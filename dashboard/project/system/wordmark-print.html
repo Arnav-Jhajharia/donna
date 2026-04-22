@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Donna — Wordmark (print)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #FBF7F5;
+    --surface: #F0EAE4;
+    --surface-2: #E7DFD7;
+    --ink: #1E1A18;
+    --ink-700: #3A3331;
+    --ink-500: #6B615C;
+    --ink-400: #8F837C;
+    --accent: #7B5544;
+    --accent-tint: #F5EFEA;
+    --border: rgba(30,26,24,0.08);
+    --border-strong: rgba(30,26,24,0.14);
+    --sans: 'Red Hat Text', sans-serif;
+    --serif: 'EB Garamond', serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+  .page { max-width: 1040px; margin: 0 auto; padding: 96px 48px 128px; }
+
+  .crumbs { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-400); font-weight: 500; margin-bottom: 56px; }
+  .crumbs a { color: var(--ink-400); text-decoration: none; }
+
+  .lock {
+    display: inline-flex; align-items: center; gap: 10px;
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--accent); font-weight: 500; margin-bottom: 20px;
+  }
+  .lock::before { content: ''; width: 8px; height: 8px; border-radius: 999px; background: var(--accent); }
+
+  h1.t { font-family: var(--serif); font-weight: 400; font-size: 56px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 20px; max-width: 22ch; }
+  p.l { font-size: 17px; line-height: 1.6; color: var(--ink-700); max-width: 62ch; margin: 0 0 80px; }
+
+  section { margin-top: 88px; }
+  section:first-of-type { margin-top: 0; }
+  .sec-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); font-weight: 500; margin-bottom: 14px; }
+  h2.s { font-family: var(--serif); font-size: 34px; line-height: 1.1; letter-spacing: -0.015em; font-weight: 400; margin: 0 0 10px; }
+  p.ld { font-size: 15px; line-height: 1.65; color: var(--ink-700); max-width: 60ch; margin: 0 0 28px; }
+
+  .m { display: inline-block; font-family: var(--serif); font-style: italic; font-weight: 500; letter-spacing: -0.01em; line-height: 1; }
+
+  /* Primary mark showcase */
+  .primary {
+    border: 1px solid var(--border);
+    padding: 96px 48px;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+    background: var(--bg);
+    margin-top: 8px;
+  }
+  .primary .tag { font-family: var(--serif); font-style: italic; font-size: 18px; color: var(--ink-500); }
+
+  /* Approved pairings */
+  .pairs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-top: 20px; }
+  .pair { padding: 56px 28px; display: flex; flex-direction: column; align-items: center; gap: 14px; min-height: 220px; justify-content: center; }
+  .pair small { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 500; color: var(--ink-400); }
+  .pair .cap { font-family: var(--serif); font-style: italic; font-size: 13px; color: var(--ink-500); text-align: center; line-height: 1.5; max-width: 22ch; }
+
+  /* Specs */
+  .specs {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 1px; background: var(--border); border: 1px solid var(--border);
+    margin-top: 20px;
+  }
+  .spec { background: var(--bg); padding: 28px; }
+  .spec h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-400); font-weight: 500; margin: 0 0 10px; }
+  .spec p { font-family: var(--serif); font-size: 22px; font-weight: 500; font-style: italic; line-height: 1.2; margin: 0; letter-spacing: -0.01em; }
+  .spec small { font-size: 12px; color: var(--ink-500); display: block; margin-top: 8px; font-family: var(--sans); font-weight: 400; font-style: normal; letter-spacing: 0; line-height: 1.5; }
+
+  /* Rules */
+  .rules { display: grid; gap: 0; border-top: 1px solid var(--border); margin-top: 8px; }
+  .rule { display: grid; grid-template-columns: 240px 1fr; gap: 48px; padding: 24px 0; border-bottom: 1px solid var(--border); }
+  .rule-t { font-family: var(--serif); font-size: 18px; font-weight: 500; color: var(--ink); font-style: normal; }
+  .rule-b { font-size: 14px; line-height: 1.65; color: var(--ink-700); max-width: 58ch; }
+  .rule-b code { font-size: 12px; color: var(--accent); background: var(--accent-tint); padding: 1px 6px; border-radius: 3px; font-weight: 500; font-family: var(--sans); }
+
+  /* Scale */
+  .ladder { border: 1px solid var(--border); padding: 40px 48px; display: flex; flex-direction: column; gap: 24px; margin-top: 20px; }
+  .rung { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 20px; border-bottom: 1px dashed var(--border); }
+  .rung:last-child { border-bottom: none; padding-bottom: 0; }
+  .rung .meta { font-size: 11px; color: var(--ink-500); font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 500; }
+  .rung .meta b { color: var(--ink); font-weight: 500; }
+
+  .foot { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-400); }
+  .foot a { color: var(--ink-400); text-decoration: none; }
+
+  /* ─────────── PRINT ─────────── */
+  @page {
+    size: A4 portrait;
+    margin: 14mm 14mm 16mm;
+  }
+  @media print {
+    html, body {
+      background: var(--bg) !important;
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    * {
+      -webkit-print-color-adjust: exact !important;
+      print-color-adjust: exact !important;
+      color-adjust: exact !important;
+    }
+    .page {
+      max-width: none !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+    .crumbs { margin-bottom: 20px !important; }
+    .lock   { margin-bottom: 12px !important; }
+
+    h1.t { font-size: 42px !important; margin-bottom: 12px !important; }
+    p.l  { font-size: 14px !important; line-height: 1.55 !important; margin-bottom: 32px !important; }
+
+    section { margin-top: 32px !important; break-before: page; }
+    section:first-of-type { break-before: auto; margin-top: 0 !important; }
+
+    h2.s { font-size: 26px !important; }
+    p.ld { font-size: 13px !important; margin-bottom: 20px !important; }
+    .sec-label { margin-bottom: 10px !important; }
+
+    /* Keep headings with following body */
+    h1, h2, h3, .sec-label, .lock { break-after: avoid; page-break-after: avoid; }
+
+    /* Primary mark — scale to fit one page cleanly */
+    .primary {
+      padding: 48px 24px !important;
+      gap: 20px !important;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .primary .m { font-size: 128px !important; }
+    .primary .tag { font-size: 14px !important; }
+
+    /* Approved pairings — force 3 columns, shrink padding */
+    .pairs { grid-template-columns: repeat(3, 1fr) !important; break-inside: avoid; page-break-inside: avoid; }
+    .pair  { padding: 32px 18px !important; min-height: 160px !important; gap: 10px !important; }
+    .pair .m { font-size: 48px !important; }
+    .pair .cap { font-size: 11px !important; }
+
+    /* Specs — 4-up, tighter */
+    .specs { grid-template-columns: repeat(4, 1fr) !important; break-inside: avoid; page-break-inside: avoid; }
+    .spec { padding: 18px !important; }
+    .spec p { font-size: 18px !important; }
+    .spec small { font-size: 10.5px !important; }
+
+    /* Rules — keep each row intact */
+    .rule {
+      grid-template-columns: 180px 1fr !important;
+      gap: 28px !important;
+      padding: 14px 0 !important;
+      break-inside: avoid;
+      page-break-inside: avoid;
+    }
+    .rule-t { font-size: 15px !important; }
+    .rule-b { font-size: 12.5px !important; line-height: 1.55 !important; }
+
+    /* Scale ladder — reduce rung sizes so every rung prints on one page */
+    .ladder { padding: 20px 28px !important; gap: 14px !important; break-inside: avoid; page-break-inside: avoid; }
+    .rung   { padding-bottom: 12px !important; }
+    .rung .m[style*="128px"] { font-size: 64px !important; }
+    .rung .m[style*="88px"]  { font-size: 52px !important; }
+    .rung .m[style*="56px"]  { font-size: 40px !important; }
+    .rung .m[style*="32px"]  { font-size: 26px !important; }
+    .rung .m[style*="22px"]  { font-size: 20px !important; }
+    .rung .m[style*="16px"]  { font-size: 16px !important; }
+    .rung .m[style*="14px"]  { font-size: 14px !important; }
+    .rung .meta { font-size: 9.5px !important; }
+
+    a { color: inherit !important; text-decoration: none !important; }
+
+    .foot { margin-top: 28px !important; padding-top: 14px !important; font-size: 10.5px !important; break-before: avoid; }
+  }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="crumbs">
+    <a href="../index.html">Package</a> &nbsp;/&nbsp;
+    <a href="type.html">Type</a> &nbsp;/&nbsp;
+    <a href="colors.html">Colors</a> &nbsp;/&nbsp;
+    <span>Wordmark · locked</span>
+  </div>
+
+  <div class="lock">Locked · final</div>
+  <h1 class="t">The wordmark.</h1>
+  <p class="l">
+    Set in EB Garamond, italic 500, lowercase, at ‑1% tracking. No decorations, no dot, no underline. The serif italic is doing the work. This is the only mark that ships.
+  </p>
+
+  <!-- PRIMARY -->
+  <section>
+    <div class="sec-label">01 · Primary mark</div>
+    <h2 class="s">Ink on paper.</h2>
+
+    <div class="primary">
+      <span class="m" style="font-size: 168px; color: var(--ink);">donna</span>
+      <span class="tag">the small things kept.</span>
+    </div>
+  </section>
+
+  <!-- APPROVED PAIRINGS -->
+  <section>
+    <div class="sec-label">02 · Approved pairings</div>
+    <h2 class="s">Six ways it's allowed to appear.</h2>
+    <p class="ld">Everything outside this list is off-system.</p>
+
+    <div class="pairs">
+      <div class="pair" style="background: var(--bg);">
+        <span class="m" style="font-size: 64px; color: var(--ink);">donna</span>
+        <small>Ink on paper</small>
+        <span class="cap">Default. Everywhere.</span>
+      </div>
+      <div class="pair" style="background: var(--surface);">
+        <span class="m" style="font-size: 64px; color: var(--ink);">donna</span>
+        <small>Ink on surface</small>
+        <span class="cap">On a card or sidebar.</span>
+      </div>
+      <div class="pair" style="background: var(--bg);">
+        <span class="m" style="font-size: 64px; color: var(--accent);">donna</span>
+        <small>Rust on paper</small>
+        <span class="cap">Brand moments only. One per page.</span>
+      </div>
+      <div class="pair" style="background: var(--ink);">
+        <span class="m" style="font-size: 64px; color: var(--bg);">donna</span>
+        <small style="color: #C9A796;">Paper on ink</small>
+        <span class="cap" style="color: #C9A796;">Dark splash, onboarding, sign-in.</span>
+      </div>
+      <div class="pair" style="background: var(--accent);">
+        <span class="m" style="font-size: 64px; color: var(--bg);">donna</span>
+        <small style="color: var(--accent-tint);">Paper on rust</small>
+        <span class="cap" style="color: var(--accent-tint);">Rare. Launch or announcement.</span>
+      </div>
+      <div class="pair" style="background: var(--bg); border: 1px solid var(--border-strong); margin: -1px;">
+        <span class="m" style="font-size: 64px; color: var(--ink);">donna</span>
+        <small>Ink on hairline</small>
+        <span class="cap">Letterhead. Printed materials.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- SPECS -->
+  <section>
+    <div class="sec-label">03 · Specs</div>
+    <h2 class="s">For the engineer and the print shop.</h2>
+
+    <div class="specs">
+      <div class="spec">
+        <h4>Family</h4>
+        <p>EB Garamond</p>
+        <small>Italic · weight 500. Google Fonts or licensed equivalent.</small>
+      </div>
+      <div class="spec">
+        <h4>Casing</h4>
+        <p>donna</p>
+        <small>All lowercase. Never capitalised, never ALL CAPS.</small>
+      </div>
+      <div class="spec">
+        <h4>Tracking</h4>
+        <p>−1%</p>
+        <small>letter-spacing: −0.01em</small>
+      </div>
+      <div class="spec">
+        <h4>Clearspace</h4>
+        <p>1 × d</p>
+        <small>Minimum margin around the mark is the width of the lowercase 'd'.</small>
+      </div>
+    </div>
+  </section>
+
+  <!-- RULES -->
+  <section>
+    <div class="sec-label">04 · Rules</div>
+    <h2 class="s">What not to do.</h2>
+
+    <div class="rules">
+      <div class="rule">
+        <div class="rule-t">No decorations</div>
+        <div class="rule-b">No dot, underline, box, or swash. The italic is the mark. Past explorations are archived, not shipped.</div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">Never redraw</div>
+        <div class="rule-b">The mark is set in live type. Do not outline, do not redraw as a path. Use <code>font-style: italic</code>, <code>font-weight: 500</code>.</div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">No signal colors</div>
+        <div class="rule-b">Moss, amber, oxblood are states, not brand colors. The mark appears only in ink, rust, or paper.</div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">Minimum size 14 px</div>
+        <div class="rule-b">Below 14 px, use the "d" monogram instead of the full wordmark.</div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">One rust per screen</div>
+        <div class="rule-b">If the wordmark appears in rust, nothing else on that screen may be rust.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- SCALE -->
+  <section>
+    <div class="sec-label">05 · Scale</div>
+    <h2 class="s">From splash to footer.</h2>
+
+    <div class="ladder">
+      <div class="rung"><span class="m" style="font-size: 128px; color: var(--ink);">donna</span><span class="meta"><b>Splash</b> · 128 px</span></div>
+      <div class="rung"><span class="m" style="font-size: 88px; color: var(--ink);">donna</span><span class="meta"><b>Hero</b> · 88 px</span></div>
+      <div class="rung"><span class="m" style="font-size: 56px; color: var(--ink);">donna</span><span class="meta"><b>Cover</b> · 56 px</span></div>
+      <div class="rung"><span class="m" style="font-size: 32px; color: var(--ink);">donna</span><span class="meta"><b>Masthead</b> · 32 px</span></div>
+      <div class="rung"><span class="m" style="font-size: 22px; color: var(--ink);">donna</span><span class="meta"><b>Nav</b> · 22 px</span></div>
+      <div class="rung"><span class="m" style="font-size: 16px; color: var(--ink);">donna</span><span class="meta"><b>Footer</b> · 16 px</span></div>
+      <div class="rung"><span class="m" style="font-size: 14px; color: var(--ink);">donna</span><span class="meta"><b>Minimum</b> · 14 px · below this, use "d"</span></div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <a href="colors.html">← Colors</a>
+    <span>Wordmark · locked</span>
+    <a href="../index.html">Package →</a>
+  </div>
+
+</div>
+
+<script>
+  (async () => {
+    try {
+      if (document.fonts && document.fonts.ready) {
+        await document.fonts.ready;
+      }
+    } catch (e) { /* noop */ }
+    await new Promise(r => setTimeout(r, 500));
+    window.print();
+  })();
+</script>
+
+</body>
+</html>

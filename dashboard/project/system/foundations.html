@@ -1,0 +1,718 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Donna · Foundations</title>
+<link rel="stylesheet" href="../assets/tokens.css" />
+<link rel="stylesheet" href="../assets/docs.css" />
+<style>
+  /* Color swatch grid */
+  .swatches {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+  .swatch {
+    background: var(--bg);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .swatch-chip {
+    height: 96px;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+  .swatch-chip::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border: 1px solid rgba(30, 26, 24, 0.03);
+    pointer-events: none;
+  }
+  .swatch-name {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--text-h4);
+    color: var(--ink);
+  }
+  .swatch-meta {
+    display: flex;
+    justify-content: space-between;
+    font-size: var(--text-small);
+    color: var(--ink-500);
+    font-feature-settings: 'tnum';
+  }
+  .swatch-meta code {
+    font-family: var(--font-sans);
+    font-weight: var(--weight-medium);
+    color: var(--ink-700);
+    letter-spacing: 0.02em;
+  }
+  .swatch-desc {
+    font-size: var(--text-small);
+    color: var(--ink-500);
+    line-height: var(--lh-normal);
+  }
+
+  /* Scale row · neutral scale strip */
+  .scale-row {
+    display: grid;
+    grid-template-columns: repeat(11, 1fr);
+    gap: 0;
+    border: 1px solid var(--border);
+    margin: var(--space-3) 0 var(--space-5);
+  }
+  .scale-row > div {
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: var(--space-2);
+    font-size: var(--text-micro);
+    color: var(--ink-500);
+    font-weight: var(--weight-medium);
+  }
+  .scale-row > div.dark { color: var(--paper-100); }
+
+  /* Type specimen */
+  .spec {
+    padding: var(--space-5) 0;
+    border-top: 1px solid var(--border);
+    display: grid;
+    grid-template-columns: 200px 1fr auto;
+    gap: var(--space-5);
+    align-items: baseline;
+  }
+  .spec:first-of-type { border-top: none; }
+  .spec-label {
+    font-size: var(--text-micro);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    color: var(--ink-500);
+    font-weight: var(--weight-medium);
+  }
+  .spec-label small {
+    display: block;
+    margin-top: var(--space-1);
+    font-size: var(--text-caption);
+    color: var(--ink-400);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: var(--weight-regular);
+  }
+  .spec-specs {
+    font-family: var(--font-sans);
+    font-size: var(--text-caption);
+    color: var(--ink-400);
+    font-feature-settings: 'tnum';
+    white-space: nowrap;
+  }
+
+  /* Spacing ruler */
+  .ruler {
+    display: grid;
+    gap: var(--space-2);
+    margin-top: var(--space-4);
+  }
+  .ruler-row {
+    display: grid;
+    grid-template-columns: 80px 80px 1fr 200px;
+    gap: var(--space-4);
+    align-items: center;
+    padding: var(--space-2) 0;
+  }
+  .ruler-token {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    font-weight: var(--weight-medium);
+    color: var(--ink);
+  }
+  .ruler-value {
+    font-size: var(--text-small);
+    color: var(--ink-500);
+    font-feature-settings: 'tnum';
+  }
+  .ruler-bar {
+    height: 10px;
+    background: var(--accent);
+    opacity: 0.85;
+  }
+  .ruler-use {
+    font-size: var(--text-small);
+    color: var(--ink-500);
+  }
+
+  /* Radius demo */
+  .radii {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: var(--space-4);
+  }
+  .radius-box {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    align-items: flex-start;
+  }
+  .radius-shape {
+    width: 100%;
+    aspect-ratio: 1.4;
+    background: var(--surface);
+    border: 1px solid var(--border);
+  }
+
+  /* Elevation demo */
+  .elev {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: var(--space-5);
+    padding: var(--space-6) var(--space-4);
+    background: var(--bg);
+  }
+  .elev-card {
+    aspect-ratio: 1;
+    background: var(--bg);
+    border-radius: var(--radius-md);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    padding: var(--space-3);
+  }
+  .elev-0 { border: 1px solid var(--border); }
+  .elev-1 { box-shadow: var(--shadow-1); }
+  .elev-2 { box-shadow: var(--shadow-2); }
+  .elev-3 { box-shadow: var(--shadow-3); }
+  .elev-4 { box-shadow: var(--shadow-4); }
+
+  .elev-label {
+    font-size: var(--text-caption);
+    color: var(--ink-500);
+    font-weight: var(--weight-medium);
+  }
+  .elev-label strong {
+    display: block;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--text-body);
+    font-weight: var(--weight-regular);
+  }
+
+  /* Motion preview */
+  .motion-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-5);
+    margin-top: var(--space-4);
+  }
+  .motion-card {
+    background: var(--surface);
+    padding: var(--space-5);
+    border-radius: var(--radius-md);
+    cursor: pointer;
+  }
+  .motion-card:hover .motion-dot { animation-duration: var(--motion-speed); animation-play-state: running; }
+  .motion-dot {
+    width: 12px; height: 12px;
+    border-radius: 999px;
+    background: var(--accent);
+    margin-bottom: var(--space-3);
+    animation: travel 1.6s var(--ease-out) infinite;
+  }
+  .motion-1 { --motion-speed: var(--duration-fast); }
+  .motion-2 { --motion-speed: var(--duration-normal); }
+  .motion-3 { --motion-speed: var(--duration-slow); }
+  @keyframes travel {
+    0%   { transform: translateX(0); }
+    50%  { transform: translateX(calc(100% - 12px)); }
+    100% { transform: translateX(0); }
+  }
+</style>
+</head>
+<body>
+
+<div class="ds-shell">
+
+  <aside class="ds-nav">
+    <a href="../index.html" class="ds-nav-brand">donna</a>
+
+    <div class="ds-nav-section">System</div>
+    <a href="foundations.html" class="active">Foundations</a>
+    <a href="components.html">Components</a>
+    <a href="patterns.html">Patterns &amp; Voice</a>
+
+    <div class="ds-nav-section">In this page</div>
+    <a href="#color">Color</a>
+    <a href="#type">Typography</a>
+    <a href="#spacing">Spacing</a>
+    <a href="#radii">Radii</a>
+    <a href="#elevation">Elevation</a>
+    <a href="#motion">Motion</a>
+
+    <div class="ds-nav-section">Screens</div>
+    <a href="../screens/dashboard.html">Dashboard</a>
+  </aside>
+
+  <main class="ds-main">
+
+    <div class="ds-page-label">01 · Foundations</div>
+    <h1 class="ds-page-title"><em>The quiet architecture underneath everything.</em></h1>
+    <p class="ds-page-lead">
+      These are the locked primitives. Every screen, every component, every moment in the product is assembled from what is on this page. If it isn&rsquo;t here, it isn&rsquo;t part of Donna.
+    </p>
+
+    <!-- ─────────────────────── COLOR ─────────────────────── -->
+    <section class="ds-section" id="color">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Color</em></h2>
+        <p class="ds-section-desc">Four locked values carry the identity. Everything else is a derived scale in the same family · warm, paper-based, never cool. Color is rare. One accent moment per screen.</p>
+      </div>
+
+      <div class="ds-subsection-title">Locked · core four</div>
+      <div class="swatches">
+        <div class="swatch">
+          <div class="swatch-chip" style="background: #FBF7F5;"></div>
+          <div class="swatch-name">Paper</div>
+          <div class="swatch-meta"><span>Background</span><code>#FBF7F5</code></div>
+          <div class="swatch-desc">The page. Never pure white. Warm enough to feel lit from the side.</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-chip" style="background: #F0EAE4;"></div>
+          <div class="swatch-name">Surface</div>
+          <div class="swatch-meta"><span>Cards, inputs</span><code>#F0EAE4</code></div>
+          <div class="swatch-desc">Raised surfaces. One step above paper. Pairs with hairlines, not shadows.</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-chip" style="background: #1E1A18;"></div>
+          <div class="swatch-name">Ink</div>
+          <div class="swatch-meta"><span>Text, marks</span><code>#1E1A18</code></div>
+          <div class="swatch-desc">Primary text. Near-black with warmth. Never <code>#000</code>.</div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-chip" style="background: #7B5544;"></div>
+          <div class="swatch-name">Rust</div>
+          <div class="swatch-meta"><span>Accent, one moment</span><code>#7B5544</code></div>
+          <div class="swatch-desc">The only color that carries meaning. Used once per screen, for the thing that matters most.</div>
+        </div>
+      </div>
+
+      <div class="ds-subsection-title">Paper &amp; ink scales</div>
+      <p class="t-small" style="color: var(--ink-500); margin: 0 0 var(--space-4); max-width: 56ch;">
+        Derived neutrals. Pick from these · don&rsquo;t invent new beiges or grays. Darker end of each scale is only for type.
+      </p>
+
+      <div class="t-label" style="margin-bottom: var(--space-2);">Paper</div>
+      <div class="scale-row">
+        <div style="background: #FDFAF8;">50</div>
+        <div style="background: #FBF7F5;">100</div>
+        <div style="background: #F5EFEA;">200</div>
+        <div style="background: #F0EAE4;">300</div>
+        <div style="background: #E7DFD7;">400</div>
+        <div style="background: #D6CAC0;">500</div>
+        <div style="background: #B8A89B;">600</div>
+        <div class="dark" style="background: #8F837C;">700</div>
+        <div class="dark" style="background: #6B615C;">800</div>
+        <div class="dark" style="background: #3A3331;">900</div>
+        <div class="dark" style="background: #1E1A18;">ink</div>
+      </div>
+
+      <div class="t-label" style="margin-bottom: var(--space-2);">Rust</div>
+      <div class="scale-row">
+        <div style="background: #EBDCD2;">100</div>
+        <div style="background: #D8BAA8;">200</div>
+        <div style="background: #C9A796;">300</div>
+        <div class="dark" style="background: #A07562;">500</div>
+        <div class="dark" style="background: #7B5544;">700 · accent</div>
+        <div class="dark" style="background: #4A2F23;">900</div>
+        <div style="background: #FBF7F5;"></div>
+        <div style="background: #FBF7F5;"></div>
+        <div style="background: #FBF7F5;"></div>
+        <div style="background: #FBF7F5;"></div>
+        <div style="background: #FBF7F5;"></div>
+      </div>
+
+      <div class="ds-subsection-title">Signal · editorial, not traffic-light</div>
+      <div class="swatches" style="grid-template-columns: repeat(3, 1fr);">
+        <div class="swatch">
+          <div class="swatch-chip" style="background: #5C6B4A;"></div>
+          <div class="swatch-name">Moss</div>
+          <div class="swatch-meta"><span>Success, kept</span><code>#5C6B4A</code></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-chip" style="background: #A8804A;"></div>
+          <div class="swatch-name">Amber</div>
+          <div class="swatch-meta"><span>Warning, gentle</span><code>#A8804A</code></div>
+        </div>
+        <div class="swatch">
+          <div class="swatch-chip" style="background: #8B3A2E;"></div>
+          <div class="swatch-name">Oxblood</div>
+          <div class="swatch-meta"><span>Destructive</span><code>#8B3A2E</code></div>
+        </div>
+      </div>
+
+      <div class="ds-subsection-title">The rule</div>
+      <div class="rule">
+        <div class="rule-label">When to use color</div>
+        <div class="rule-body">
+          <p>Rust is reserved for <em>the one thing that matters most on the screen</em>. A CTA. A single word she&rsquo;s emphasizing. The live status of a meaningful moment. Never two rusts on one screen.</p>
+          <p>Signal colors appear only on states · a chip, a dot, a line. Never as backgrounds. Never as decoration.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">When to use black</div>
+        <div class="rule-body">
+          <p>Everything else. Headings, body, labels, icons. Black (<em>ink</em>) is the default voice. Color is the exception that earns attention <em>because</em> it&rsquo;s rare.</p>
+          <p>If you&rsquo;re reaching for color to make something legible, the layout is wrong.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────── TYPE ─────────────────────── -->
+    <section class="ds-section" id="type">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Typography</em></h2>
+        <p class="ds-section-desc">Two families, each with one job. <em>EB Garamond</em> carries emotion and hierarchy. <em>Red Hat Text</em> handles the interface and disappears. Serif is italic by default · that&rsquo;s the brand.</p>
+      </div>
+
+      <div class="ds-subsection-title">The specimen</div>
+
+      <div class="spec">
+        <div class="spec-label">Display<small>EB Garamond · Italic</small></div>
+        <div style="font-family: var(--font-serif); font-style: italic; font-size: 4.5rem; line-height: 0.98; letter-spacing: -0.035em;">A quieter kind of AI.</div>
+        <div class="spec-specs">72 / 70 · -3.5%</div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-label">Heading 1<small>Page titles</small></div>
+        <div style="font-family: var(--font-serif); font-style: italic; font-size: 3rem; line-height: 1.08; letter-spacing: -0.025em;">She remembers everything.</div>
+        <div class="spec-specs">48 / 52 · -2.5%</div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-label">Heading 2<small>Section leads</small></div>
+        <div style="font-family: var(--font-serif); font-style: italic; font-size: 2.25rem; line-height: 1.1; letter-spacing: -0.02em;">Today, gently.</div>
+        <div class="spec-specs">36 / 40 · -2%</div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-label">Heading 3<small>Subsection</small></div>
+        <div style="font-family: var(--font-serif); font-style: italic; font-size: 1.625rem; line-height: 1.24; letter-spacing: -0.015em;">The things you cared about.</div>
+        <div class="spec-specs">26 / 32 · -1.5%</div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-label">Heading 4<small>Card titles</small></div>
+        <div style="font-family: var(--font-serif); font-style: italic; font-size: 1.25rem; line-height: 1.24;">This week with Maya.</div>
+        <div class="spec-specs">20 / 25</div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-label">Lead<small>Red Hat Text · 400</small></div>
+        <div style="font-family: var(--font-sans); font-size: 1.125rem; line-height: 1.65; color: var(--ink-700); max-width: 48ch;">A warm intro paragraph, used at the top of pages and important sections, never for running copy.</div>
+        <div class="spec-specs">18 / 30</div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-label">Body<small>Red Hat Text · 400</small></div>
+        <div style="font-family: var(--font-sans); font-size: 1rem; line-height: 1.5; max-width: 56ch;">The default voice of the interface. Conversations, descriptions, any sentence longer than a label. Generous leading so nothing feels cramped.</div>
+        <div class="spec-specs">16 / 24</div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-label">Small<small>Red Hat Text · 400</small></div>
+        <div style="font-family: var(--font-sans); font-size: 0.875rem; line-height: 1.5; color: var(--ink-500);">Secondary text. Timestamps, meta, anything that is present but not loud.</div>
+        <div class="spec-specs">14 / 21</div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-label">Caption<small>Red Hat Text · 400</small></div>
+        <div style="font-family: var(--font-sans); font-size: 0.75rem; line-height: 1.5; color: var(--ink-400);">Smallest comfortable size. Captions, helper text, input affordances.</div>
+        <div class="spec-specs">12 / 18</div>
+      </div>
+
+      <div class="spec">
+        <div class="spec-label">Label<small>Small-caps · 500</small></div>
+        <div style="font-family: var(--font-sans); font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-500); font-weight: 500;">SECTION LABEL · 01</div>
+        <div class="spec-specs">11 · +14%</div>
+      </div>
+
+      <div class="ds-subsection-title">The rule</div>
+
+      <div class="rule">
+        <div class="rule-label">What is serif for</div>
+        <div class="rule-body">
+          <p><em>EB Garamond italic</em> is used for anything the user should <em>feel</em>, not just read. Page titles, section leads, card titles, her own words when she addresses you directly, quoted memory, the hero of an empty state.</p>
+          <p>Serif is <em>always italic</em>. Upright serif is not Donna.</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">What is sans for</div>
+        <div class="rule-body">
+          <p><em>Red Hat Text</em> handles the mechanics. Body copy, labels, buttons, inputs, metadata, timestamps, navigation. Anything a user reads to act.</p>
+          <p>Sans is never italic in the UI. Never. Italic sans reads as apology.</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">When headings are in color</div>
+        <div class="rule-body">
+          <p>Almost never. The single allowed case: one word or phrase inside a heading gets <em>rust</em> to mark its weight · a name, an outcome, a promise. Never the whole heading.</p>
+          <p>Example: <em>A quieter kind of <span style="color: var(--accent);">AI</span>.</em> &nbsp; or &nbsp; <em>Today with <span style="color: var(--accent);">Maya</span>.</em></p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">When headings are in black</div>
+        <div class="rule-body">
+          <p>Default. Every page title, section title, card title is ink. The serif italic is already doing emotional work · color would be redundant.</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">Weights</div>
+        <div class="rule-body">
+          <p>Serif: 400 (regular italic) for everything. 500 exists for emphasis within a paragraph but is almost never needed.</p>
+          <p>Sans: 400 for body, 500 for buttons and labels, 600 for rare cases where a specific word must carry. Never 700 in product UI.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────── SPACING ─────────────────────── -->
+    <section class="ds-section" id="spacing">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Spacing</em></h2>
+        <p class="ds-section-desc">A 4px base scale. Ten named steps, each with a clear job. Spacing is the single biggest driver of whether Donna feels premium or generic · honor it.</p>
+      </div>
+
+      <div class="ds-subsection-title">The scale</div>
+      <div class="ruler">
+        <div class="ruler-row">
+          <div class="ruler-token">space-1</div>
+          <div class="ruler-value">4 px</div>
+          <div><div class="ruler-bar" style="width: 4px;"></div></div>
+          <div class="ruler-use">Icon &harr; label</div>
+        </div>
+        <div class="ruler-row">
+          <div class="ruler-token">space-2</div>
+          <div class="ruler-value">8 px</div>
+          <div><div class="ruler-bar" style="width: 8px;"></div></div>
+          <div class="ruler-use">Inline elements, chip gap</div>
+        </div>
+        <div class="ruler-row">
+          <div class="ruler-token">space-3</div>
+          <div class="ruler-value">12 px</div>
+          <div><div class="ruler-bar" style="width: 12px;"></div></div>
+          <div class="ruler-use">Related stack, list item rows</div>
+        </div>
+        <div class="ruler-row">
+          <div class="ruler-token">space-4</div>
+          <div class="ruler-value">16 px</div>
+          <div><div class="ruler-bar" style="width: 16px;"></div></div>
+          <div class="ruler-use">Default gap, body margins</div>
+        </div>
+        <div class="ruler-row">
+          <div class="ruler-token">space-5</div>
+          <div class="ruler-value">24 px</div>
+          <div><div class="ruler-bar" style="width: 24px;"></div></div>
+          <div class="ruler-use">Card padding, form field gap</div>
+        </div>
+        <div class="ruler-row">
+          <div class="ruler-token">space-6</div>
+          <div class="ruler-value">32 px</div>
+          <div><div class="ruler-bar" style="width: 32px;"></div></div>
+          <div class="ruler-use">Section internal gap</div>
+        </div>
+        <div class="ruler-row">
+          <div class="ruler-token">space-7</div>
+          <div class="ruler-value">48 px</div>
+          <div><div class="ruler-bar" style="width: 48px;"></div></div>
+          <div class="ruler-use">Block separation, card outer padding</div>
+        </div>
+        <div class="ruler-row">
+          <div class="ruler-token">space-8</div>
+          <div class="ruler-value">64 px</div>
+          <div><div class="ruler-bar" style="width: 64px;"></div></div>
+          <div class="ruler-use">Major section break</div>
+        </div>
+        <div class="ruler-row">
+          <div class="ruler-token">space-9</div>
+          <div class="ruler-value">96 px</div>
+          <div><div class="ruler-bar" style="width: 96px;"></div></div>
+          <div class="ruler-use">Page breathing, hero bottom</div>
+        </div>
+        <div class="ruler-row">
+          <div class="ruler-token">space-10</div>
+          <div class="ruler-value">128 px</div>
+          <div><div class="ruler-bar" style="width: 128px;"></div></div>
+          <div class="ruler-use">Editorial pause (between chapters)</div>
+        </div>
+      </div>
+
+      <div class="ds-subsection-title">The rule</div>
+
+      <div class="rule">
+        <div class="rule-label">Inside a card</div>
+        <div class="rule-body">
+          <p>Padding: <em>space-5</em> (24) on mobile, <em>space-6</em> (32) on desktop.</p>
+          <p>Gap between a card's title and body: <em>space-3</em> (12). Between body and footer/meta: <em>space-4</em> (16). Never tighter.</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">Between cards</div>
+        <div class="rule-body">
+          <p>Grids: <em>space-5</em> (24) gutter, or a 1px hairline in place of gap for a denser, editorial feel.</p>
+          <p>Stacked cards: <em>space-4</em> (16) if related, <em>space-6</em> (32) if they are distinct thoughts.</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">Between sections</div>
+        <div class="rule-body">
+          <p><em>space-8</em> (64) is the minimum between two sections that belong to the same page. <em>space-9</em> (96) between chapters. <em>space-10</em> (128) when you want the user to breathe · hero to first content, for example.</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">Page gutters</div>
+        <div class="rule-body">
+          <p>Mobile: <em>20 px</em> left/right. Desktop: <em>32 px</em> minimum.</p>
+          <p>Dashboard max width: <em>1200 px</em>. Reading content: <em>640 px</em>. Never full-bleed except for hero images.</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">The vertical rhythm</div>
+        <div class="rule-body">
+          <p>Headings always get more space above than below. A card's title sits closer to its body than to the card above. White space belongs to the thing that follows, not the thing that came before.</p>
+          <p>If a screen feels crowded, the fix is always to add space, never to shrink type.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────── RADII ─────────────────────── -->
+    <section class="ds-section" id="radii">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Radii</em></h2>
+        <p class="ds-section-desc">Small-to-medium, never pill. Softness with precision · nothing bubbly, nothing infantilizing.</p>
+      </div>
+
+      <div class="radii">
+        <div class="radius-box">
+          <div class="radius-shape" style="border-radius: 4px;"></div>
+          <div class="t-small"><strong style="color: var(--ink);">xs · 4</strong></div>
+          <div class="t-meta">Chip inner, tag corners</div>
+        </div>
+        <div class="radius-box">
+          <div class="radius-shape" style="border-radius: 6px;"></div>
+          <div class="t-small"><strong style="color: var(--ink);">sm · 6</strong></div>
+          <div class="t-meta">Buttons, inputs, small cards</div>
+        </div>
+        <div class="radius-box">
+          <div class="radius-shape" style="border-radius: 10px;"></div>
+          <div class="t-small"><strong style="color: var(--ink);">md · 10</strong></div>
+          <div class="t-meta">Default cards</div>
+        </div>
+        <div class="radius-box">
+          <div class="radius-shape" style="border-radius: 16px;"></div>
+          <div class="t-small"><strong style="color: var(--ink);">lg · 16</strong></div>
+          <div class="t-meta">Large cards, modals, sheets</div>
+        </div>
+        <div class="radius-box">
+          <div class="radius-shape" style="border-radius: 24px;"></div>
+          <div class="t-small"><strong style="color: var(--ink);">xl · 24</strong></div>
+          <div class="t-meta">Hero surfaces only</div>
+        </div>
+        <div class="radius-box">
+          <div class="radius-shape" style="border-radius: 999px; aspect-ratio: 3;"></div>
+          <div class="t-small"><strong style="color: var(--ink);">full</strong></div>
+          <div class="t-meta">Status chips only · never buttons</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────── ELEVATION ─────────────────────── -->
+    <section class="ds-section" id="elevation">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Elevation</em></h2>
+        <p class="ds-section-desc">Soft shadows only when they communicate something · a modal above the page, a popover above a row. Never decorative. Prefer hairlines.</p>
+      </div>
+
+      <div class="elev" style="background: var(--paper-200); border-radius: var(--radius-md);">
+        <div class="elev-card elev-0">
+          <div class="elev-label"><strong>0 · Flat</strong>Hairline only</div>
+        </div>
+        <div class="elev-card elev-1">
+          <div class="elev-label"><strong>1 · Whisper</strong>Resting card</div>
+        </div>
+        <div class="elev-card elev-2">
+          <div class="elev-label"><strong>2 · Lift</strong>Hovered, focused</div>
+        </div>
+        <div class="elev-card elev-3">
+          <div class="elev-label"><strong>3 · Popover</strong>Menus, tooltips</div>
+        </div>
+        <div class="elev-card elev-4">
+          <div class="elev-label"><strong>4 · Modal</strong>Dialogs, sheets</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ─────────────────────── MOTION ─────────────────────── -->
+    <section class="ds-section" id="motion">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Motion</em></h2>
+        <p class="ds-section-desc">Barely there. Donna doesn&rsquo;t announce herself · she appears. Most motion is a slow fade, a gentle translate, a character-by-character type reveal. No bounces. No spring overshoot. Nothing that calls attention to the animation itself.</p>
+      </div>
+
+      <div class="ds-subsection-title">Durations</div>
+      <div class="motion-grid">
+        <div class="motion-card motion-1">
+          <div class="motion-dot"></div>
+          <div class="t-label">Fast · 160ms</div>
+          <div class="t-small" style="margin-top: var(--space-2);">Hovers, button states, tiny toggles.</div>
+        </div>
+        <div class="motion-card motion-2">
+          <div class="motion-dot"></div>
+          <div class="t-label">Normal · 280ms</div>
+          <div class="t-small" style="margin-top: var(--space-2);">Card entrance, dropdown, menu, toast.</div>
+        </div>
+        <div class="motion-card motion-3">
+          <div class="motion-dot"></div>
+          <div class="t-label">Slow · 480ms</div>
+          <div class="t-small" style="margin-top: var(--space-2);">Page transitions, hero reveals, her messages.</div>
+        </div>
+      </div>
+
+      <div class="ds-subsection-title">The rule</div>
+      <div class="rule">
+        <div class="rule-label">Easing</div>
+        <div class="rule-body">
+          <p>Default: <em>cubic-bezier(0.22, 1, 0.36, 1)</em> · a soft ease-out. Things arrive, they don&rsquo;t bounce.</p>
+          <p>Page-level reveals: <em>cubic-bezier(0.2, 0.8, 0.2, 1)</em> · editorial, turning-a-page feel.</p>
+          <p>Never linear. Never spring.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Her messages</div>
+        <div class="rule-body">
+          <p>When Donna speaks, text appears with a gentle 60ms-per-word fade-in (not a typewriter). Never faster. It should feel like she&rsquo;s thinking, not performing.</p>
+        </div>
+      </div>
+    </section>
+
+    <footer style="margin-top: var(--space-9); padding-top: var(--space-6); border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: var(--text-small); color: var(--ink-500);">
+      <a href="../index.html" style="color: var(--ink-500); text-decoration: none;">← Package index</a>
+      <a href="components.html" style="color: var(--accent); text-decoration: none;">Next · Components →</a>
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>

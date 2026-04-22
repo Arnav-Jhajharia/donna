@@ -1,0 +1,239 @@
+/* =============================================================
+   Donna · Design System Tokens
+   Canonical source. Every hex, px, and duration used in product
+   UI derives from a variable declared here. Nothing else is
+   allowed to ship.
+   ============================================================= */
+
+:root {
+  /* -----------------------------------------------------------
+     1 · COLOR — primitive scale
+     The "what it is" layer. Never reference these directly in
+     components; always use a semantic role (section 2).
+     ----------------------------------------------------------- */
+
+  /* Paper — warm off-white family */
+  --paper-50:   #FDFAF8;
+  --paper-100:  #FBF7F5;   /* the page */
+  --paper-200:  #F5EFEA;
+  --paper-300:  #F0EAE4;   /* resting surface */
+  --paper-400:  #E7DFD7;   /* pressed surface */
+  --paper-500:  #D6CAC0;
+  --paper-600:  #B8A89B;
+
+  /* Ink — warm near-black family */
+  --ink-900:    #1E1A18;   /* primary type */
+  --ink-800:    #3A3331;
+  --ink-600:    #6B615C;   /* secondary type */
+  --ink-500:    #8F837C;   /* tertiary type, meta */
+  --ink-400:    #B5A89F;   /* placeholder, disabled */
+  --ink-300:    #D9CEC5;   /* hairline on surface */
+
+  /* Rust — brand accent family */
+  --rust-900:   #4A2F23;   /* accent pressed / hover */
+  --rust-700:   #7B5544;   /* accent */
+  --rust-500:   #A07562;
+  --rust-300:   #C9A796;
+  --rust-100:   #EBDCD2;
+  --rust-50:    #F5EFEA;   /* same hex as paper-200; named for rust-tint context */
+
+  /* Signal — reserved for states, never brand */
+  --moss-700:   #5C6B4A;   /* success */
+  --moss-100:   #EEF1E7;   /* success tint */
+  --amber-700:  #A8804A;   /* warning */
+  --amber-100:  #F5EBD9;   /* warning tint */
+  --oxblood-700:#8B3A2E;   /* danger */
+  --oxblood-100:#F3E0DC;   /* danger tint */
+
+  /* Alpha — hairlines, shadows, overlays on paper */
+  --alpha-ink-03:  rgba(30, 26, 24, 0.03);
+  --alpha-ink-04:  rgba(30, 26, 24, 0.04);
+  --alpha-ink-05:  rgba(30, 26, 24, 0.05);
+  --alpha-ink-08:  rgba(30, 26, 24, 0.08);
+  --alpha-ink-12:  rgba(30, 26, 24, 0.12);
+  --alpha-ink-14:  rgba(30, 26, 24, 0.14);
+  --alpha-rust-28: rgba(123, 85, 68, 0.28);
+
+  /* -----------------------------------------------------------
+     2 · COLOR — semantic roles
+     The "what it does" layer. This is what components consume.
+     If you need a new color, add a role here first.
+     ----------------------------------------------------------- */
+
+  /* Canvas */
+  --bg-canvas:      var(--paper-100);
+  --bg-surface:     var(--paper-300);
+  --bg-surface-alt: var(--paper-400);   /* pressed / hover on surface */
+  --bg-inset:       var(--paper-50);    /* subtle inset panels */
+  --bg-inverse:     var(--ink-900);     /* dark splash, sign-in */
+
+  /* Type */
+  --fg-primary:     var(--ink-900);
+  --fg-secondary:   var(--ink-800);
+  --fg-tertiary:    var(--ink-600);
+  --fg-muted:       var(--ink-500);
+  --fg-placeholder: var(--ink-400);
+  --fg-disabled:    var(--ink-400);
+  --fg-inverse:     var(--paper-100);
+  --fg-on-rust:     var(--paper-100);
+
+  /* Brand */
+  --fg-accent:      var(--rust-700);
+  --fg-accent-strong: var(--rust-900);
+  --bg-accent:      var(--rust-700);
+  --bg-accent-hover: var(--rust-900);
+  --bg-accent-tint: var(--rust-50);
+
+  /* Signal — state, not brand */
+  --fg-success:     var(--moss-700);
+  --bg-success-tint:var(--moss-100);
+  --fg-warning:     var(--amber-700);
+  --bg-warning-tint:var(--amber-100);
+  --fg-danger:      var(--oxblood-700);
+  --bg-danger-tint: var(--oxblood-100);
+  /* NOTE: no --fg-info. Donna has no "info" state. Use --fg-muted. */
+
+  /* Borders — hairlines on paper, never on themselves */
+  --border-hairline: var(--alpha-ink-08);
+  --border-strong:   var(--alpha-ink-14);
+  --border-inset:    var(--alpha-ink-03);
+  --border-accent:   var(--alpha-rust-28);
+  --border-on-surface: var(--ink-300);   /* hairline when bg is --bg-surface */
+
+  /* -----------------------------------------------------------
+     3 · SPACING — 4px base, semantic names
+     Only these values may appear in product CSS. Values outside
+     the scale (10, 14, 18, 20, 28, 40, 56, 80) are off-system.
+     ----------------------------------------------------------- */
+  --space-0:    0;
+  --space-px:   1px;
+  --space-1:    4px;
+  --space-2:    8px;
+  --space-3:    12px;
+  --space-4:    16px;
+  --space-5:    24px;
+  --space-6:    32px;
+  --space-7:    48px;
+  --space-8:    64px;
+  --space-9:    96px;
+  --space-10:   128px;
+
+  /* -----------------------------------------------------------
+     4 · TYPOGRAPHY — families, sizes, line-heights, tracking
+     The system is two families doing different jobs:
+       serif = voice (EB Garamond)
+       sans  = utility (Red Hat Text)
+     ----------------------------------------------------------- */
+
+  --font-serif: 'EB Garamond', 'Cormorant Garamond', Georgia, serif;
+  --font-sans:  'Red Hat Text', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono:  ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  /* Size scale — majors only, labeled by role */
+  --size-display: 72px;
+  --size-h1:     56px;
+  --size-h2:     36px;
+  --size-h3:     22px;
+  --size-h4:     15px;   /* sans 600, not a serif role */
+  --size-lead:   17px;
+  --size-body:   16px;
+  --size-small:  14px;
+  --size-caption:13px;
+  --size-micro:  11px;
+
+  /* Line-heights — named by tightness */
+  --lh-display:  1.02;
+  --lh-tight:    1.1;
+  --lh-snug:     1.24;
+  --lh-normal:   1.5;
+  --lh-prose:    1.6;
+  --lh-relaxed:  1.65;
+
+  /* Tracking — serif tightens as it grows, sans stays neutral */
+  --tracking-display: -0.025em;
+  --tracking-h1:      -0.02em;
+  --tracking-h2:      -0.015em;
+  --tracking-h3:      -0.01em;
+  --tracking-body:     0;
+  --tracking-micro:    0.14em;  /* uppercase labels only */
+
+  /* Weights — product UI uses 400/500/600 only */
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semi:    600;   /* sans-only, for --size-h4 cards + nums */
+
+  /* -----------------------------------------------------------
+     5 · RADIUS
+     ----------------------------------------------------------- */
+  --radius-0:    0;
+  --radius-xs:   4px;      /* chip inner stroke, small pressed */
+  --radius-sm:   6px;      /* buttons, inputs */
+  --radius-md:   10px;     /* cards, dialogs */
+  --radius-lg:   16px;     /* large cards, modal */
+  --radius-xl:   24px;     /* hero surfaces */
+  --radius-full: 999px;    /* chips, dots, avatars */
+
+  /* -----------------------------------------------------------
+     6 · SHADOW — four steps, no more
+     Donna casts warm shadows (ink-tinted, never black).
+     ----------------------------------------------------------- */
+  --shadow-0: none;
+  --shadow-1: 0 1px 2px var(--alpha-ink-04);
+  --shadow-2: 0 2px 8px var(--alpha-ink-05), 0 1px 2px var(--alpha-ink-04);
+  --shadow-3: 0 8px 24px var(--alpha-ink-08), 0 2px 4px var(--alpha-ink-04);
+  --shadow-4: 0 20px 48px var(--alpha-ink-12), 0 4px 8px var(--alpha-ink-04);
+
+  /* -----------------------------------------------------------
+     7 · MOTION
+     ----------------------------------------------------------- */
+  --duration-fast:   160ms;   /* hover, press, focus */
+  --duration-normal: 280ms;   /* drawer, toast, menu */
+  --duration-slow:   480ms;   /* route, modal */
+
+  --ease-out:       cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out:    cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-editorial: cubic-bezier(0.2, 0.8, 0.2, 1);  /* serif-feeling fade */
+
+  /* -----------------------------------------------------------
+     8 · Z-INDEX — declared so it exists
+     ----------------------------------------------------------- */
+  --z-base:     0;
+  --z-raised:   10;
+  --z-sticky:   100;
+  --z-dropdown: 200;
+  --z-modal:    300;
+  --z-toast:    400;
+  --z-tooltip:  500;
+
+  /* -----------------------------------------------------------
+     9 · LAYOUT
+     ----------------------------------------------------------- */
+  --measure-prose:   62ch;
+  --measure-narrow:  48ch;
+  --page-max:        1040px;
+  --gutter-mobile:   var(--space-5);   /* 24 */
+  --gutter-desktop:  var(--space-7);   /* 48 */
+}
+
+/* =============================================================
+   DARK / INVERSE
+   When ink is the canvas — sign-in, splash, onboarding —
+   swap the semantic layer only. Primitives stay.
+   Usage: <body class="inverse"> or any subtree.
+   ============================================================= */
+
+.inverse {
+  --bg-canvas:      var(--ink-900);
+  --bg-surface:     var(--ink-800);
+  --bg-surface-alt: var(--ink-800);
+  --bg-inset:       var(--ink-900);
+  --fg-primary:     var(--paper-100);
+  --fg-secondary:   var(--paper-200);
+  --fg-tertiary:    var(--paper-300);
+  --fg-muted:       var(--rust-300);
+  --fg-placeholder: var(--ink-500);
+  --fg-accent:      var(--rust-300);
+  --fg-accent-strong: var(--rust-100);
+  --border-hairline: rgba(251, 247, 245, 0.10);
+  --border-strong:   rgba(251, 247, 245, 0.18);
+}

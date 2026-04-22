@@ -1,0 +1,61 @@
+"""list_calendar — upcoming events."""
+from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+
+DESCRIPTION = (
+    "List upcoming calendar entries for this user. "
+    "Use when deciding what's coming up ('meetings today?', 'anything tomorrow?')."
+)
+
+INPUT_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "within_days": {"type": "integer", "default": 7},
+        "limit": {"type": "integer", "default": 20},
+    },
+    "required": [],
+}
+
+
+async def list_calendar(
+    user_id: str, within_days: int = 7, limit: int = 20
+) -> ToolResult:
+    try:
+        from sqlalchemy import select
+
+        from backend.db.models import CalendarEntry
+        from backend.db.session import async_session
+    except Exception:
+        return degraded("db unavailable")
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    until = now + timedelta(days=within_days)
+    try:
+        async with async_session() as session:
+            stmt = (
+                select(CalendarEntry)
+                .where(CalendarEntry.user_id == user_id)
+                .where(CalendarEntry.start_time >= now)
+                .where(CalendarEntry.start_time <= until)
+                .order_by(CalendarEntry.start_time.asc())
+                .limit(limit)
+            )
+            rows = (await session.execute(stmt)).scalars().all()
+    except Exception:
+        return degraded("db error")
+    if not rows:
+        return no_hits()
+    return ok(
+        [
+            {
+                "id": r.id,
+                "title": r.title,
+                "start_time": r.start_time.isoformat() if r.start_time else None,
+                "end_time": r.end_time.isoformat() if r.end_time else None,
+                "location": r.location,
+            }
+            for r in rows
+        ]
+    )

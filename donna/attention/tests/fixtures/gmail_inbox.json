@@ -1,0 +1,5 @@
+[
+  {"id": "m1", "subject": "Your Notion subscription renewal", "from": "billing@notion.so", "amount": 12.0},
+  {"id": "m2", "subject": "Spotify monthly invoice", "from": "noreply@spotify.com", "amount": 9.99},
+  {"id": "m3", "subject": "Vercel invoice April", "from": "billing@vercel.com", "amount": 20.0}
+]

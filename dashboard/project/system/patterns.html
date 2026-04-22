@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Donna · Patterns &amp; Voice</title>
+<link rel="stylesheet" href="../assets/tokens.css" />
+<link rel="stylesheet" href="../assets/docs.css" />
+<style>
+  .do-dont {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: var(--space-4) 0;
+  }
+  .do-dont > div {
+    background: var(--bg);
+    padding: var(--space-5);
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+  .dd-head {
+    font-size: var(--text-micro);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    font-weight: var(--weight-medium);
+  }
+  .dd-do .dd-head { color: var(--signal-success); }
+  .dd-dont .dd-head { color: var(--signal-danger); }
+  .dd-quote {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 1.25rem;
+    line-height: 1.4;
+    color: var(--ink);
+  }
+  .dd-note { font-size: var(--text-small); color: var(--ink-500); }
+
+  /* Illustration sample grid */
+  .vignettes {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin: var(--space-4) 0;
+  }
+  .vignette {
+    background: var(--bg);
+    aspect-ratio: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-5);
+    gap: var(--space-4);
+  }
+  .vignette svg { width: 60%; height: auto; }
+  .vignette-caption {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 1rem;
+    color: var(--ink-700);
+    text-align: center;
+  }
+
+  .pattern-example {
+    background: var(--paper-200);
+    padding: var(--space-7) var(--space-6);
+    border-radius: var(--radius-md);
+    margin: var(--space-4) 0;
+  }
+
+  /* Hierarchy diagram */
+  .hierarchy {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-4);
+    padding: var(--space-6);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+  .hi-row { display: grid; grid-template-columns: 100px 1fr 1fr; gap: var(--space-5); align-items: baseline; padding: var(--space-3) 0; border-top: 1px solid var(--border); }
+  .hi-row:first-child { border-top: none; }
+  .hi-label { font-size: var(--text-micro); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--ink-400); font-weight: 500; }
+  .hi-sample { color: var(--ink); }
+  .hi-when { font-size: var(--text-small); color: var(--ink-500); }
+</style>
+</head>
+<body>
+
+<div class="ds-shell">
+
+  <aside class="ds-nav">
+    <a href="../index.html" class="ds-nav-brand">donna</a>
+
+    <div class="ds-nav-section">System</div>
+    <a href="foundations.html">Foundations</a>
+    <a href="components.html">Components</a>
+    <a href="patterns.html" class="active">Patterns &amp; Voice</a>
+
+    <div class="ds-nav-section">In this page</div>
+    <a href="#hierarchy">Text hierarchy</a>
+    <a href="#color-use">Using color</a>
+    <a href="#cards-rules">Card rules</a>
+    <a href="#spacing-rules">Spacing rhythm</a>
+    <a href="#voice">Voice &amp; copy</a>
+    <a href="#illustration">Illustration</a>
+    <a href="#empty">Empty &amp; loading</a>
+
+    <div class="ds-nav-section">Screens</div>
+    <a href="../screens/dashboard.html">Dashboard</a>
+  </aside>
+
+  <main class="ds-main">
+
+    <div class="ds-page-label">03 · Patterns &amp; Voice</div>
+    <h1 class="ds-page-title"><em>The way she behaves.</em></h1>
+    <p class="ds-page-lead">
+      Foundations tell you <em>what</em> exists. Components tell you <em>how</em> each part is built. This page tells you <em>when</em> to use which · the logic that keeps every screen feeling like the same product.
+    </p>
+
+    <!-- HIERARCHY -->
+    <section class="ds-section" id="hierarchy">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Text hierarchy · what to use where</em></h2>
+        <p class="ds-section-desc">A decision chart, not a style guide. If a screen feels unclear, it&rsquo;s almost always because two levels are competing, or the right level was skipped.</p>
+      </div>
+
+      <div class="hierarchy">
+        <div class="hi-row">
+          <span class="hi-label">Display</span>
+          <span class="hi-sample" style="font-family: var(--font-serif); font-style: italic; font-size: 2.5rem; line-height: 1; letter-spacing: -0.03em;">A quieter AI.</span>
+          <span class="hi-when">Hero of cover/landing. Once per marketing page, never in-product.</span>
+        </div>
+        <div class="hi-row">
+          <span class="hi-label">H1 · Page title</span>
+          <span class="hi-sample" style="font-family: var(--font-serif); font-style: italic; font-size: 2rem; letter-spacing: -0.025em;">Good morning, Arnav.</span>
+          <span class="hi-when">One per page. The first thing read. Personal when possible.</span>
+        </div>
+        <div class="hi-row">
+          <span class="hi-label">H2 · Section</span>
+          <span class="hi-sample" style="font-family: var(--font-serif); font-style: italic; font-size: 1.625rem; letter-spacing: -0.02em;">Today, gently.</span>
+          <span class="hi-when">Introduces a chapter of content. Has space above, not below.</span>
+        </div>
+        <div class="hi-row">
+          <span class="hi-label">H3 · Subsection</span>
+          <span class="hi-sample" style="font-family: var(--font-serif); font-style: italic; font-size: 1.25rem;">The things you cared about.</span>
+          <span class="hi-when">Groups related cards. Never decorative · only when there&rsquo;s a real grouping.</span>
+        </div>
+        <div class="hi-row">
+          <span class="hi-label">H4 · Card title</span>
+          <span class="hi-sample" style="font-family: var(--font-serif); font-style: italic; font-size: 1.125rem;">This week with Maya.</span>
+          <span class="hi-when">Default title inside a card or list item.</span>
+        </div>
+        <div class="hi-row">
+          <span class="hi-label">Lead</span>
+          <span class="hi-sample" style="font-family: var(--font-sans); font-size: 1.0625rem; line-height: 1.6; color: var(--ink-700);">A short intro, never more than two sentences.</span>
+          <span class="hi-when">Top of a page or section. Explains, then steps aside.</span>
+        </div>
+        <div class="hi-row">
+          <span class="hi-label">Body</span>
+          <span class="hi-sample" style="font-family: var(--font-sans); font-size: 1rem; line-height: 1.5;">Everything a user reads to do something.</span>
+          <span class="hi-when">Running copy, descriptions, card body.</span>
+        </div>
+        <div class="hi-row">
+          <span class="hi-label">Small · Meta</span>
+          <span class="hi-sample" style="font-family: var(--font-sans); font-size: 0.875rem; color: var(--ink-500);">Quiet details · timestamps, counts.</span>
+          <span class="hi-when">Supporting information. Never primary.</span>
+        </div>
+        <div class="hi-row">
+          <span class="hi-label">Label · Caps</span>
+          <span class="hi-sample" style="font-size: 0.6875rem; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-500); font-weight: 500;">SECTION LABEL · 01</span>
+          <span class="hi-when">Category markers, nav sections, step numbers.</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- COLOR USE -->
+    <section class="ds-section" id="color-use">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Color · when, and when not</em></h2>
+        <p class="ds-section-desc">The rule is almost absolute: <em>everything is ink; rust appears once</em>. If you feel the urge to add a second color moment, remove the first one instead.</p>
+      </div>
+
+      <div class="do-dont">
+        <div class="dd-do">
+          <div class="dd-head">Do</div>
+          <div class="dd-quote">A quieter kind of <span style="color: var(--accent);">AI</span>.</div>
+          <div class="dd-note">One word in rust. The rest in ink. The accent earns attention because it is rare.</div>
+        </div>
+        <div class="dd-dont">
+          <div class="dd-head">Don&rsquo;t</div>
+          <div class="dd-quote" style="color: var(--accent);">A quieter kind of AI.</div>
+          <div class="dd-note">Entire headings in color. Kills the intent. The italic serif is already doing the emotional work.</div>
+        </div>
+      </div>
+
+      <div class="do-dont">
+        <div class="dd-do">
+          <div class="dd-head">Do</div>
+          <div style="display: flex; gap: var(--space-3);">
+            <button class="btn btn-primary" style="font: 500 14px/1 var(--font-sans); padding: 10px 16px; background: var(--ink); color: var(--paper-100); border-radius: 6px; border: none;">Not now</button>
+            <button style="font: 500 14px/1 var(--font-sans); padding: 10px 16px; background: var(--accent); color: var(--paper-100); border-radius: 6px; border: none;">Keep it for me</button>
+          </div>
+          <div class="dd-note">Primary action in rust because it&rsquo;s the <em>keeping</em> action. Decline in ink.</div>
+        </div>
+        <div class="dd-dont">
+          <div class="dd-head">Don&rsquo;t</div>
+          <div style="display: flex; gap: var(--space-3);">
+            <button style="font: 500 14px/1 var(--font-sans); padding: 10px 16px; background: var(--accent); color: var(--paper-100); border-radius: 6px; border: none;">Cancel</button>
+            <button style="font: 500 14px/1 var(--font-sans); padding: 10px 16px; background: var(--signal-success); color: var(--paper-100); border-radius: 6px; border: none;">Save</button>
+          </div>
+          <div class="dd-note">Rust on a destructive action. Green on a save. Two colors fighting. This is every generic AI app.</div>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">The one-moment rule</div>
+        <div class="rule-body">
+          <p>Count the rust on any screen before shipping. Zero is sometimes correct. One is ideal. Two is always wrong · choose.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Signal colors</div>
+        <div class="rule-body">
+          <p>Moss, amber, oxblood only on <em>status indicators</em> · chip dots, chip labels, a hairline under a row. Never as button backgrounds. Never as text inside prose.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- CARD RULES -->
+    <section class="ds-section" id="cards-rules">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Card rules</em></h2>
+        <p class="ds-section-desc">Cards are not containers · they are thoughts. One thought per card. If a card has two sections inside it, it should be two cards.</p>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">Surface vs. hairline</div>
+        <div class="rule-body">
+          <p><em>Surface</em> card (<code>#F0EAE4</code>) for the primary content of a row · things to act on. <em>Hairline</em> card (paper bg, 1px border) for reference content · things to know. Never mix in the same grid.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Padding</div>
+        <div class="rule-body">
+          <p>24px on mobile, 32px on desktop. Inner title &rarr; body: 12px. Body &rarr; meta: 16px, divided by a 1px hairline.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Elevation</div>
+        <div class="rule-body">
+          <p>Resting cards have <em>no shadow</em>. A shadow means the card is briefly above the page · popover, hovered drag, a highlighted moment. When it lands, the shadow goes.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Radius</div>
+        <div class="rule-body">
+          <p>10px (<code>--radius-md</code>). 16px only for hero or modal surfaces. Never pill. Never 0.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Width</div>
+        <div class="rule-body">
+          <p>Cards come in thirds of the content width. Three across on desktop, one across on mobile. Never two-and-a-half · no orphan card sitting alone in a row.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SPACING RULES -->
+    <section class="ds-section" id="spacing-rules">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Spacing · the rhythm</em></h2>
+        <p class="ds-section-desc">Every page has three spacing moments: between sections, between elements, inside elements. Keep them distinct. If the space between a title and its body equals the space between sections, the hierarchy collapses.</p>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">Page top</div>
+        <div class="rule-body">
+          <p><em>space-9</em> (96) from the top nav to the page title. <em>space-8</em> (64) from the page title to the first section. This is the breath the user takes before reading.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Section to section</div>
+        <div class="rule-body">
+          <p><em>space-8</em> (64) minimum. <em>space-9</em> (96) if the two sections are different ideas. <em>space-10</em> (128) when crossing a chapter boundary · the equivalent of a new page.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Inside a section</div>
+        <div class="rule-body">
+          <p>Title to first element: <em>space-6</em> (32). Between grouped elements: <em>space-4</em> (16). Between different ideas in the same section: <em>space-5</em> (24).</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">The single most important rule</div>
+        <div class="rule-body">
+          <p><em>Space belongs to what follows, not what came before.</em> That means a section title is close to its content, and the space lives <em>above</em> the title. This is why Donna looks calmly composed instead of divided into walls.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- VOICE -->
+    <section class="ds-section" id="voice">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Voice &amp; copy</em></h2>
+        <p class="ds-section-desc">She writes the way a sharp, warm friend texts you · direct, observant, a little dry. She does not perform. She does not add exclamation. She knows your name but doesn&rsquo;t use it unless it matters.</p>
+      </div>
+
+      <div class="do-dont">
+        <div class="dd-do">
+          <div class="dd-head">Do</div>
+          <div class="dd-quote">Maya&rsquo;s sister lands in 40 minutes. Do you still want flowers?</div>
+          <div class="dd-note">Direct. Specific. Trusts the user to remember context.</div>
+        </div>
+        <div class="dd-dont">
+          <div class="dd-head">Don&rsquo;t</div>
+          <div class="dd-quote">Hi there! Just a friendly reminder that Maya&rsquo;s sister is landing soon! 🎉</div>
+          <div class="dd-note">Overbearing. Performs warmth instead of being warm.</div>
+        </div>
+      </div>
+
+      <div class="do-dont">
+        <div class="dd-do">
+          <div class="dd-head">Do</div>
+          <div class="dd-quote">Kept. I&rsquo;ll nudge you Wednesday evening.</div>
+          <div class="dd-note">One-word confirmation. Then says the next helpful thing.</div>
+        </div>
+        <div class="dd-dont">
+          <div class="dd-head">Don&rsquo;t</div>
+          <div class="dd-quote">Got it! I&rsquo;ve successfully added your reminder to the system. You&rsquo;ll receive a notification on Wednesday.</div>
+          <div class="dd-note">Talks about the system instead of to the user. Developer-tool voice.</div>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">Never</div>
+        <div class="rule-body">
+          <p>Em dashes. Exclamation marks. Emoji. The word &ldquo;friend&rdquo;. The phrase &ldquo;I&rsquo;m just an AI&rdquo;. &ldquo;Let me know if you&rsquo;d like me to&rdquo;. &ldquo;How can I help?&rdquo;</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Names &amp; pronouns</div>
+        <div class="rule-body">
+          <p>Donna is <em>she</em>. Not <em>it</em>. Not <em>they</em>. In-product copy never refers to her in the third person to the user · the user is speaking <em>to</em> her, so her voice is first-person.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Length</div>
+        <div class="rule-body">
+          <p>One or two sentences per message. If you need three, you&rsquo;re telling, not helping. Break into a follow-up.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ILLUSTRATION -->
+    <section class="ds-section" id="illustration">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Illustration</em></h2>
+        <p class="ds-section-desc">Quiet editorial vignettes · small, restrained, thin-line drawings in rust ink on paper. Each one is an object, not a scene. A teacup. A pencil on a page. A key. Objects imply presence and memory without forcing metaphor.</p>
+      </div>
+
+      <div class="vignettes">
+        <div class="vignette">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M30 50 L85 50 L82 95 Q82 102 75 102 L42 102 Q35 102 33 95 Z" stroke="#7B5544" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M85 60 Q102 62 102 78 Q102 92 85 90" stroke="#7B5544" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M45 40 Q45 30 52 30 M58 40 Q58 28 66 28 M71 40 Q71 32 77 32" stroke="#7B5544" stroke-width="1.1" stroke-linecap="round"/>
+          </svg>
+          <div class="vignette-caption">the morning</div>
+        </div>
+        <div class="vignette">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M20 90 L80 30 L92 42 L32 102 Z" stroke="#7B5544" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M80 30 L88 22 L100 34 L92 42 Z" stroke="#7B5544" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M88 22 L95 15" stroke="#7B5544" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M22 100 L30 108" stroke="#7B5544" stroke-width="1.2" stroke-linecap="round"/>
+          </svg>
+          <div class="vignette-caption">something noted</div>
+        </div>
+        <div class="vignette">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="45" cy="55" r="18" stroke="#7B5544" stroke-width="1.4"/>
+            <path d="M62 62 L100 100" stroke="#7B5544" stroke-width="1.4" stroke-linecap="round"/>
+            <path d="M95 100 L105 100 L100 85" stroke="#7B5544" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/>
+            <circle cx="41" cy="51" r="3" fill="#7B5544"/>
+          </svg>
+          <div class="vignette-caption">a small key</div>
+        </div>
+        <div class="vignette">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M30 30 L90 30 L90 95 L60 85 L30 95 Z" stroke="#7B5544" stroke-width="1.4" stroke-linejoin="round"/>
+            <path d="M42 50 L78 50 M42 62 L70 62 M42 74 L64 74" stroke="#7B5544" stroke-width="1" stroke-linecap="round" opacity="0.7"/>
+          </svg>
+          <div class="vignette-caption">the book</div>
+        </div>
+        <div class="vignette">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <path d="M25 85 Q60 20 95 85" stroke="#7B5544" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+            <circle cx="60" cy="50" r="3" fill="#7B5544"/>
+            <path d="M25 92 L95 92" stroke="#7B5544" stroke-width="1" opacity="0.4"/>
+          </svg>
+          <div class="vignette-caption">the thought kept</div>
+        </div>
+        <div class="vignette">
+          <svg viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect x="35" y="25" width="50" height="75" rx="4" stroke="#7B5544" stroke-width="1.4"/>
+            <path d="M50 45 L72 45 M50 58 L78 58 M50 71 L68 71 M50 84 L74 84" stroke="#7B5544" stroke-width="1" opacity="0.7"/>
+            <circle cx="85" cy="100" r="6" stroke="#7B5544" stroke-width="1.4" fill="#FBF7F5"/>
+            <circle cx="85" cy="100" r="2" fill="#7B5544"/>
+          </svg>
+          <div class="vignette-caption">a note pinned</div>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">Style</div>
+        <div class="rule-body">
+          <p>Single-weight line (1.2&ndash;1.4px). Rust on paper only. No fills except occasional rust solid for a focal element. Rounded line caps. Gentle imperfection · these look drawn, not geometric.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">When to use</div>
+        <div class="rule-body">
+          <p>Empty states, onboarding steps, email headers, marketing moments, section intros on the dashboard. Never as decoration inside a card. Never more than one per viewport.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Scale</div>
+        <div class="rule-body">
+          <p>Small. 80&ndash;160px. An illustration the size of your thumbnail, not a billboard. Restraint is the style.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- EMPTY & LOADING -->
+    <section class="ds-section" id="empty">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Empty &amp; loading states</em></h2>
+        <p class="ds-section-desc">Empty doesn&rsquo;t mean blank · it means <em>not yet</em>. One illustration, one serif sentence, one optional action. Loading is almost invisible: a single rust dot, slowly breathing.</p>
+      </div>
+
+      <div class="pattern-example" style="display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-5);">
+        <!-- Empty -->
+        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-8) var(--space-6); text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--space-4);">
+          <svg width="96" height="96" viewBox="0 0 120 120" fill="none">
+            <path d="M25 85 Q60 20 95 85" stroke="#7B5544" stroke-width="1.4" stroke-linecap="round" fill="none"/>
+            <circle cx="60" cy="50" r="3" fill="#7B5544"/>
+            <path d="M25 92 L95 92" stroke="#7B5544" stroke-width="1" opacity="0.4"/>
+          </svg>
+          <div style="font-family: var(--font-serif); font-style: italic; font-size: 1.5rem; color: var(--ink); max-width: 24ch;">Nothing kept yet. Tell me something small.</div>
+          <div style="font-size: 0.875rem; color: var(--ink-500);">She starts learning from the first message.</div>
+        </div>
+
+        <!-- Loading -->
+        <div style="background: var(--bg); border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-8) var(--space-6); text-align: center; display: flex; flex-direction: column; align-items: center; gap: var(--space-4); justify-content: center;">
+          <div style="display: flex; gap: 8px; align-items: center;">
+            <span style="width: 6px; height: 6px; border-radius: 999px; background: var(--accent); animation: breath 1.6s infinite;"></span>
+            <span style="width: 6px; height: 6px; border-radius: 999px; background: var(--accent); animation: breath 1.6s infinite 0.2s;"></span>
+            <span style="width: 6px; height: 6px; border-radius: 999px; background: var(--accent); animation: breath 1.6s infinite 0.4s;"></span>
+          </div>
+          <div style="font-family: var(--font-serif); font-style: italic; font-size: 1.125rem; color: var(--ink-500);">Thinking.</div>
+          <style>@keyframes breath { 0%, 100% { opacity: 0.25; } 50% { opacity: 1; } }</style>
+        </div>
+      </div>
+    </section>
+
+    <footer style="margin-top: var(--space-9); padding-top: var(--space-6); border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: var(--text-small); color: var(--ink-500);">
+      <a href="components.html" style="color: var(--ink-500); text-decoration: none;">← Components</a>
+      <a href="../screens/dashboard.html" style="color: var(--accent); text-decoration: none;">Next · Dashboard in situ →</a>
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>

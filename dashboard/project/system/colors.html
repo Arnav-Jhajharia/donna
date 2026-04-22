@@ -1,0 +1,455 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Donna — Colors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --serif: 'EB Garamond', Georgia, serif;
+    --sans: 'Red Hat Text', -apple-system, sans-serif;
+    --bg: #FBF7F5;
+    --surface: #F0EAE4;
+    --surface-2: #E7DFD7;
+    --ink: #1E1A18;
+    --ink-700: #3A3331;
+    --ink-500: #6B615C;
+    --ink-400: #8F837C;
+    --accent: #7B5544;
+    --accent-tint: #F5EFEA;
+    --border: rgba(30,26,24,0.08);
+    --border-strong: rgba(30,26,24,0.14);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+  .page { max-width: 1040px; margin: 0 auto; padding: 96px 48px 128px; }
+
+  .crumbs {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--ink-400); font-weight: 500; margin-bottom: 64px;
+  }
+  .crumbs a { color: var(--ink-400); text-decoration: none; }
+
+  h1.page-title {
+    font-family: var(--serif); font-size: 56px; line-height: 1.05;
+    letter-spacing: -0.02em; font-weight: 400; font-style: normal;
+    margin: 0 0 20px; max-width: 22ch;
+  }
+  p.page-lead {
+    font-size: 17px; line-height: 1.6; color: var(--ink-700);
+    max-width: 62ch; margin: 0 0 80px; font-weight: 400;
+  }
+
+  section { margin-top: 96px; }
+  section:first-of-type { margin-top: 0; }
+
+  .sec-label {
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em;
+    color: var(--accent); font-weight: 500; margin-bottom: 16px;
+  }
+  h2.sec-title {
+    font-family: var(--serif); font-size: 36px; line-height: 1.1;
+    letter-spacing: -0.015em; font-weight: 400; font-style: normal;
+    margin: 0 0 12px;
+  }
+  p.sec-lead {
+    font-size: 16px; line-height: 1.65; color: var(--ink-700);
+    max-width: 58ch; margin: 0 0 40px;
+  }
+
+  /* Core palette — six roles */
+  .palette {
+    border-top: 1px solid var(--border);
+    margin-top: 8px;
+  }
+  .swatch {
+    display: grid;
+    grid-template-columns: 180px 1fr 1fr;
+    gap: 32px;
+    align-items: stretch;
+    border-bottom: 1px solid var(--border);
+  }
+  .swatch-chip {
+    min-height: 160px;
+    border-right: 1px solid var(--border);
+  }
+  .swatch-meta {
+    padding: 28px 0;
+    display: flex; flex-direction: column; gap: 6px;
+  }
+  .swatch-role {
+    font-family: var(--serif); font-size: 22px; line-height: 1.2;
+    font-weight: 500; font-style: normal; color: var(--ink);
+  }
+  .swatch-hex {
+    font-size: 12px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--ink-500); font-weight: 500; font-variant-numeric: tabular-nums;
+  }
+  .swatch-use {
+    font-size: 14px; line-height: 1.55; color: var(--ink-500);
+    max-width: 36ch; margin-top: 8px;
+  }
+  .swatch-specs {
+    padding: 28px 0;
+    display: grid; gap: 6px;
+    font-size: 12px; line-height: 1.6;
+    color: var(--ink-400);
+    font-variant-numeric: tabular-nums;
+  }
+  .swatch-specs b { color: var(--ink-700); font-weight: 500; }
+
+  /* Scales */
+  .scale {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    border: 1px solid var(--border);
+    margin-top: 20px;
+  }
+  .scale-cell {
+    min-height: 96px;
+    padding: 12px;
+    display: flex; flex-direction: column; justify-content: flex-end;
+    border-right: 1px solid var(--border);
+    font-size: 11px; line-height: 1.3;
+    font-variant-numeric: tabular-nums;
+  }
+  .scale-cell:last-child { border-right: none; }
+  .scale-cell .n { font-weight: 500; }
+  .scale-cell .h { opacity: 0.7; }
+  .scale-cell.dark { color: var(--bg); }
+  .scale-cell.light { color: var(--ink-500); }
+
+  /* Rules */
+  .rules { display: grid; gap: 28px; margin-top: 8px; }
+  .rule {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 48px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
+  }
+  .rule:first-child { padding-top: 0; border-top: none; }
+  .rule-t {
+    font-family: var(--serif); font-size: 20px; line-height: 1.3;
+    color: var(--ink); font-weight: 500;
+  }
+  .rule-b {
+    font-size: 15px; line-height: 1.7; color: var(--ink-700);
+    max-width: 58ch;
+  }
+  .rule-b p { margin: 0 0 8px; }
+  .rule-b p:last-child { margin-bottom: 0; }
+  .rule-b em { font-family: var(--serif); font-style: italic; }
+  .rule-b code {
+    font-size: 13px; color: var(--accent); background: var(--accent-tint);
+    padding: 1px 6px; border-radius: 3px; font-weight: 500;
+  }
+
+  /* In-context demo row */
+  .demo {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px; background: var(--border);
+    border: 1px solid var(--border); margin-top: 24px;
+  }
+  .mock { padding: 28px; min-height: 220px; display: flex; flex-direction: column; gap: 12px; }
+  .mock.on-bg { background: var(--bg); }
+  .mock.on-surface { background: var(--surface); }
+  .mock.on-hair { background: var(--bg); border: 1px solid var(--border-strong); margin: -1px; }
+  .mock-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-400); font-weight: 500; }
+  .mock-title { font-family: var(--serif); font-size: 24px; line-height: 1.1; font-weight: 400; letter-spacing: -0.015em; margin: 0; }
+  .mock-body { font-size: 14px; line-height: 1.55; color: var(--ink-500); margin: 0; }
+  .mock-btn { font-size: 13px; font-weight: 500; background: var(--accent); color: var(--bg); padding: 10px 16px; border-radius: 6px; border: none; display: inline-flex; align-self: flex-start; margin-top: auto; cursor: pointer; font-family: inherit; }
+
+  .foot {
+    margin-top: 128px; padding-top: 24px; border-top: 1px solid var(--border);
+    display: flex; justify-content: space-between;
+    font-size: 13px; color: var(--ink-400);
+  }
+  .foot a { color: var(--ink-400); text-decoration: none; }
+  .foot a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="crumbs">
+    <a href="../index.html">Package</a> &nbsp;/&nbsp;
+    <a href="type.html">Type</a> &nbsp;/&nbsp;
+    <span>Colors · locked</span>
+  </div>
+
+  <h1 class="page-title">Paper, ink, and one moment of rust.</h1>
+  <p class="page-lead">
+    Six core colors. One warm paper background, two warmer surfaces, ink for all text, a single rust accent, and two neutral muted levels. Signals (success, warning, danger) are pulled from the same editorial family — no new hues introduced.
+  </p>
+
+  <!-- ─────────────── CORE PALETTE ─────────────── -->
+  <section>
+    <div class="sec-label">01 · The six</div>
+    <h2 class="sec-title">Core palette.</h2>
+    <p class="sec-lead">
+      Six roles, each with one job. Every other value in the system is a tint or shade of these.
+    </p>
+
+    <div class="palette">
+
+      <div class="swatch">
+        <div class="swatch-chip" style="background: var(--bg);"></div>
+        <div class="swatch-meta">
+          <div class="swatch-role">Paper</div>
+          <div class="swatch-hex">#FBF7F5</div>
+          <p class="swatch-use">The page. The warm off-white everything sits on.</p>
+        </div>
+        <div class="swatch-specs">
+          <div><b>Role</b> Background</div>
+          <div><b>Use on</b> Body, app shell</div>
+          <div><b>Contrast</b> 18.9 : 1 with ink</div>
+          <div><b>Never</b> Don't tint further</div>
+        </div>
+      </div>
+
+      <div class="swatch">
+        <div class="swatch-chip" style="background: var(--surface);"></div>
+        <div class="swatch-meta">
+          <div class="swatch-role">Surface</div>
+          <div class="swatch-hex">#F0EAE4</div>
+          <p class="swatch-use">Raised. Primary cards, inputs at rest, navigation rails.</p>
+        </div>
+        <div class="swatch-specs">
+          <div><b>Role</b> Card / input</div>
+          <div><b>Use on</b> Paper</div>
+          <div><b>Contrast</b> 17.1 : 1 with ink</div>
+          <div><b>Paired with</b> 1px hairline</div>
+        </div>
+      </div>
+
+      <div class="swatch">
+        <div class="swatch-chip" style="background: var(--surface-2);"></div>
+        <div class="swatch-meta">
+          <div class="swatch-role">Surface · pressed</div>
+          <div class="swatch-hex">#E7DFD7</div>
+          <p class="swatch-use">Pressed / hovered card. The deepest neutral in the system.</p>
+        </div>
+        <div class="swatch-specs">
+          <div><b>Role</b> Hover / active</div>
+          <div><b>Use on</b> Surface transitions</div>
+          <div><b>Contrast</b> 15.3 : 1</div>
+          <div><b>Never</b> As resting background</div>
+        </div>
+      </div>
+
+      <div class="swatch">
+        <div class="swatch-chip" style="background: var(--ink);"></div>
+        <div class="swatch-meta">
+          <div class="swatch-role">Ink</div>
+          <div class="swatch-hex">#1E1A18</div>
+          <p class="swatch-use">Primary text. Near-black with a touch of warm. The voice.</p>
+        </div>
+        <div class="swatch-specs">
+          <div><b>Role</b> All primary text</div>
+          <div><b>Use on</b> Paper, surface</div>
+          <div><b>Weight</b> 90%+ of type</div>
+          <div><b>Pure #000</b> Never</div>
+        </div>
+      </div>
+
+      <div class="swatch">
+        <div class="swatch-chip" style="background: var(--accent);"></div>
+        <div class="swatch-meta">
+          <div class="swatch-role">Rust</div>
+          <div class="swatch-hex">#7B5544</div>
+          <p class="swatch-use">The one accent. One moment per screen · a word, a dot, a button fill. Never two.</p>
+        </div>
+        <div class="swatch-specs">
+          <div><b>Role</b> Accent</div>
+          <div><b>Use on</b> One moment / screen</div>
+          <div><b>Contrast</b> 6.1 : 1 on paper</div>
+          <div><b>Also</b> The dot after <em style="font-family:var(--serif); font-style:italic;">donna</em></div>
+        </div>
+      </div>
+
+      <div class="swatch">
+        <div class="swatch-chip" style="background: var(--ink-500);"></div>
+        <div class="swatch-meta">
+          <div class="swatch-role">Muted</div>
+          <div class="swatch-hex">#6B615C</div>
+          <p class="swatch-use">Secondary text · captions, helper text, timestamps that aren't "just now".</p>
+        </div>
+        <div class="swatch-specs">
+          <div><b>Role</b> Secondary text</div>
+          <div><b>Use on</b> Paper, surface</div>
+          <div><b>Contrast</b> 6.8 : 1</div>
+          <div><b>Paired with</b> Ink body</div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ─────────────── SCALES ─────────────── -->
+  <section>
+    <div class="sec-label">02 · The scales</div>
+    <h2 class="sec-title">Derived values.</h2>
+    <p class="sec-lead">
+      Two scales — paper (warm neutral) and ink (text) — plus a rust ramp for the accent. Only the six roles above appear directly in UI. Scales exist for disabled states, hairlines, tints.
+    </p>
+
+    <div class="sec-label" style="margin-top:40px; color:var(--ink-400);">Paper / surface</div>
+    <div class="scale">
+      <div class="scale-cell light" style="background:#FDFAF8;"><span class="n">Paper 50</span><span class="h">#FDFAF8</span></div>
+      <div class="scale-cell light" style="background:#FBF7F5;"><span class="n">Paper 100</span><span class="h">#FBF7F5</span></div>
+      <div class="scale-cell light" style="background:#F5EFEA;"><span class="n">Paper 200</span><span class="h">#F5EFEA</span></div>
+      <div class="scale-cell light" style="background:#F0EAE4;"><span class="n">Paper 300</span><span class="h">#F0EAE4</span></div>
+      <div class="scale-cell light" style="background:#E7DFD7;"><span class="n">Paper 400</span><span class="h">#E7DFD7</span></div>
+      <div class="scale-cell" style="background:#D6CAC0; color:var(--ink);"><span class="n">Paper 500</span><span class="h">#D6CAC0</span></div>
+    </div>
+
+    <div class="sec-label" style="margin-top:40px; color:var(--ink-400);">Ink</div>
+    <div class="scale">
+      <div class="scale-cell light" style="background:#D9CEC5;"><span class="n">Ink 200</span><span class="h">#D9CEC5</span></div>
+      <div class="scale-cell light" style="background:#B5A89F;"><span class="n">Ink 300</span><span class="h">#B5A89F</span></div>
+      <div class="scale-cell dark" style="background:#8F837C;"><span class="n">Ink 400</span><span class="h">#8F837C</span></div>
+      <div class="scale-cell dark" style="background:#6B615C;"><span class="n">Ink 500</span><span class="h">#6B615C</span></div>
+      <div class="scale-cell dark" style="background:#3A3331;"><span class="n">Ink 700</span><span class="h">#3A3331</span></div>
+      <div class="scale-cell dark" style="background:#1E1A18;"><span class="n">Ink 900</span><span class="h">#1E1A18</span></div>
+    </div>
+
+    <div class="sec-label" style="margin-top:40px; color:var(--ink-400);">Rust</div>
+    <div class="scale">
+      <div class="scale-cell light" style="background:#F5EFEA;"><span class="n">Rust 50</span><span class="h">#F5EFEA</span></div>
+      <div class="scale-cell light" style="background:#EBDCD2;"><span class="n">Rust 100</span><span class="h">#EBDCD2</span></div>
+      <div class="scale-cell dark" style="background:#C9A796;"><span class="n">Rust 300</span><span class="h">#C9A796</span></div>
+      <div class="scale-cell dark" style="background:#A07562;"><span class="n">Rust 500</span><span class="h">#A07562</span></div>
+      <div class="scale-cell dark" style="background:#7B5544;"><span class="n">Rust 700</span><span class="h">#7B5544</span></div>
+      <div class="scale-cell dark" style="background:#4A2F23;"><span class="n">Rust 900</span><span class="h">#4A2F23</span></div>
+    </div>
+  </section>
+
+  <!-- ─────────────── SIGNALS ─────────────── -->
+  <section>
+    <div class="sec-label">03 · Signals</div>
+    <h2 class="sec-title">Three quiet states.</h2>
+    <p class="sec-lead">
+      Success, warning, danger — desaturated to sit beside rust without fighting it. Each appears only in the exact role it names.
+    </p>
+
+    <div class="palette">
+      <div class="swatch">
+        <div class="swatch-chip" style="background: #5C6B4A;"></div>
+        <div class="swatch-meta">
+          <div class="swatch-role">Moss · success</div>
+          <div class="swatch-hex">#5C6B4A</div>
+          <p class="swatch-use">Confirmation. "Done", "kept", "noted". Never as a celebration.</p>
+        </div>
+        <div class="swatch-specs"><div><b>Use on</b> Paper</div><div><b>Pairs with</b> Moss tint #EEF1E7</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-chip" style="background: #A8804A;"></div>
+        <div class="swatch-meta">
+          <div class="swatch-role">Amber · warning</div>
+          <div class="swatch-hex">#A8804A</div>
+          <p class="swatch-use">"Heads up, something shifted." Always paired with a quiet sentence, never an icon alone.</p>
+        </div>
+        <div class="swatch-specs"><div><b>Use on</b> Paper</div><div><b>Pairs with</b> Amber tint #F5EBD9</div></div>
+      </div>
+      <div class="swatch">
+        <div class="swatch-chip" style="background: #8B3A2E;"></div>
+        <div class="swatch-meta">
+          <div class="swatch-role">Oxblood · danger</div>
+          <div class="swatch-hex">#8B3A2E</div>
+          <p class="swatch-use">Destructive confirm. "Forget this", "remove". Rare.</p>
+        </div>
+        <div class="swatch-specs"><div><b>Use on</b> Paper</div><div><b>Pairs with</b> Oxblood tint #F3E0DC</div></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────── RULES ─────────────── -->
+  <section>
+    <div class="sec-label">04 · How to use it</div>
+    <h2 class="sec-title">The rules.</h2>
+
+    <div class="rules">
+      <div class="rule">
+        <div class="rule-t">One rust moment per screen</div>
+        <div class="rule-b">
+          <p>A screen has exactly one rust · one word in a heading, or one accent button, or one active chip. Not two. If two things compete for rust, the screen has two priorities and the design is wrong.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">Ink does the hierarchy</div>
+        <div class="rule-b">
+          <p>90% of type is ink <code>#1E1A18</code>. Hierarchy is earned by size and weight, not by color. Muted <code>#6B615C</code> is the only lighter text allowed, and only for secondary.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">Paper, surface, hairline — the three card treatments</div>
+        <div class="rule-b">
+          <p><b>Surface</b> (filled <code>#F0EAE4</code>) = primary card. <b>Hairline</b> (paper bg + <code>1px</code> ink-200 border) = secondary card. A page holds at most two of each before it reads as busy.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">No gradients, no shadows by default</div>
+        <div class="rule-b">
+          <p>Elevation is a hairline or a surface swap · never a drop shadow at rest. Shadows appear only on modals and floating toasts.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">Never introduce a new hue</div>
+        <div class="rule-b">
+          <p>If a new color feels needed, the answer is a scale step of paper, ink, or rust · or a signal. The palette does not grow.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ─────────────── IN CONTEXT ─────────────── -->
+  <section>
+    <div class="sec-label">05 · In context</div>
+    <h2 class="sec-title">The palette at work.</h2>
+    <p class="sec-lead">
+      The same card on three surfaces · paper, surface-filled, hairline. The rust moment is the small dot after the time, and the button.
+    </p>
+
+    <div class="demo">
+      <div class="mock on-bg">
+        <span class="mock-label">On paper · <span style="color:var(--accent);">Today · 8:14</span></span>
+        <h3 class="mock-title">Good morning, <span style="font-family:var(--serif); font-style:italic; color:var(--accent);">Arnav</span>.</h3>
+        <p class="mock-body">Maya's sister lands at 4. You wanted to send flowers. Still want to?</p>
+        <button class="mock-btn">Yes, peonies</button>
+      </div>
+      <div class="mock on-surface">
+        <span class="mock-label">On surface · <span style="color:var(--accent);">Today · 8:14</span></span>
+        <h3 class="mock-title">Good morning, <span style="font-family:var(--serif); font-style:italic; color:var(--accent);">Arnav</span>.</h3>
+        <p class="mock-body">Maya's sister lands at 4. You wanted to send flowers. Still want to?</p>
+        <button class="mock-btn">Yes, peonies</button>
+      </div>
+      <div class="mock on-hair">
+        <span class="mock-label">Hairline · <span style="color:var(--accent);">Today · 8:14</span></span>
+        <h3 class="mock-title">Good morning, <span style="font-family:var(--serif); font-style:italic; color:var(--accent);">Arnav</span>.</h3>
+        <p class="mock-body">Maya's sister lands at 4. You wanted to send flowers. Still want to?</p>
+        <button class="mock-btn">Yes, peonies</button>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <a href="type.html">← Type</a>
+    <span>Colors · locked</span>
+    <a href="../index.html">Package →</a>
+  </div>
+
+</div>
+
+</body>
+</html>

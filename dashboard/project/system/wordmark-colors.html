@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Donna — Wordmark · italic · color variations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500;1,600&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #FBF7F5;
+    --surface: #F0EAE4;
+    --surface-2: #E7DFD7;
+    --ink: #1E1A18;
+    --ink-700: #3A3331;
+    --ink-500: #6B615C;
+    --ink-400: #8F837C;
+    --accent: #7B5544;
+    --accent-tint: #F5EFEA;
+    --border: rgba(30,26,24,0.08);
+    --border-strong: rgba(30,26,24,0.14);
+    --sans: 'Red Hat Text', sans-serif;
+    --serif: 'EB Garamond', serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  .page { max-width: 1320px; margin: 0 auto; padding: 80px 48px 128px; }
+  .crumbs { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-400); font-weight: 500; margin-bottom: 56px; }
+  .crumbs a { color: var(--ink-400); text-decoration: none; }
+
+  h1.t { font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 16px; max-width: 24ch; }
+  p.l { font-size: 17px; line-height: 1.6; color: #3A3331; max-width: 62ch; margin: 0 0 48px; }
+
+  section { margin-top: 88px; }
+  section:first-of-type { margin-top: 0; }
+  .sec-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); font-weight: 500; margin-bottom: 14px; }
+  h2.s { font-family: var(--serif); font-size: 32px; line-height: 1.1; letter-spacing: -0.015em; font-weight: 400; margin: 0 0 10px; }
+  p.ld { font-size: 15px; line-height: 1.65; color: #3A3331; max-width: 60ch; margin: 0 0 28px; }
+
+  /* The italic-only wordmark */
+  .m { display: inline-block; font-family: var(--serif); font-style: italic; font-weight: 500; letter-spacing: -0.01em; line-height: 1; font-size: 64px; }
+
+  /* Matrix: 7 mark colors × 6 backgrounds */
+  .matrix {
+    display: grid;
+    grid-template-columns: 180px repeat(6, 1fr);
+    border: 1px solid var(--border);
+    background: var(--border);
+    gap: 1px;
+  }
+  .matrix > * { background: var(--bg); }
+  .mh { padding: 14px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 500; color: var(--ink-500); display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 4px; min-height: 64px; }
+  .mh small { text-transform: none; letter-spacing: 0; color: var(--ink-400); font-weight: 400; font-size: 10px; font-variant-numeric: tabular-nums; }
+  .mrow-label {
+    display: flex; align-items: center; gap: 14px;
+    padding: 20px 20px; font-size: 13px; color: var(--ink); font-weight: 500;
+  }
+  .mrow-label .chip { width: 22px; height: 22px; border-radius: 999px; border: 1px solid var(--border-strong); flex-shrink: 0; }
+  .mrow-label .lbl { display: flex; flex-direction: column; gap: 2px; font-family: var(--serif); font-style: italic; font-size: 15px; letter-spacing: -0.005em; }
+  .mrow-label small { font-family: var(--sans); font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-400); font-weight: 500; font-variant-numeric: tabular-nums; }
+  .cell { min-height: 130px; display: flex; align-items: center; justify-content: center; padding: 20px 10px; }
+
+  /* Background columns */
+  .bg-paper { background: var(--bg); }
+  .bg-surface { background: var(--surface); }
+  .bg-surface-2 { background: var(--surface-2); }
+  .bg-transparent {
+    background-image:
+      linear-gradient(45deg, #E7E0D9 25%, transparent 25%),
+      linear-gradient(-45deg, #E7E0D9 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #E7E0D9 75%),
+      linear-gradient(-45deg, transparent 75%, #E7E0D9 75%);
+    background-size: 14px 14px;
+    background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+  }
+  .bg-ink { background: var(--ink); }
+  .bg-accent { background: var(--accent); }
+
+  /* Mark colors */
+  .c-ink    { color: var(--ink); }
+  .c-rust   { color: var(--accent); }
+  .c-paper  { color: var(--bg); }
+  .c-muted  { color: var(--ink-500); }
+  .c-moss   { color: #5C6B4A; }
+  .c-amber  { color: #A8804A; }
+  .c-ox     { color: #8B3A2E; }
+
+  /* Hero cards */
+  .hero { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); margin-top: 24px; }
+  .hero > div { padding: 72px 56px; min-height: 300px; display: flex; flex-direction: column; justify-content: space-between; }
+  .hero .who { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 500; }
+  .hero .tag { font-family: var(--serif); font-style: italic; font-size: 18px; line-height: 1.4; }
+
+  /* Final pairings */
+  .pairs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-top: 24px; }
+  .pair { padding: 48px 32px; display: flex; flex-direction: column; align-items: center; gap: 18px; min-height: 240px; justify-content: center; }
+  .pair small { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 500; color: var(--ink-400); }
+  .pair .cap { font-family: var(--serif); font-style: italic; font-size: 14px; color: var(--ink-500); text-align: center; line-height: 1.5; }
+
+  .foot { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-400); }
+  .foot a { color: var(--ink-400); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="crumbs">
+    <a href="../index.html">Package</a> &nbsp;/&nbsp;
+    <a href="type.html">Type</a> &nbsp;/&nbsp;
+    <a href="colors.html">Colors</a> &nbsp;/&nbsp;
+    <a href="wordmark.html">Wordmark</a> &nbsp;/&nbsp;
+    <span>Italic · color variations</span>
+  </div>
+
+  <h1 class="t">The italic wordmark, in every color it's allowed to be.</h1>
+  <p class="l">
+    Italic-only. No underline. Seven colors from the locked palette × six surfaces. Row shows the mark color, column shows the surface. The combinations that work are obvious at a glance — the ones that don't are left in so the rule writes itself.
+  </p>
+
+  <!-- ────────── THE MATRIX ────────── -->
+  <section>
+    <div class="sec-label">01 · Mark color × surface</div>
+    <h2 class="s">Forty-two combinations.</h2>
+    <p class="ld">Only palette colors appear here. Nothing is invented. Cells where the mark disappears into the surface are shown honestly so the "do not" rule is visible, not hypothetical.</p>
+
+    <div class="matrix">
+      <!-- Header -->
+      <div class="mh"></div>
+      <div class="mh">Paper<small>#FBF7F5</small></div>
+      <div class="mh">Surface<small>#F0EAE4</small></div>
+      <div class="mh">Pressed<small>#E7DFD7</small></div>
+      <div class="mh">Transparent<small>over image</small></div>
+      <div class="mh">Ink<small>#1E1A18</small></div>
+      <div class="mh">Rust<small>#7B5544</small></div>
+
+      <!-- Ink mark -->
+      <div class="mrow-label"><span class="chip" style="background: var(--ink);"></span><span class="lbl">ink<small>#1E1A18</small></span></div>
+      <div class="cell bg-paper"><span class="m c-ink">donna</span></div>
+      <div class="cell bg-surface"><span class="m c-ink">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m c-ink">donna</span></div>
+      <div class="cell bg-transparent"><span class="m c-ink">donna</span></div>
+      <div class="cell bg-ink"><span class="m c-ink">donna</span></div>
+      <div class="cell bg-accent"><span class="m c-ink">donna</span></div>
+
+      <!-- Rust mark -->
+      <div class="mrow-label"><span class="chip" style="background: var(--accent);"></span><span class="lbl">rust<small>#7B5544</small></span></div>
+      <div class="cell bg-paper"><span class="m c-rust">donna</span></div>
+      <div class="cell bg-surface"><span class="m c-rust">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m c-rust">donna</span></div>
+      <div class="cell bg-transparent"><span class="m c-rust">donna</span></div>
+      <div class="cell bg-ink"><span class="m c-rust">donna</span></div>
+      <div class="cell bg-accent"><span class="m c-rust">donna</span></div>
+
+      <!-- Paper mark -->
+      <div class="mrow-label"><span class="chip" style="background: var(--bg); border-color: var(--border-strong);"></span><span class="lbl">paper<small>#FBF7F5</small></span></div>
+      <div class="cell bg-paper"><span class="m c-paper">donna</span></div>
+      <div class="cell bg-surface"><span class="m c-paper">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m c-paper">donna</span></div>
+      <div class="cell bg-transparent"><span class="m c-paper">donna</span></div>
+      <div class="cell bg-ink"><span class="m c-paper">donna</span></div>
+      <div class="cell bg-accent"><span class="m c-paper">donna</span></div>
+
+      <!-- Muted mark -->
+      <div class="mrow-label"><span class="chip" style="background: var(--ink-500);"></span><span class="lbl">muted<small>#6B615C</small></span></div>
+      <div class="cell bg-paper"><span class="m c-muted">donna</span></div>
+      <div class="cell bg-surface"><span class="m c-muted">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m c-muted">donna</span></div>
+      <div class="cell bg-transparent"><span class="m c-muted">donna</span></div>
+      <div class="cell bg-ink"><span class="m c-muted">donna</span></div>
+      <div class="cell bg-accent"><span class="m c-muted">donna</span></div>
+
+      <!-- Moss -->
+      <div class="mrow-label"><span class="chip" style="background: #5C6B4A;"></span><span class="lbl">moss<small>#5C6B4A</small></span></div>
+      <div class="cell bg-paper"><span class="m c-moss">donna</span></div>
+      <div class="cell bg-surface"><span class="m c-moss">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m c-moss">donna</span></div>
+      <div class="cell bg-transparent"><span class="m c-moss">donna</span></div>
+      <div class="cell bg-ink"><span class="m c-moss">donna</span></div>
+      <div class="cell bg-accent"><span class="m c-moss">donna</span></div>
+
+      <!-- Amber -->
+      <div class="mrow-label"><span class="chip" style="background: #A8804A;"></span><span class="lbl">amber<small>#A8804A</small></span></div>
+      <div class="cell bg-paper"><span class="m c-amber">donna</span></div>
+      <div class="cell bg-surface"><span class="m c-amber">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m c-amber">donna</span></div>
+      <div class="cell bg-transparent"><span class="m c-amber">donna</span></div>
+      <div class="cell bg-ink"><span class="m c-amber">donna</span></div>
+      <div class="cell bg-accent"><span class="m c-amber">donna</span></div>
+
+      <!-- Oxblood -->
+      <div class="mrow-label"><span class="chip" style="background: #8B3A2E;"></span><span class="lbl">oxblood<small>#8B3A2E</small></span></div>
+      <div class="cell bg-paper"><span class="m c-ox">donna</span></div>
+      <div class="cell bg-surface"><span class="m c-ox">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m c-ox">donna</span></div>
+      <div class="cell bg-transparent"><span class="m c-ox">donna</span></div>
+      <div class="cell bg-ink"><span class="m c-ox">donna</span></div>
+      <div class="cell bg-accent"><span class="m c-ox">donna</span></div>
+    </div>
+  </section>
+
+  <!-- ────────── THE PAIRINGS THAT WORK ────────── -->
+  <section>
+    <div class="sec-label">02 · The six that work</div>
+    <h2 class="s">Allowed combinations.</h2>
+    <p class="ld">Six pairings are official. Everything else in the matrix above is reference only — do not ship it.</p>
+
+    <div class="pairs">
+      <div class="pair" style="background: var(--bg);">
+        <span class="m c-ink" style="font-size: 72px;">donna</span>
+        <small>Ink on paper</small>
+        <span class="cap">Default. Everywhere.</span>
+      </div>
+      <div class="pair" style="background: var(--surface);">
+        <span class="m c-ink" style="font-size: 72px;">donna</span>
+        <small>Ink on surface</small>
+        <span class="cap">On a card, a sidebar, a quiet moment.</span>
+      </div>
+      <div class="pair" style="background: var(--bg);">
+        <span class="m c-rust" style="font-size: 72px;">donna</span>
+        <small>Rust on paper</small>
+        <span class="cap">Brand moments. A splash, a homepage.</span>
+      </div>
+      <div class="pair" style="background: var(--ink);">
+        <span class="m c-paper" style="font-size: 72px;">donna</span>
+        <small style="color: #C9A796;">Paper on ink</small>
+        <span class="cap" style="color: #C9A796;">Dark splash. Onboarding. Sign-in.</span>
+      </div>
+      <div class="pair" style="background: var(--accent);">
+        <span class="m c-paper" style="font-size: 72px;">donna</span>
+        <small style="color: #F5EFEA;">Paper on rust</small>
+        <span class="cap" style="color: #F5EFEA;">Rare. A launch announcement.</span>
+      </div>
+      <div class="pair" style="background: var(--bg); border: 1px solid var(--border-strong); margin: -1px;">
+        <span class="m c-ink" style="font-size: 72px;">donna</span>
+        <small>Ink on hairline</small>
+        <span class="cap">Letterhead. Printed materials.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── SIZE DEMONSTRATIONS ────────── -->
+  <section>
+    <div class="sec-label">03 · At size</div>
+    <h2 class="s">The two primary pairings, bigger.</h2>
+
+    <div class="hero">
+      <div style="background: var(--bg);">
+        <span class="who" style="color: var(--accent);">Ink on paper · default</span>
+        <span class="m c-ink" style="font-size: 168px;">donna</span>
+        <span class="tag" style="color: var(--ink-500);">the small things kept.</span>
+      </div>
+      <div style="background: var(--ink);">
+        <span class="who" style="color: #C9A796;">Paper on ink · splash</span>
+        <span class="m c-paper" style="font-size: 168px;">donna</span>
+        <span class="tag" style="color: #C9A796;">a quieter kind of help.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── DO NOT ────────── -->
+  <section>
+    <div class="sec-label">04 · Do not</div>
+    <h2 class="s">Four combinations to avoid.</h2>
+    <p class="ld">Shown so they are not accidentally used. Low contrast, hue clash, or a signal color masquerading as a brand mark.</p>
+
+    <div class="pairs">
+      <div class="pair" style="background: var(--surface);">
+        <span class="m c-muted" style="font-size: 56px;">donna</span>
+        <small style="color: #8B3A2E;">Muted on surface</small>
+        <span class="cap">Disappears. Reads as disabled.</span>
+      </div>
+      <div class="pair" style="background: var(--accent);">
+        <span class="m c-ox" style="font-size: 56px;">donna</span>
+        <small style="color: #F5EFEA;">Oxblood on rust</small>
+        <span class="cap" style="color: #F5EFEA;">Hue clash. Muddy.</span>
+      </div>
+      <div class="pair" style="background: var(--bg);">
+        <span class="m c-amber" style="font-size: 56px;">donna</span>
+        <small style="color: #8B3A2E;">Amber on paper</small>
+        <span class="cap">Amber is "warning". Never the brand color.</span>
+      </div>
+      <div class="pair" style="background: var(--bg);">
+        <span class="m c-moss" style="font-size: 56px;">donna</span>
+        <small style="color: #8B3A2E;">Moss on paper</small>
+        <span class="cap">Moss is "success". Never the brand color.</span>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <a href="wordmark-d.html">← Wordmark · D</a>
+    <span>Italic · color variations · pick a pairing from Section 02</span>
+    <a href="../index.html">Package →</a>
+  </div>
+
+</div>
+
+</body>
+</html>

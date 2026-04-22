@@ -1,0 +1,216 @@
+/* ──────────────────────────────────────────────────────────────
+   DONNA — DESIGN TOKENS
+   Single source of truth. Every screen, every component.
+   ────────────────────────────────────────────────────────────── */
+
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Red+Hat+Text:wght@300;400;500;600;700&display=swap');
+
+:root {
+  /* ── COLOR — LOCKED (Option A · Rust & Paper) ────────────── */
+  --bg:            #FBF7F5;  /* warm paper, the page */
+  --surface:       #F0EAE4;  /* raised: cards, inputs */
+  --surface-2:     #E7DFD7;  /* pressed / hovered card */
+  --ink:           #1E1A18;  /* primary text, near-black */
+  --accent:        #7B5544;  /* rust, one moment per screen */
+  --muted:         #6B615C;  /* secondary text */
+  --soft:          #8F837C;  /* tertiary text, meta */
+
+  /* Beige/brown scale (derived, warm-neutral) */
+  --paper-50:      #FDFAF8;
+  --paper-100:     #FBF7F5;  /* = bg */
+  --paper-200:     #F5EFEA;
+  --paper-300:     #F0EAE4;  /* = surface */
+  --paper-400:     #E7DFD7;
+  --paper-500:     #D6CAC0;
+  --paper-600:     #B8A89B;
+
+  /* Ink scale */
+  --ink-900:       #1E1A18;  /* = ink */
+  --ink-700:       #3A3331;
+  --ink-500:       #6B615C;  /* secondary text */
+  --ink-400:       #8F837C;  /* tertiary, meta, timestamps */
+  --ink-300:       #B5A89F;  /* placeholder, disabled */
+  --ink-200:       #D9CEC5;  /* hairline on surface */
+
+  /* Rust scale (accent, single hue) */
+  --rust-900:      #4A2F23;
+  --rust-700:      #7B5544;  /* = accent */
+  --rust-500:      #A07562;
+  --rust-300:      #C9A796;
+  --rust-100:      #EBDCD2;  /* accent tint background */
+
+  /* Signal (editorial, desaturated) */
+  --signal-success: #5C6B4A;  /* moss */
+  --signal-warning: #A8804A;  /* amber-brown */
+  --signal-danger:  #8B3A2E;  /* oxblood */
+  --signal-info:    --ink-500; /* info defers to type */
+
+  /* Hairline border */
+  --border:        rgba(30, 26, 24, 0.08);
+  --border-strong: rgba(30, 26, 24, 0.14);
+  --border-accent: rgba(123, 85, 68, 0.28);
+
+  /* ── TYPE ────────────────────────────────────────────────── */
+  --font-serif: 'EB Garamond', 'Iowan Old Style', Georgia, serif;
+  --font-sans:  'Red Hat Text', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+
+  /* Scale — modular, 1.25 between headings, 1.125 between body sizes */
+  --text-display:   4.5rem;   /* 72px — hero moments only */
+  --text-h1:        3rem;     /* 48px — page titles */
+  --text-h2:        2.25rem;  /* 36px — section leads */
+  --text-h3:        1.625rem; /* 26px — subsection */
+  --text-h4:        1.25rem;  /* 20px — card titles */
+  --text-lead:      1.125rem; /* 18px — intro paragraphs */
+  --text-body:      1rem;     /* 16px — default */
+  --text-small:     0.875rem; /* 14px — meta, secondary */
+  --text-caption:   0.75rem;  /* 12px — labels, captions */
+  --text-micro:     0.6875rem; /* 11px — small caps tags */
+
+  /* Line heights */
+  --lh-tight:    1.08;
+  --lh-snug:     1.24;
+  --lh-normal:   1.5;
+  --lh-relaxed:  1.65;
+
+  /* Letter spacing */
+  --tracking-tight:   -0.02em;  /* large serif headings */
+  --tracking-normal:   0em;
+  --tracking-wide:     0.02em;
+  --tracking-caps:     0.14em;  /* small caps labels */
+
+  /* Weights */
+  --weight-light:   300;
+  --weight-regular: 400;
+  --weight-medium:  500;
+  --weight-semi:    600;
+  --weight-bold:    700;
+
+  /* ── SPACING — 4px base, named semantically ─────────────── */
+  --space-0:    0;
+  --space-1:    0.25rem;   /* 4  — icon to label */
+  --space-2:    0.5rem;    /* 8  — inline elements */
+  --space-3:    0.75rem;   /* 12 — related stack */
+  --space-4:    1rem;      /* 16 — default gap */
+  --space-5:    1.5rem;    /* 24 — card padding */
+  --space-6:    2rem;      /* 32 — section gap */
+  --space-7:    3rem;      /* 48 — block separation */
+  --space-8:    4rem;      /* 64 — major section */
+  --space-9:    6rem;      /* 96 — page breathing */
+  --space-10:   8rem;      /* 128 — editorial pause */
+
+  /* Layout */
+  --content-narrow:  640px;   /* reading column */
+  --content-regular: 960px;   /* default content */
+  --content-wide:    1200px;  /* dashboard max */
+  --gutter-mobile:   1.25rem;
+  --gutter-desktop:  2rem;
+
+  /* ── RADII ──────────────────────────────────────────────── */
+  --radius-xs:  4px;    /* chip inner */
+  --radius-sm:  6px;    /* buttons, inputs */
+  --radius-md:  10px;   /* cards */
+  --radius-lg:  16px;   /* large cards, modals */
+  --radius-xl:  24px;   /* hero surfaces */
+  --radius-full: 999px; /* status chips only */
+
+  /* ── ELEVATION — soft, functional ───────────────────────── */
+  --shadow-0: none;
+  --shadow-1: 0 1px 2px rgba(30, 26, 24, 0.04);
+  --shadow-2: 0 2px 8px rgba(30, 26, 24, 0.05), 0 1px 2px rgba(30, 26, 24, 0.04);
+  --shadow-3: 0 8px 24px rgba(30, 26, 24, 0.08), 0 2px 4px rgba(30, 26, 24, 0.04);
+  --shadow-4: 0 20px 48px rgba(30, 26, 24, 0.12), 0 4px 8px rgba(30, 26, 24, 0.04);
+
+  /* ── MOTION ─────────────────────────────────────────────── */
+  --ease-out:     cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out:  cubic-bezier(0.65, 0, 0.35, 1);
+  --ease-editorial: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  --duration-fast:   160ms;
+  --duration-normal: 280ms;
+  --duration-slow:   480ms;
+  --duration-page:   720ms;
+}
+
+/* ──────────────────────────────────────────────────────────────
+   BASE
+   ────────────────────────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+
+/* Reset heading weights — serif italic is always 400, never UA bold */
+h1, h2, h3, h4, h5, h6 {
+  margin: 0;
+  font-weight: var(--weight-regular);
+}
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans);
+  font-size: var(--text-body);
+  line-height: var(--lh-normal);
+  font-weight: var(--weight-regular);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+/* ── TYPE CLASSES ─────────────────────────────────────────── */
+.t-display, .t-h1, .t-h2, .t-h3, .t-h4 {
+  font-family: var(--font-serif);
+  font-style: italic;          /* serif default is italic — brand */
+  font-weight: var(--weight-regular);
+  color: var(--ink);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--lh-tight);
+  margin: 0;
+  text-wrap: pretty;
+}
+.t-display { font-size: var(--text-display); line-height: 0.98; }
+.t-h1      { font-size: var(--text-h1); }
+.t-h2      { font-size: var(--text-h2); }
+.t-h3      { font-size: var(--text-h3); line-height: var(--lh-snug); }
+.t-h4      { font-size: var(--text-h4); line-height: var(--lh-snug); }
+
+.t-lead {
+  font-family: var(--font-sans);
+  font-size: var(--text-lead);
+  line-height: var(--lh-relaxed);
+  color: var(--ink-700);
+  font-weight: var(--weight-regular);
+}
+.t-body   { font-size: var(--text-body); line-height: var(--lh-normal); color: var(--ink-900); }
+.t-small  { font-size: var(--text-small); line-height: var(--lh-normal); color: var(--ink-500); }
+.t-meta   { font-size: var(--text-caption); line-height: var(--lh-normal); color: var(--ink-400); }
+.t-label {
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--ink-500);
+  font-weight: var(--weight-medium);
+}
+
+.t-accent { color: var(--accent); }
+.t-muted  { color: var(--ink-500); }
+.t-soft   { color: var(--ink-400); }
+
+/* ── WORDMARK ─────────────────────────────────────────────── */
+.wordmark {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-weight: var(--weight-regular);
+  letter-spacing: -0.015em;
+  color: var(--ink);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.08em;
+}
+.wordmark::after {
+  content: '';
+  display: inline-block;
+  width: 0.22em;
+  height: 0.22em;
+  background: var(--accent);
+  border-radius: 999px;
+  margin-left: 0.12em;
+  transform: translateY(-0.02em);
+}

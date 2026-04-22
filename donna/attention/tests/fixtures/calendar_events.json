@@ -1,0 +1,8 @@
+[
+  {"id": "cal_1", "title": "1:1 with Sarah", "start": "2026-04-22T15:00:00Z", "attendees": ["sarah@"]},
+  {"id": "cal_2", "title": "Flight DL 442 to SFO", "start": "2026-04-25T08:00:00Z"},
+  {"id": "cal_3", "title": "Weekly eng sync", "start": "2026-04-23T17:00:00Z"},
+  {"id": "cal_4", "title": "Weekly eng sync", "start": "2026-04-30T17:00:00Z"},
+  {"id": "cal_5", "title": "1:1 with Sarah", "start": "2026-04-29T15:00:00Z", "attendees": ["sarah@"]},
+  {"id": "cal_6", "title": "Weekly eng sync", "start": "2026-05-07T17:00:00Z"}
+]

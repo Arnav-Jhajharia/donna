@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Donna — Dashboard · four variants</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg:#FBF7F5; --surface:#F0EAE4; --surface-2:#E7DFD7; --ink:#1E1A18;
+    --ink-700:#3A3331; --ink-500:#6B615C; --ink-400:#8F837C; --accent:#7B5544;
+    --accent-tint:#F5EFEA; --moss:#5C6B4A; --amber:#A8804A;
+    --border:rgba(30,26,24,0.08); --border-strong:rgba(30,26,24,0.14);
+    --sans:'Red Hat Text',sans-serif; --serif:'EB Garamond',serif;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; }
+  body { background:var(--bg); color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; }
+
+  /* ── Index chrome ── */
+  .gate { max-width:1200px; margin:0 auto; padding:80px 48px 40px; }
+  .gate .crumbs { font-size:11px; text-transform:uppercase; letter-spacing:0.14em; color:var(--ink-400); font-weight:500; margin-bottom:48px; }
+  .gate .crumbs a { color:var(--ink-400); text-decoration:none; }
+  .gate h1 { font-family:var(--serif); font-weight:400; font-size:52px; line-height:1.05; letter-spacing:-0.02em; margin:0 0 16px; max-width:22ch; }
+  .gate p  { font-size:17px; line-height:1.6; color:var(--ink-700); max-width:62ch; margin:0 0 40px; }
+  .toc { display:grid; grid-template-columns:repeat(4,1fr); gap:1px; background:var(--border); border:1px solid var(--border); margin-bottom:24px; }
+  .toc a { background:var(--bg); padding:24px 20px; display:flex; flex-direction:column; gap:8px; text-decoration:none; color:var(--ink); }
+  .toc a:hover { background:var(--surface); }
+  .toc .n { font-size:11px; text-transform:uppercase; letter-spacing:0.14em; color:var(--accent); font-weight:500; }
+  .toc .t { font-family:var(--serif); font-style:italic; font-size:20px; font-weight:500; letter-spacing:-0.01em; }
+  .toc .d { font-size:12px; color:var(--ink-500); line-height:1.5; }
+
+  /* ── Variant frame ── */
+  .variant { border-top:1px solid var(--border); padding:64px 0 96px; }
+  .variant-head { max-width:1200px; margin:0 auto; padding:0 48px 32px; display:flex; justify-content:space-between; align-items:baseline; gap:32px; }
+  .variant-head .lead { max-width:52ch; }
+  .variant-head .num { font-size:11px; text-transform:uppercase; letter-spacing:0.14em; color:var(--accent); font-weight:500; margin-bottom:10px; }
+  .variant-head h2 { font-family:var(--serif); font-style:normal; font-weight:400; font-size:36px; line-height:1.1; letter-spacing:-0.015em; margin:0 0 8px; }
+  .variant-head h2 em { font-style:italic; color:var(--accent); font-weight:500; }
+  .variant-head .sub { font-size:14px; color:var(--ink-500); line-height:1.5; margin:0; }
+  .variant-head .why { font-family:var(--serif); font-style:italic; font-size:14px; color:var(--ink-500); max-width:26ch; text-align:right; line-height:1.5; }
+
+  /* Viewport mock frame */
+  .viewport { max-width:1200px; margin:0 auto; padding:0 48px; }
+  .frame {
+    border:1px solid var(--border-strong);
+    border-radius:10px;
+    overflow:hidden;
+    background:var(--bg);
+    height:820px;
+    display:grid;
+  }
+  .frame.split { grid-template-columns:240px 1fr; }
+  .frame.split-wide { grid-template-columns:260px 1fr 320px; }
+  .frame.topnav { grid-template-rows:auto 1fr; }
+  .frame.single { grid-template-columns:1fr; }
+
+  /* Wordmark tag */
+  .wm { font-family:var(--serif); font-style:italic; font-weight:500; letter-spacing:-0.01em; font-size:22px; color:var(--ink); }
+  .kbd { font-family:var(--sans); font-size:10px; color:var(--ink-400); border:1px solid var(--border-strong); padding:2px 5px; border-radius:3px; font-weight:500; }
+
+  /* Reset headings across mocks */
+  .frame h1, .frame h2, .frame h3, .frame h4, .frame h5 { margin:0; font-weight:500; }
+
+  /* Shared mock vocab */
+  .label { font-size:10px; text-transform:uppercase; letter-spacing:0.14em; color:var(--ink-400); font-weight:500; }
+  .label.accent { color:var(--accent); }
+  .meta { font-size:12px; color:var(--ink-500); }
+  .divider { height:1px; background:var(--border); width:100%; }
+  .pill {
+    display:inline-flex; align-items:center; gap:6px;
+    font-size:11px; padding:4px 10px; border-radius:999px;
+    background:var(--surface); color:var(--ink-500); font-weight:500;
+  }
+  .pill.on { background:var(--accent-tint); color:var(--accent); }
+  .pill::before { content:''; width:5px; height:5px; border-radius:999px; background:currentColor; opacity:0.7; }
+  .dot { width:6px; height:6px; border-radius:999px; background:var(--accent); display:inline-block; }
+  .btn { font-family:var(--sans); font-size:13px; font-weight:500; padding:9px 14px; border-radius:6px; border:none; cursor:pointer; line-height:1; }
+  .btn-primary { background:var(--ink); color:var(--bg); }
+  .btn-accent { background:var(--accent); color:var(--bg); }
+  .btn-ghost { background:transparent; color:var(--ink-700); border:1px solid var(--border-strong); }
+  .btn-quiet { background:transparent; color:var(--ink-500); padding:4px 0; }
+
+  /* ════════════════════════════════════════════════════
+     VARIANT 01 — THE LETTER
+     Single column. She opens with a letter. Cards follow.
+     ═══════════════════════════════════════════════════ */
+  .v1 { grid-template-columns:220px 1fr !important; }
+  .v1-nav { background:var(--bg); border-right:1px solid var(--border); padding:28px 24px; display:flex; flex-direction:column; gap:28px; }
+  .v1-nav .wm { font-size:22px; }
+  .v1-nav ul { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:4px; }
+  .v1-nav li { font-size:14px; color:var(--ink-500); padding:8px 10px; border-radius:5px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; }
+  .v1-nav li.active { color:var(--ink); background:var(--surface); }
+  .v1-nav li .n { font-size:10px; font-variant-numeric:tabular-nums; color:var(--ink-400); }
+  .v1-nav .section-label { font-size:10px; text-transform:uppercase; letter-spacing:0.14em; color:var(--ink-400); font-weight:500; margin-bottom:4px; }
+  .v1-main { padding:64px 88px; overflow-y:auto; display:flex; flex-direction:column; gap:56px; }
+  .v1 .meta-bar { display:flex; justify-content:space-between; align-items:center; }
+  .v1 .meta-bar .time { font-family:var(--serif); font-style:italic; font-size:14px; color:var(--ink-500); }
+  .v1 .letter h1 {
+    font-family:var(--serif); font-style:normal; font-weight:400;
+    font-size:44px; line-height:1.08; letter-spacing:-0.02em; color:var(--ink);
+    margin:0 0 24px; max-width:20ch;
+  }
+  .v1 .letter h1 em { font-style:italic; color:var(--accent); font-weight:400; }
+  .v1 .letter p {
+    font-family:var(--serif); font-size:19px; line-height:1.6; color:var(--ink-700);
+    max-width:52ch; margin:0 0 16px;
+  }
+  .v1 .letter p em { font-style:italic; }
+  .v1 .letter .sign { font-size:13px; color:var(--ink-500); font-family:var(--sans); margin-top:24px; }
+  .v1 .letter .actions { display:flex; gap:10px; margin-top:24px; }
+  .v1 .cards { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .v1 .card { border:1px solid var(--border-strong); padding:24px; display:flex; flex-direction:column; gap:10px; }
+  .v1 .card h3 { font-family:var(--serif); font-style:normal; font-weight:500; font-size:17px; letter-spacing:-0.005em; }
+  .v1 .card .body { font-size:14px; line-height:1.5; color:var(--ink-700); }
+  .v1 .card .foot { display:flex; justify-content:space-between; align-items:center; margin-top:4px; }
+
+  /* ════════════════════════════════════════════════════
+     VARIANT 02 — THE DESK
+     Three columns: nav, canvas (today), her column (chat + memory)
+     ═══════════════════════════════════════════════════ */
+  .v2 .col-nav { background:var(--surface); border-right:1px solid var(--border); padding:24px 20px; display:flex; flex-direction:column; gap:24px; }
+  .v2 .col-nav .wm { font-size:22px; }
+  .v2 .col-nav .search { background:var(--bg); border:1px solid var(--border); border-radius:5px; padding:8px 10px; font-size:13px; color:var(--ink-400); display:flex; justify-content:space-between; }
+  .v2 .col-nav ul { list-style:none; padding:0; margin:0; display:flex; flex-direction:column; gap:2px; }
+  .v2 .col-nav li { font-size:13px; color:var(--ink-700); padding:7px 10px; border-radius:4px; display:flex; justify-content:space-between; align-items:center; }
+  .v2 .col-nav li.active { background:var(--bg); color:var(--ink); }
+  .v2 .col-nav li .c { font-size:11px; color:var(--ink-400); font-variant-numeric:tabular-nums; }
+  .v2 .col-nav .group { font-size:10px; text-transform:uppercase; letter-spacing:0.14em; color:var(--ink-400); font-weight:500; padding:0 10px; margin-top:8px; }
+  .v2 .col-nav .people { display:flex; gap:-6px; flex-wrap:wrap; gap:4px; padding:0 10px; }
+  .v2 .col-nav .avatar { width:26px; height:26px; border-radius:999px; background:var(--accent); color:var(--bg); display:flex; align-items:center; justify-content:center; font-family:var(--serif); font-style:italic; font-size:13px; font-weight:500; }
+  .v2 .col-nav .avatar.alt { background:#5C6B4A; }
+  .v2 .col-nav .avatar.alt2 { background:#2C3E63; }
+  .v2 .col-nav .avatar.alt3 { background:var(--ink-500); }
+
+  .v2 .col-main { padding:40px 56px; overflow-y:auto; display:flex; flex-direction:column; gap:36px; }
+  .v2 .greet h1 { font-family:var(--serif); font-weight:400; font-size:36px; line-height:1.08; letter-spacing:-0.02em; margin:0; }
+  .v2 .greet h1 em { font-style:italic; color:var(--accent); }
+  .v2 .greet .meta { margin-top:6px; font-size:13px; color:var(--ink-500); }
+  .v2 section .label { margin-bottom:12px; }
+  .v2 .timeline { display:flex; flex-direction:column; gap:0; border-top:1px solid var(--border); }
+  .v2 .row { display:grid; grid-template-columns:64px 1fr auto; padding:16px 0; border-bottom:1px solid var(--border); align-items:baseline; gap:20px; }
+  .v2 .row .time { font-size:13px; color:var(--ink-500); font-variant-numeric:tabular-nums; }
+  .v2 .row .t { font-size:14px; color:var(--ink); }
+  .v2 .row .t small { display:block; color:var(--ink-500); font-size:12px; margin-top:3px; }
+  .v2 .row .r { font-size:11px; color:var(--ink-400); text-transform:uppercase; letter-spacing:0.12em; font-weight:500; }
+  .v2 .row.accent .t b { color:var(--accent); font-weight:500; }
+
+  .v2 .promises h3 { font-family:var(--serif); font-style:normal; font-weight:400; font-size:22px; letter-spacing:-0.01em; margin:0 0 12px; }
+  .v2 .promises h3 em { font-style:italic; }
+  .v2 .promise { display:grid; grid-template-columns:16px 1fr auto; gap:12px; padding:12px 0; border-bottom:1px solid var(--border); align-items:baseline; }
+  .v2 .promise .check { width:14px; height:14px; border-radius:999px; border:1px solid var(--border-strong); margin-top:2px; }
+  .v2 .promise.done .check { background:var(--moss); border-color:var(--moss); }
+  .v2 .promise .b { font-size:14px; color:var(--ink); line-height:1.5; }
+  .v2 .promise .b small { color:var(--ink-500); display:block; font-size:12px; margin-top:2px; }
+  .v2 .promise.done .b { color:var(--ink-500); text-decoration:line-through; text-decoration-color:var(--border-strong); }
+  .v2 .promise .w { font-size:11px; color:var(--ink-400); }
+
+  .v2 .col-donna { background:var(--bg); border-left:1px solid var(--border); padding:32px 28px; display:flex; flex-direction:column; gap:24px; }
+  .v2 .col-donna .head { display:flex; align-items:center; gap:10px; justify-content:space-between; }
+  .v2 .col-donna .head .title { font-family:var(--serif); font-style:italic; font-size:18px; font-weight:500; letter-spacing:-0.005em; }
+  .v2 .col-donna .bubble { background:var(--surface); padding:16px 18px; border-radius:4px 14px 14px 14px; font-size:14px; line-height:1.55; color:var(--ink); }
+  .v2 .col-donna .bubble em { font-family:var(--serif); font-style:italic; }
+  .v2 .col-donna .bubble.from-me { background:var(--ink); color:var(--bg); align-self:flex-end; border-radius:14px 4px 14px 14px; }
+  .v2 .col-donna .msgs { display:flex; flex-direction:column; gap:10px; }
+  .v2 .col-donna .composer { background:var(--surface); border:1px solid var(--border); border-radius:8px; padding:10px 12px; font-size:13px; color:var(--ink-400); display:flex; justify-content:space-between; align-items:center; }
+  .v2 .col-donna .memory { border-top:1px solid var(--border); padding-top:20px; display:flex; flex-direction:column; gap:10px; }
+  .v2 .col-donna .mem { font-family:var(--serif); font-style:italic; font-size:14px; line-height:1.5; color:var(--ink-700); }
+  .v2 .col-donna .mem .w { color:var(--accent); }
+
+  /* ════════════════════════════════════════════════════
+     VARIANT 03 — THE MARGIN
+     A centered editorial column, with her notes in the margin.
+     ═══════════════════════════════════════════════════ */
+  .v3 .topbar { grid-column:1 / -1; padding:16px 32px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); }
+  .v3 .topbar nav { display:flex; gap:20px; font-size:13px; color:var(--ink-500); }
+  .v3 .topbar nav a { color:var(--ink-500); text-decoration:none; }
+  .v3 .topbar nav a.active { color:var(--ink); }
+  .v3 .body { overflow-y:auto; padding:56px 32px 80px; position:relative; }
+  .v3 .page-inner { max-width:600px; margin:0 auto; position:relative; }
+  .v3 .page-inner h1 { font-family:var(--serif); font-weight:400; font-size:52px; line-height:1.05; letter-spacing:-0.02em; margin:0 0 12px; }
+  .v3 .page-inner h1 em { font-style:italic; color:var(--accent); }
+  .v3 .page-inner .date { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--ink-500); margin-bottom:48px; }
+  .v3 .page-inner h2 { font-family:var(--serif); font-weight:400; font-size:24px; letter-spacing:-0.01em; margin:48px 0 16px; }
+  .v3 .page-inner p { font-size:16px; line-height:1.65; color:var(--ink-700); margin:0 0 12px; }
+  .v3 .page-inner p b { color:var(--ink); font-weight:500; }
+  .v3 .page-inner .moment { padding:20px 0; border-top:1px solid var(--border); display:grid; grid-template-columns:56px 1fr auto; gap:20px; align-items:baseline; }
+  .v3 .page-inner .moment:last-child { border-bottom:1px solid var(--border); }
+  .v3 .page-inner .moment .t { font-size:13px; color:var(--ink-500); font-variant-numeric:tabular-nums; }
+  .v3 .page-inner .moment .c { font-size:15px; color:var(--ink); line-height:1.5; }
+  .v3 .page-inner .moment .c em { font-family:var(--serif); font-style:italic; }
+  .v3 .page-inner .moment .r { font-size:11px; color:var(--ink-400); text-transform:uppercase; letter-spacing:0.12em; }
+  /* Marginalia — her notes */
+  .v3 .margin-note { position:absolute; width:180px; font-family:var(--serif); font-style:italic; font-size:13px; line-height:1.5; color:var(--ink-500); padding-left:14px; border-left:1px solid var(--accent); }
+  .v3 .margin-note .who { font-family:var(--sans); font-style:normal; font-size:10px; text-transform:uppercase; letter-spacing:0.14em; color:var(--accent); font-weight:500; margin-bottom:6px; }
+  .v3 .mn-1 { top:90px; left:-220px; }
+  .v3 .mn-2 { top:300px; left:calc(100% + 24px); }
+  .v3 .mn-3 { top:560px; left:-220px; }
+
+  /* ════════════════════════════════════════════════════
+     VARIANT 04 — THE NOTEBOOK
+     Horizontal day · week strips. Scroll-like timeline.
+     ═══════════════════════════════════════════════════ */
+  .v4 .header { grid-column:1 / -1; padding:18px 32px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid var(--border); gap:24px; }
+  .v4 .header .title { font-family:var(--serif); font-weight:400; font-size:22px; letter-spacing:-0.015em; white-space:nowrap; }
+  .v4 .header .title em { font-style:italic; color:var(--accent); }
+  .v4 .header nav { display:flex; gap:24px; font-size:13px; color:var(--ink-500); }
+  .v4 .header nav a { color:var(--ink-500); text-decoration:none; }
+  .v4 .header nav a.active { color:var(--ink); }
+  .v4 .body { overflow-y:auto; padding:32px 32px 64px; display:flex; flex-direction:column; gap:40px; }
+  .v4 .week-label { font-size:11px; text-transform:uppercase; letter-spacing:0.14em; color:var(--ink-400); font-weight:500; }
+  .v4 .days { display:grid; grid-template-columns:repeat(7, 1fr); gap:1px; background:var(--border); border:1px solid var(--border); }
+  .v4 .day { background:var(--bg); padding:14px 12px; min-height:220px; display:flex; flex-direction:column; gap:8px; }
+  .v4 .day.today { background:var(--accent-tint); }
+  .v4 .day .dh { display:flex; justify-content:space-between; align-items:baseline; }
+  .v4 .day .dh .dow { font-size:10px; text-transform:uppercase; letter-spacing:0.12em; color:var(--ink-500); font-weight:500; white-space:nowrap; }
+  .v4 .day .dh .dn { font-family:var(--serif); font-style:italic; font-size:20px; color:var(--ink); font-weight:500; letter-spacing:-0.01em; }
+  .v4 .day.today .dh .dow { color:var(--accent); }
+  .v4 .day .ev { font-size:11px; line-height:1.4; color:var(--ink-700); padding:6px 8px; background:var(--surface); border-radius:4px; }
+  .v4 .day .ev b { font-family:var(--serif); font-style:italic; font-weight:500; color:var(--ink); display:block; font-size:12px; }
+  .v4 .day .ev.accent { background:var(--bg); border-left:2px solid var(--accent); padding-left:10px; }
+  .v4 .day .ev.quiet { background:transparent; padding:2px 8px; color:var(--ink-500); }
+
+  .v4 .strips { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  .v4 .strip { border:1px solid var(--border-strong); padding:24px 26px; display:flex; flex-direction:column; gap:14px; min-height:180px; }
+  .v4 .strip h3 { font-family:var(--serif); font-weight:400; font-size:22px; letter-spacing:-0.01em; margin:0; }
+  .v4 .strip h3 em { font-style:italic; color:var(--accent); }
+  .v4 .strip .line { display:flex; justify-content:space-between; align-items:baseline; padding:6px 0; border-bottom:1px solid var(--border); font-size:13px; color:var(--ink-700); gap:12px; }
+  .v4 .strip .line span:first-child { flex:1; min-width:0; }
+  .v4 .strip .line:last-child { border-bottom:none; }
+  .v4 .strip .line small { font-size:11px; color:var(--ink-400); text-transform:uppercase; letter-spacing:0.12em; font-weight:500; }
+
+  /* Footer */
+  .foot { max-width:1200px; margin:0 auto; padding:32px 48px 64px; border-top:1px solid var(--border); display:flex; justify-content:space-between; font-size:13px; color:var(--ink-400); }
+  .foot a { color:var(--ink-400); text-decoration:none; }
+</style>
+</head>
+<body>
+
+<!-- ============ GATE / INDEX ============ -->
+<div class="gate">
+  <div class="crumbs"><a href="../index.html">Package</a> &nbsp;/&nbsp; <span>Dashboard · four directions</span></div>
+  <h1>Four dashboards, for the same morning.</h1>
+  <p>Same user · same 8:14am · same unread things. Only the structure and the metaphor change. Scroll straight through, or jump to one. Pick a direction and the next pass gets it right at every pixel.</p>
+  <div class="toc">
+    <a href="#v1"><span class="n">01 · The Letter</span><span class="t">She writes to you.</span><span class="d">Single editorial column. She opens with a short note, then quiet cards follow.</span></a>
+    <a href="#v2"><span class="n">02 · The Desk</span><span class="t">Your day, her side.</span><span class="d">Three columns: nav, today's canvas, her live column with chat and memory.</span></a>
+    <a href="#v3"><span class="n">03 · The Margin</span><span class="t">A page with her notes.</span><span class="d">A centered editorial page of today. Her thoughts live in the margin, like marginalia.</span></a>
+    <a href="#v4"><span class="n">04 · The Notebook</span><span class="t">A spread of the week.</span><span class="d">Horizontal days, today highlighted. Calendar-first, memory-woven.</span></a>
+  </div>
+  <p style="font-size:13px; color:var(--ink-500); margin-top:24px;">Sample user: <em style="font-family:var(--serif); font-style:italic;">Arnav</em> — designer, partner Maya, habit of forgetting small things he promised.</p>
+</div>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- VARIANT 01 — THE LETTER                                  -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<section class="variant" id="v1">
+  <div class="variant-head">
+    <div class="lead">
+      <div class="num">01 · The Letter</div>
+      <h2>She writes to you, <em>once</em> a day.</h2>
+      <p class="sub">A single editorial column. The top of the dashboard is a short note from Donna — two or three sentences about what today is, signed. Below that, a quiet pair of cards.</p>
+    </div>
+    <div class="why">warmest option · feels like a product that cares, less like a tool.</div>
+  </div>
+
+  <div class="viewport">
+    <div class="frame v1">
+      <aside class="v1-nav">
+        <span class="wm">donna</span>
+        <div>
+          <div class="section-label">Today</div>
+          <ul>
+            <li class="active">Morning <span class="n">·</span></li>
+            <li>Calendar <span class="n">4</span></li>
+            <li>People <span class="n">3</span></li>
+            <li>Memory <span class="n">·</span></li>
+          </ul>
+        </div>
+        <div>
+          <div class="section-label">This week</div>
+          <ul>
+            <li>Promises <span class="n">2</span></li>
+            <li>Threads <span class="n">6</span></li>
+            <li>Handled <span class="n">11</span></li>
+          </ul>
+        </div>
+        <div style="margin-top:auto; display:flex; flex-direction:column; gap:8px;">
+          <div class="divider"></div>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <span class="meta">Arnav</span>
+            <span class="pill">online</span>
+          </div>
+        </div>
+      </aside>
+
+      <main class="v1-main">
+        <div class="meta-bar">
+          <span class="label">Friday · April 18</span>
+          <span class="time">quarter past eight in the morning</span>
+        </div>
+
+        <div class="letter">
+          <h1>Good morning, <em>Arnav</em>.</h1>
+          <p>Maya's sister is landing at four — you wanted to send peonies to the hotel. I found a florist three blocks from the office that can deliver by noon.</p>
+          <p>Two small things from yesterday: Oscar called about the frame (<em>ready today</em>), and you told Priya you'd send the onboarding deck by Friday. It's Friday.</p>
+          <div class="actions">
+            <button class="btn btn-accent">Yes, order the peonies</button>
+            <button class="btn btn-ghost">Not yet</button>
+          </div>
+          <div class="sign">— donna</div>
+        </div>
+
+        <div class="cards">
+          <div class="card">
+            <span class="label">Today at a glance</span>
+            <h3>Three things on the calendar</h3>
+            <div class="body">Design review at 11 with Priya. Pick up the frame from Oscar's before 3. Maya's sister arrives 4:10 at SFO.</div>
+            <div class="foot"><span class="meta">4 events, 2 blocks for focus</span><button class="btn btn-quiet">Open →</button></div>
+          </div>
+          <div class="card">
+            <span class="label">Handled while you slept</span>
+            <h3>Rescheduled one thing</h3>
+            <div class="body">Dr. Chen's office moved your cleaning to Tuesday at 10:30. You'd asked me to avoid Thursdays.</div>
+            <div class="foot"><span class="meta">Tue 22 · 10:30am</span><button class="btn btn-quiet">Details →</button></div>
+          </div>
+        </div>
+      </main>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- VARIANT 02 — THE DESK                                    -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<section class="variant" id="v2">
+  <div class="variant-head">
+    <div class="lead">
+      <div class="num">02 · The Desk</div>
+      <h2>Your day on the left, <em>her</em> on the right.</h2>
+      <p class="sub">Three-column productivity layout. Today's timeline and promises in the center. A persistent Donna column on the right — chat, live memory, her current thought. Nav on the left is tight.</p>
+    </div>
+    <div class="why">most "product-like" · works when her presence is a collaborator you want always visible.</div>
+  </div>
+
+  <div class="viewport">
+    <div class="frame v2 split-wide">
+
+      <aside class="col-nav">
+        <span class="wm">donna</span>
+        <div class="search">Ask or search <span class="kbd">⌘K</span></div>
+        <ul>
+          <li class="active">Today <span class="c">·</span></li>
+          <li>Calendar <span class="c">4</span></li>
+          <li>Inbox <span class="c">12</span></li>
+          <li>Promises <span class="c">2</span></li>
+          <li>Memory <span class="c">·</span></li>
+          <li>Handled <span class="c">11</span></li>
+        </ul>
+        <div class="group">People</div>
+        <div class="people">
+          <div class="avatar">m</div>
+          <div class="avatar alt">p</div>
+          <div class="avatar alt2">o</div>
+          <div class="avatar alt3">r</div>
+          <div class="avatar alt3">j</div>
+        </div>
+        <div class="group">Connected</div>
+        <ul>
+          <li>Calendar <span class="c">✓</span></li>
+          <li>Mail <span class="c">✓</span></li>
+          <li>Messages <span class="c">✓</span></li>
+          <li>Contacts <span class="c">✓</span></li>
+        </ul>
+      </aside>
+
+      <main class="col-main">
+        <div class="greet">
+          <h1>Good morning, <em>Arnav</em>.</h1>
+          <div class="meta">Friday, April 18 · 8:14am · warm, slight breeze</div>
+        </div>
+
+        <section>
+          <span class="label accent">Today</span>
+          <div class="timeline">
+            <div class="row"><span class="time">9:30</span><span class="t">Coffee with Ren <small>Café Corsica · walk from home</small></span><span class="r">Personal</span></div>
+            <div class="row accent"><span class="time">11:00</span><span class="t"><b>Design review with Priya</b> <small>Room 3 · 45 min · agenda sent</small></span><span class="r">Work</span></div>
+            <div class="row"><span class="time">1:00</span><span class="t">Focus block <small>You keep Friday afternoons for deep work</small></span><span class="r">Blocked</span></div>
+            <div class="row"><span class="time">3:00</span><span class="t">Pick up frame at Oscar's <small>Ready since yesterday</small></span><span class="r">Errand</span></div>
+            <div class="row"><span class="time">4:10</span><span class="t">Maya's sister lands · SFO <small>Peonies to hotel by noon?</small></span><span class="r">Family</span></div>
+          </div>
+        </section>
+
+        <section class="promises">
+          <h3>Things you <em>said</em> you'd do</h3>
+          <div class="promise done"><span class="check"></span><span class="b">Send Priya the onboarding deck <small>delivered 7:52am, handled</small></span><span class="w">Weds</span></div>
+          <div class="promise"><span class="check"></span><span class="b">Call Dad back about the house <small>You said "this week" on Tuesday</small></span><span class="w">3d ago</span></div>
+          <div class="promise"><span class="check"></span><span class="b">Book the dentist (Maya asked twice) <small>I can hold Tuesday 10:30 if you want</small></span><span class="w">6d ago</span></div>
+        </section>
+      </main>
+
+      <aside class="col-donna">
+        <div class="head"><span class="title">donna · now</span><span class="pill on">listening</span></div>
+        <div class="msgs">
+          <div class="bubble">Morning. Two small things before we start: the peonies for Maya's sister need to leave the florist by 11. And you told Priya <em>Friday</em> — I have the deck in a draft if you want to read it first.</div>
+          <div class="bubble from-me">Send it. I trust you.</div>
+          <div class="bubble">Sending. I'll hold a soft reminder at 10:45 in case you want to peek.</div>
+        </div>
+        <div class="composer">Say something to her… <span class="kbd">↵</span></div>
+        <div class="memory">
+          <span class="label accent">She's remembered</span>
+          <div class="mem"><span class="w">·</span> &nbsp;You don't like being reminded twice. I only do it for things with hotels involved.</div>
+          <div class="mem"><span class="w">·</span> &nbsp;Maya prefers the off-white peonies, not the blush.</div>
+          <div class="mem"><span class="w">·</span> &nbsp;Oscar closes at five on Fridays. Walk is nine minutes.</div>
+        </div>
+      </aside>
+
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- VARIANT 03 — THE MARGIN                                  -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<section class="variant" id="v3">
+  <div class="variant-head">
+    <div class="lead">
+      <div class="num">03 · The Margin</div>
+      <h2>A page, with her <em>notes</em> in the margin.</h2>
+      <p class="sub">The dashboard is one editorial page — today, written plainly. Her comments live in the margins, like a marked-up manuscript. Most unusual direction; highest risk of feeling precious.</p>
+    </div>
+    <div class="why">most distinct · a dashboard that looks like nothing else in category. Works if she's the quiet narrator.</div>
+  </div>
+
+  <div class="viewport">
+    <div class="frame v3 topnav single">
+      <div class="topbar">
+        <span class="wm">donna</span>
+        <nav>
+          <a href="#" class="active">Today</a>
+          <a href="#">Week</a>
+          <a href="#">People</a>
+          <a href="#">Memory</a>
+          <a href="#">Handled</a>
+        </nav>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <span class="meta">Arnav</span>
+          <span class="pill on">listening</span>
+        </div>
+      </div>
+
+      <div class="body">
+        <div class="page-inner">
+          <div class="margin-note mn-1">
+            <div class="who">donna · 8:14</div>
+            the flowers need to leave by eleven to land at the hotel before she does.
+          </div>
+
+          <h1>Friday, <em>quietly</em>.</h1>
+          <div class="date">April 18 · warm in the morning, cooler by evening</div>
+
+          <p>The day is <b>four things</b>: coffee with Ren at nine-thirty, a design review with Priya at eleven, the frame from Oscar's sometime before three, and Maya's sister's plane at four-ten.</p>
+          <p>You've kept Friday afternoon for focus — I won't schedule anything there unless you tell me otherwise.</p>
+
+          <div class="margin-note mn-2">
+            <div class="who">donna · yesterday</div>
+            I held Priya's deck until this morning so you could read it rested. It's a better note that way.
+          </div>
+
+          <h2>Kept, delivered</h2>
+          <div class="moment"><span class="t">7:52</span><span class="c">Priya has the onboarding deck. <em>You told her Friday.</em></span><span class="r">Handled</span></div>
+          <div class="moment"><span class="t">Tue</span><span class="c">Dentist is on the calendar for next Tuesday at 10:30.</span><span class="r">Handled</span></div>
+          <div class="moment"><span class="t">Mon</span><span class="c">Dad called. You said you'd call him back this week.</span><span class="r">Pending</span></div>
+
+          <div class="margin-note mn-3">
+            <div class="who">a soft reminder</div>
+            you've mentioned your dad three times this week. shall I draft you a message to him?
+          </div>
+
+          <h2>On your mind</h2>
+          <p>You asked me twice this week about <b>the trip in June</b> — flights, the rental, whether Maya's sister is coming. I have a draft of options. Tell me when you'd like to sit with it.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ═══════════════════════════════════════════════════════ -->
+<!-- VARIANT 04 — THE NOTEBOOK                                -->
+<!-- ═══════════════════════════════════════════════════════ -->
+<section class="variant" id="v4">
+  <div class="variant-head">
+    <div class="lead">
+      <div class="num">04 · The Notebook</div>
+      <h2>A <em>spread</em> of the week.</h2>
+      <p class="sub">Seven days across, today colored. Calendar-first, with quieter strips below for promises and people. Closest to a traditional dashboard — fastest to read, least "AI product" in feel.</p>
+    </div>
+    <div class="why">most conventional · safest, most utilitarian. Good if people come here to check the week.</div>
+  </div>
+
+  <div class="viewport">
+    <div class="frame v4 topnav single">
+      <div class="header">
+        <div class="title">Week of <em>April 14</em></div>
+        <nav>
+          <a href="#">Day</a>
+          <a href="#" class="active">Week</a>
+          <a href="#">Month</a>
+          <a href="#">People</a>
+          <a href="#">Memory</a>
+        </nav>
+        <div style="display:flex; gap:10px; align-items:center;">
+          <span class="wm" style="font-size:16px;">donna</span>
+          <span class="pill on">listening</span>
+        </div>
+      </div>
+
+      <div class="body">
+        <div>
+          <div class="week-label">This week</div>
+          <div class="days" style="margin-top:10px;">
+            <div class="day"><div class="dh"><span class="dow">Mon</span><span class="dn">14</span></div><div class="ev quiet">Studio · quiet</div><div class="ev">Dad called <b>6:20pm</b></div></div>
+            <div class="day"><div class="dh"><span class="dow">Tue</span><span class="dn">15</span></div><div class="ev">1:1 w/ Jules <b>10am</b></div><div class="ev quiet">Errands</div></div>
+            <div class="day"><div class="dh"><span class="dow">Wed</span><span class="dn">16</span></div><div class="ev">Offsite prep <b>2pm</b></div></div>
+            <div class="day"><div class="dh"><span class="dow">Thu</span><span class="dn">17</span></div><div class="ev">Maya · home</div><div class="ev">Deck draft <b>sent 7:52am</b></div></div>
+            <div class="day today">
+              <div class="dh"><span class="dow">Fri · now</span><span class="dn">18</span></div>
+              <div class="ev">Ren · coffee <b>9:30</b></div>
+              <div class="ev accent">Priya · review <b>11:00</b></div>
+              <div class="ev">Oscar's · frame <b>by 3</b></div>
+              <div class="ev">SFO · Maya's sister <b>4:10</b></div>
+            </div>
+            <div class="day"><div class="dh"><span class="dow">Sat</span><span class="dn">19</span></div><div class="ev quiet">Dinner — hers</div></div>
+            <div class="day"><div class="dh"><span class="dow">Sun</span><span class="dn">20</span></div><div class="ev quiet">Free</div></div>
+          </div>
+        </div>
+
+        <div class="strips">
+          <div class="strip">
+            <h3>Things you said you'd <em>do</em></h3>
+            <div class="line"><span>Call Dad back</span><small>3d</small></div>
+            <div class="line"><span>Dentist (Maya asked twice)</span><small>6d</small></div>
+            <div class="line"><span>Flights for June trip</span><small>this week</small></div>
+          </div>
+          <div class="strip">
+            <h3>People she's <em>watching</em></h3>
+            <div class="line"><span>Priya &nbsp; · &nbsp; waiting for a reply</span><small>since Tue</small></div>
+            <div class="line"><span>Maya's sister &nbsp; · &nbsp; lands today</span><small>4:10pm</small></div>
+            <div class="line"><span>Oscar &nbsp; · &nbsp; frame ready</span><small>yesterday</small></div>
+          </div>
+          <div class="strip">
+            <h3>Handled <em>without</em> asking</h3>
+            <div class="line"><span>Moved dentist off Thursday</span><small>Tue 10:30</small></div>
+            <div class="line"><span>Held Priya's deck until morning</span><small>7:52am</small></div>
+            <div class="line"><span>Added SFO arrival to calendar</span><small>Weds</small></div>
+          </div>
+          <div class="strip">
+            <h3>She's been <em>remembering</em></h3>
+            <div class="line"><span>Maya prefers off-white peonies</span><small>noted Mar</small></div>
+            <div class="line"><span>Oscar closes at five on Fridays</span><small>noted Apr</small></div>
+            <div class="line"><span>You avoid Thursdays for personal appts.</span><small>noted Feb</small></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="foot">
+  <a href="../index.html">← Package</a>
+  <span>Dashboard · four directions · tell me which to take further</span>
+  <a href="../system/wordmark.html">Wordmark →</a>
+</div>
+
+</body>
+</html>

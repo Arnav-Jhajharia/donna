@@ -1,0 +1,91 @@
+/* Donna design tokens — ported from dashboard/project/ds/tokens.css */
+:root {
+  /* Paper */
+  --paper-50:  #FDFAF8;
+  --paper-100: #FBF7F5;
+  --paper-200: #F5EFEA;
+  --paper-300: #F0EAE4;
+  --paper-400: #E7DFD7;
+  --paper-500: #D6CAC0;
+  --paper-600: #B8A89B;
+
+  /* Ink */
+  --ink-900: #1E1A18;
+  --ink-800: #3A3331;
+  --ink-600: #6B615C;
+  --ink-500: #8F837C;
+  --ink-400: #B5A89F;
+  --ink-300: #D9CEC5;
+
+  /* Rust */
+  --rust-900: #4A2F23;
+  --rust-700: #7B5544;
+  --rust-500: #A07562;
+  --rust-300: #C9A796;
+  --rust-100: #EBDCD2;
+  --rust-50:  #F5EFEA;
+
+  /* Signals */
+  --moss-700: #5C6B4A;
+  --moss-100: #EEF1E7;
+  --amber-700: #A8804A;
+  --amber-100: #F5EBD9;
+  --oxblood-700: #8B3A2E;
+  --oxblood-100: #F3E0DC;
+
+  /* Alpha */
+  --alpha-ink-04: rgba(30,26,24,0.04);
+  --alpha-ink-05: rgba(30,26,24,0.05);
+  --alpha-ink-08: rgba(30,26,24,0.08);
+  --alpha-ink-14: rgba(30,26,24,0.14);
+
+  /* Semantic */
+  --bg-canvas:  var(--paper-100);
+  --bg-surface: var(--paper-300);
+  --bg-inset:   var(--paper-50);
+  --fg-primary:   var(--ink-900);
+  --fg-secondary: var(--ink-800);
+  --fg-tertiary:  var(--ink-600);
+  --fg-muted:     var(--ink-500);
+  --fg-placeholder: var(--ink-400);
+  --fg-accent:    var(--rust-700);
+  --border-hairline: var(--alpha-ink-08);
+  --border-strong:   var(--alpha-ink-14);
+
+  /* Spacing */
+  --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px; --space-5: 24px; --space-6: 32px;
+  --space-7: 48px; --space-8: 64px; --space-9: 96px;
+
+  /* Type */
+  --font-serif: 'EB Garamond', 'Cormorant Garamond', Georgia, serif;
+  --font-sans:  'Red Hat Text', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* Motion */
+  --duration-fast:   160ms;
+  --duration-normal: 280ms;
+  --ease-out:       cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-editorial: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg-canvas);
+  color: var(--fg-primary);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  font-feature-settings: "kern";
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}

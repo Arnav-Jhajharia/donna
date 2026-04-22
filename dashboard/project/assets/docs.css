@@ -1,0 +1,197 @@
+/* Design system doc chrome — shared across system pages */
+
+.ds-shell {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+  max-width: 1440px;
+  margin: 0 auto;
+}
+
+.ds-nav {
+  border-right: 1px solid var(--border);
+  padding: var(--space-6) var(--space-5);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+  background: var(--bg);
+}
+
+.ds-nav-brand {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: 1.75rem;
+  color: var(--ink);
+  letter-spacing: -0.02em;
+  display: flex;
+  align-items: baseline;
+  gap: 0.08em;
+  margin-bottom: var(--space-7);
+  text-decoration: none;
+}
+.ds-nav-brand::after {
+  content: '';
+  width: 6px; height: 6px;
+  background: var(--accent);
+  border-radius: 999px;
+  display: inline-block;
+  margin-left: 2px;
+}
+
+.ds-nav-section {
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--ink-400);
+  font-weight: var(--weight-medium);
+  margin: var(--space-6) 0 var(--space-3);
+}
+.ds-nav-section:first-of-type { margin-top: 0; }
+
+.ds-nav a {
+  display: block;
+  padding: var(--space-2) 0;
+  color: var(--ink-700);
+  text-decoration: none;
+  font-size: var(--text-small);
+  transition: color var(--duration-fast) var(--ease-out);
+  position: relative;
+}
+.ds-nav a:hover { color: var(--ink); }
+.ds-nav a.active {
+  color: var(--accent);
+}
+.ds-nav a.active::before {
+  content: '';
+  position: absolute;
+  left: -20px;
+  top: 50%;
+  width: 10px;
+  height: 1px;
+  background: var(--accent);
+  transform: translateY(-50%);
+}
+
+.ds-main {
+  padding: var(--space-8) var(--space-8) var(--space-10);
+  max-width: 1040px;
+}
+
+.ds-page-label {
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+  margin-bottom: var(--space-3);
+}
+
+.ds-page-title {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-h1);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--lh-tight);
+  margin: 0 0 var(--space-4);
+  max-width: 16ch;
+}
+
+.ds-page-lead {
+  font-size: var(--text-lead);
+  color: var(--ink-700);
+  line-height: var(--lh-relaxed);
+  max-width: 56ch;
+  margin: 0 0 var(--space-8);
+}
+
+.ds-section {
+  margin-top: var(--space-8);
+  padding-top: var(--space-7);
+  border-top: 1px solid var(--border);
+}
+.ds-section:first-of-type { border-top: none; padding-top: 0; }
+
+.ds-section-head {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: var(--space-7);
+  margin-bottom: var(--space-6);
+  align-items: baseline;
+}
+.ds-section-title {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-h2);
+  letter-spacing: var(--tracking-tight);
+  line-height: var(--lh-tight);
+  margin: 0;
+}
+.ds-section-desc {
+  font-size: var(--text-body);
+  color: var(--ink-700);
+  line-height: var(--lh-relaxed);
+  margin: 0;
+  max-width: 52ch;
+}
+
+.ds-subsection-title {
+  font-size: var(--text-micro);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-caps);
+  color: var(--ink-500);
+  font-weight: var(--weight-medium);
+  margin: var(--space-6) 0 var(--space-4);
+}
+
+/* Rule card — shared component on system pages */
+.rule {
+  display: grid;
+  grid-template-columns: 180px 1fr;
+  gap: var(--space-5);
+  padding: var(--space-5) 0;
+  border-top: 1px solid var(--border);
+}
+.rule:first-of-type { border-top: none; }
+.rule-label {
+  font-family: var(--font-serif);
+  font-style: italic;
+  font-size: var(--text-h4);
+  color: var(--ink);
+  line-height: var(--lh-snug);
+}
+.rule-body {
+  font-size: var(--text-body);
+  color: var(--ink-700);
+  line-height: var(--lh-relaxed);
+}
+.rule-body p { margin: 0 0 var(--space-3); }
+.rule-body p:last-child { margin-bottom: 0; }
+.rule-body em {
+  font-family: var(--font-serif);
+  font-style: italic;
+  color: var(--ink);
+}
+
+/* Utility: hairline divider */
+.hairline {
+  height: 1px;
+  background: var(--border);
+  border: none;
+  margin: var(--space-6) 0;
+}
+
+/* Responsive: collapse nav on mobile */
+@media (max-width: 860px) {
+  .ds-shell { grid-template-columns: 1fr; }
+  .ds-nav {
+    position: static;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: var(--space-5);
+  }
+  .ds-main { padding: var(--space-6) var(--space-5) var(--space-8); }
+  .ds-section-head { grid-template-columns: 1fr; gap: var(--space-3); }
+  .rule { grid-template-columns: 1fr; gap: var(--space-2); }
+}

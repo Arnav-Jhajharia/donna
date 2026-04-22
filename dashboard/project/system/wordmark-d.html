@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Donna — D · full matrix</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500;1,600&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --bg: #FBF7F5;
+    --surface: #F0EAE4;
+    --surface-2: #E7DFD7;
+    --ink: #1E1A18;
+    --ink-500: #6B615C;
+    --ink-400: #8F837C;
+    --accent: #7B5544;
+    --accent-tint: #F5EFEA;
+    --border: rgba(30,26,24,0.08);
+    --border-strong: rgba(30,26,24,0.14);
+    --sans: 'Red Hat Text', sans-serif;
+    --serif: 'EB Garamond', serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body { background: var(--bg); color: var(--ink); font-family: var(--sans); -webkit-font-smoothing: antialiased; }
+
+  .page { max-width: 1320px; margin: 0 auto; padding: 80px 48px 128px; }
+  .crumbs { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-400); font-weight: 500; margin-bottom: 56px; }
+  .crumbs a { color: var(--ink-400); text-decoration: none; }
+
+  h1.t { font-family: var(--serif); font-weight: 400; font-size: 52px; line-height: 1.05; letter-spacing: -0.02em; margin: 0 0 16px; max-width: 24ch; }
+  p.l { font-size: 17px; line-height: 1.6; color: #3A3331; max-width: 64ch; margin: 0 0 48px; }
+
+  section { margin-top: 88px; }
+  section:first-of-type { margin-top: 0; }
+  .sec-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--accent); font-weight: 500; margin-bottom: 14px; }
+  h2.s { font-family: var(--serif); font-size: 32px; line-height: 1.1; letter-spacing: -0.015em; font-weight: 400; margin: 0 0 10px; }
+  p.ld { font-size: 15px; line-height: 1.65; color: #3A3331; max-width: 60ch; margin: 0 0 28px; }
+
+  /* Grid matrix: 4 styles × 6 backgrounds */
+  .matrix {
+    display: grid;
+    grid-template-columns: 180px repeat(6, 1fr);
+    border: 1px solid var(--border);
+    background: var(--border);
+    gap: 1px;
+  }
+  .matrix > * { background: var(--bg); }
+  .mh, .mrow-label { padding: 14px 16px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 500; color: var(--ink-500); display: flex; align-items: center; justify-content: center; text-align: center; }
+  .mh-corner { background: var(--bg); }
+  .mrow-label { justify-content: flex-start; font-family: var(--serif); font-style: italic; text-transform: none; letter-spacing: -0.005em; font-size: 15px; color: var(--ink); font-weight: 500; padding-left: 20px; }
+  .mrow-label small { display: block; font-family: var(--sans); font-style: normal; font-size: 10px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-400); font-weight: 500; margin-top: 4px; }
+  .cell {
+    min-height: 120px;
+    display: flex; align-items: center; justify-content: center;
+    padding: 20px 10px;
+  }
+
+  /* Wordmark styles — four variants */
+  .m { display: inline-block; font-family: var(--serif); letter-spacing: -0.01em; line-height: 1; font-size: 44px; }
+
+  .m-a { font-style: italic; font-weight: 500; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 0.04em; text-underline-offset: 0.12em; }
+  .m-b { font-style: italic; font-weight: 500; }
+  .m-c { font-style: normal; font-weight: 500; letter-spacing: -0.02em; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 0.04em; text-underline-offset: 0.12em; }
+  .m-d { font-style: normal; font-weight: 500; letter-spacing: -0.02em; }
+
+  /* Inverted underline on dark/rust surfaces */
+  .inv-under { text-decoration-color: #F0EAE4 !important; }
+  .on-dark { color: var(--bg); }
+
+  /* Background variants for cells */
+  .bg-none { background: var(--bg); } /* treat "no background" as paper */
+  .bg-transparent { background: transparent;
+    background-image:
+      linear-gradient(45deg, #E7E0D9 25%, transparent 25%),
+      linear-gradient(-45deg, #E7E0D9 25%, transparent 25%),
+      linear-gradient(45deg, transparent 75%, #E7E0D9 75%),
+      linear-gradient(-45deg, transparent 75%, #E7E0D9 75%);
+    background-size: 14px 14px;
+    background-position: 0 0, 0 7px, 7px -7px, -7px 0;
+  }
+  .bg-paper { background: var(--bg); }
+  .bg-surface { background: var(--surface); }
+  .bg-surface-2 { background: var(--surface-2); }
+  .bg-ink { background: var(--ink); }
+  .bg-accent { background: var(--accent); }
+
+  /* In-situ showcase */
+  .hero {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-top: 24px;
+  }
+  .hero > div { padding: 72px 56px; min-height: 300px; display: flex; flex-direction: column; justify-content: space-between; }
+  .hero .who { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 500; }
+  .hero .tag { font-family: var(--serif); font-style: italic; font-size: 18px; line-height: 1.4; }
+
+  /* Scale ladder for chosen (D · italic + underline) */
+  .ladder { border: 1px solid var(--border); padding: 40px 48px; display: flex; flex-direction: column; gap: 24px; }
+  .rung { display: flex; align-items: baseline; justify-content: space-between; padding-bottom: 20px; border-bottom: 1px dashed var(--border); }
+  .rung:last-child { border-bottom: none; padding-bottom: 0; }
+  .rung .meta { font-size: 11px; color: var(--ink-500); font-variant-numeric: tabular-nums; text-transform: uppercase; letter-spacing: 0.14em; font-weight: 500; }
+  .rung .meta b { color: var(--ink); font-weight: 500; }
+
+  /* Specs block */
+  .specs {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-top: 24px;
+  }
+  .spec { background: var(--bg); padding: 24px 28px; }
+  .spec h4 { font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-400); font-weight: 500; margin: 0 0 10px; }
+  .spec p { font-family: var(--serif); font-size: 20px; font-weight: 500; line-height: 1.2; margin: 0; }
+  .spec small { font-size: 12px; color: var(--ink-500); display: block; margin-top: 6px; font-family: var(--sans); font-weight: 400; }
+
+  .foot { margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-400); }
+  .foot a { color: var(--ink-400); text-decoration: none; }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="crumbs">
+    <a href="../index.html">Package</a> &nbsp;/&nbsp;
+    <a href="type.html">Type</a> &nbsp;/&nbsp;
+    <a href="colors.html">Colors</a> &nbsp;/&nbsp;
+    <a href="wordmark.html">Wordmark</a> &nbsp;/&nbsp;
+    <span>D · variations</span>
+  </div>
+
+  <h1 class="t">Four styles, six surfaces. All twenty-four, together.</h1>
+  <p class="l">
+    Italic + underline, italic only, upright + underline, upright only — each on paper, surface, pressed surface, transparent, ink, and rust. Same size, same spacing, same rust underline where shown. Pick the cell you want and I lock it.
+  </p>
+
+  <!-- ────────── THE MATRIX ────────── -->
+  <section>
+    <div class="sec-label">01 · The matrix</div>
+    <h2 class="s">24 combinations.</h2>
+    <p class="ld">Rows are wordmark styles. Columns are backgrounds. Transparent is shown as a checker pattern — the wordmark stays ink, underline stays rust.</p>
+
+    <div class="matrix">
+      <!-- Header row -->
+      <div class="mh mh-corner"></div>
+      <div class="mh">Paper<br/><span style="text-transform:none; letter-spacing:0; color:var(--ink-400); font-weight:400;">#FBF7F5</span></div>
+      <div class="mh">Surface<br/><span style="text-transform:none; letter-spacing:0; color:var(--ink-400); font-weight:400;">#F0EAE4</span></div>
+      <div class="mh">Pressed<br/><span style="text-transform:none; letter-spacing:0; color:var(--ink-400); font-weight:400;">#E7DFD7</span></div>
+      <div class="mh">Transparent<br/><span style="text-transform:none; letter-spacing:0; color:var(--ink-400); font-weight:400;">no fill</span></div>
+      <div class="mh">Ink<br/><span style="text-transform:none; letter-spacing:0; color:var(--ink-400); font-weight:400;">#1E1A18</span></div>
+      <div class="mh">Rust<br/><span style="text-transform:none; letter-spacing:0; color:var(--ink-400); font-weight:400;">#7B5544</span></div>
+
+      <!-- Row 1 · Italic + underline -->
+      <div class="mrow-label">italic + underline<small>D · recommended</small></div>
+      <div class="cell bg-paper"><span class="m m-a">donna</span></div>
+      <div class="cell bg-surface"><span class="m m-a">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m m-a">donna</span></div>
+      <div class="cell bg-transparent"><span class="m m-a">donna</span></div>
+      <div class="cell bg-ink"><span class="m m-a on-dark inv-under">donna</span></div>
+      <div class="cell bg-accent"><span class="m m-a on-dark inv-under">donna</span></div>
+
+      <!-- Row 2 · Italic only -->
+      <div class="mrow-label">italic only<small>A · current</small></div>
+      <div class="cell bg-paper"><span class="m m-b">donna</span></div>
+      <div class="cell bg-surface"><span class="m m-b">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m m-b">donna</span></div>
+      <div class="cell bg-transparent"><span class="m m-b">donna</span></div>
+      <div class="cell bg-ink"><span class="m m-b on-dark">donna</span></div>
+      <div class="cell bg-accent"><span class="m m-b on-dark">donna</span></div>
+
+      <!-- Row 3 · Upright + underline -->
+      <div class="mrow-label">upright + underline<small>quieter</small></div>
+      <div class="cell bg-paper"><span class="m m-c">donna</span></div>
+      <div class="cell bg-surface"><span class="m m-c">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m m-c">donna</span></div>
+      <div class="cell bg-transparent"><span class="m m-c">donna</span></div>
+      <div class="cell bg-ink"><span class="m m-c on-dark inv-under">donna</span></div>
+      <div class="cell bg-accent"><span class="m m-c on-dark inv-under">donna</span></div>
+
+      <!-- Row 4 · Upright only -->
+      <div class="mrow-label">upright only<small>strictest</small></div>
+      <div class="cell bg-paper"><span class="m m-d">donna</span></div>
+      <div class="cell bg-surface"><span class="m m-d">donna</span></div>
+      <div class="cell bg-surface-2"><span class="m m-d">donna</span></div>
+      <div class="cell bg-transparent"><span class="m m-d">donna</span></div>
+      <div class="cell bg-ink"><span class="m m-d on-dark">donna</span></div>
+      <div class="cell bg-accent"><span class="m m-d on-dark">donna</span></div>
+    </div>
+  </section>
+
+  <!-- ────────── LARGE HERO APPLICATIONS (D) ────────── -->
+  <section>
+    <div class="sec-label">02 · D · at size</div>
+    <h2 class="s">The recommended mark, bigger.</h2>
+    <p class="ld">Italic 500 with rust underline at 0.04em, offset 0.12em. On dark and rust surfaces, the underline flips to paper to preserve the signature feel without introducing a new color.</p>
+
+    <div class="hero">
+      <div style="background: var(--bg);">
+        <span class="who" style="color: var(--accent);">Paper · primary</span>
+        <span class="m m-a" style="font-size: 128px;">donna</span>
+        <span class="tag" style="color: var(--ink-500);">the small things kept.</span>
+      </div>
+      <div style="background: var(--surface);">
+        <span class="who" style="color: var(--accent);">Surface · card</span>
+        <span class="m m-a" style="font-size: 128px;">donna</span>
+        <span class="tag" style="color: var(--ink-500);">a hand on your sleeve.</span>
+      </div>
+      <div style="background: var(--ink);">
+        <span class="who" style="color: #C9A796;">Ink · splash</span>
+        <span class="m m-a on-dark inv-under" style="font-size: 128px;">donna</span>
+        <span class="tag" style="color: #C9A796;">a quieter kind of help.</span>
+      </div>
+      <div style="background: var(--accent);">
+        <span class="who" style="color: #F5EFEA;">Rust · rare</span>
+        <span class="m m-a on-dark inv-under" style="font-size: 128px;">donna</span>
+        <span class="tag" style="color: #F5EFEA;">not loud. just there.</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ────────── SCALE LADDER ────────── -->
+  <section>
+    <div class="sec-label">03 · D · scale ladder</div>
+    <h2 class="s">From splash to masthead.</h2>
+    <p class="ld">The underline thickness is relative (0.04em) so it scales with the mark. Below 20px, drop the underline — the serif italic alone is enough.</p>
+
+    <div class="ladder">
+      <div class="rung"><span class="m m-a" style="font-size: 128px;">donna</span><span class="meta"><b>Splash</b> · 128 px</span></div>
+      <div class="rung"><span class="m m-a" style="font-size: 88px;">donna</span><span class="meta"><b>Hero</b> · 88 px</span></div>
+      <div class="rung"><span class="m m-a" style="font-size: 56px;">donna</span><span class="meta"><b>Cover</b> · 56 px</span></div>
+      <div class="rung"><span class="m m-a" style="font-size: 32px;">donna</span><span class="meta"><b>Masthead</b> · 32 px</span></div>
+      <div class="rung"><span class="m m-a" style="font-size: 22px;">donna</span><span class="meta"><b>Nav</b> · 22 px</span></div>
+      <div class="rung"><span class="m m-b" style="font-size: 16px;">donna</span><span class="meta"><b>Footer</b> · 16 px · italic only, no rule</span></div>
+    </div>
+  </section>
+
+  <!-- ────────── SPECS ────────── -->
+  <section>
+    <div class="sec-label">04 · Final specs</div>
+    <h2 class="s">For the engineer and the print shop.</h2>
+
+    <div class="specs">
+      <div class="spec">
+        <h4>Family</h4>
+        <p>EB Garamond</p>
+        <small>italic 500 · from Google Fonts or equivalent</small>
+      </div>
+      <div class="spec">
+        <h4>Tracking</h4>
+        <p>−1%</p>
+        <small>letter-spacing: −0.01em</small>
+      </div>
+      <div class="spec">
+        <h4>Underline</h4>
+        <p>0.04em · rust</p>
+        <small>text-underline-offset: 0.12em · color #7B5544</small>
+      </div>
+      <div class="spec">
+        <h4>Inverse</h4>
+        <p>paper underline</p>
+        <small>on ink #1E1A18 and accent #7B5544 surfaces</small>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <a href="wordmark.html">← Wordmark exploration</a>
+    <span>D · twenty-four combinations</span>
+    <a href="../index.html">Package →</a>
+  </div>
+
+</div>
+
+</body>
+</html>

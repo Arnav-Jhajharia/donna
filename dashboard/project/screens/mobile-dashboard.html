@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Donna — Mobile dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --bg:#FBF7F5; --surface:#F0EAE4; --surface-2:#E7DFD7;
+    --ink:#1E1A18; --ink-700:#3A3331; --ink-500:#6B615C; --ink-400:#8F837C;
+    --accent:#7B5544; --accent-tint:#F5EFEA;
+    --border:rgba(30,26,24,0.08); --border-strong:rgba(30,26,24,0.14);
+    --sans:'Red Hat Text',sans-serif; --serif:'EB Garamond',serif;
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; padding:0; background:var(--bg); color:var(--ink); font-family:var(--sans); -webkit-font-smoothing:antialiased; }
+
+  .gate { max-width:1240px; margin:0 auto; padding:72px 48px 48px; }
+  .crumbs { font-size:11px; text-transform:uppercase; letter-spacing:0.14em; color:var(--ink-400); font-weight:500; margin-bottom:40px; }
+  .crumbs a { color:var(--ink-400); text-decoration:none; }
+  h1 { font-family:var(--serif); font-weight:400; font-size:48px; line-height:1.05; letter-spacing:-0.02em; margin:0 0 16px; max-width:22ch; }
+  h1 em { font-style:italic; color:var(--accent); }
+  .lead { font-size:16px; line-height:1.6; color:var(--ink-700); max-width:60ch; margin:0 0 40px; }
+
+  .row { max-width:1240px; margin:0 auto; padding:0 48px 96px; }
+  .row + .row { border-top:1px solid var(--border); padding-top:72px; }
+  .row-head { display:flex; justify-content:space-between; align-items:baseline; gap:32px; margin-bottom:36px; max-width:900px; }
+  .row-head .n { font-size:11px; text-transform:uppercase; letter-spacing:0.14em; color:var(--accent); font-weight:500; margin-bottom:8px; }
+  .row-head h2 { font-family:var(--serif); font-weight:400; font-size:30px; line-height:1.1; letter-spacing:-0.015em; margin:0 0 8px; }
+  .row-head h2 em { font-style:italic; color:var(--accent); }
+  .row-head .sub { font-size:14px; color:var(--ink-500); max-width:48ch; margin:0; line-height:1.5; }
+
+  .phones { display:flex; gap:32px; flex-wrap:wrap; align-items:flex-start; }
+  .phone-wrap { display:flex; flex-direction:column; gap:14px; align-items:center; }
+  .phone-label { font-family:var(--serif); font-style:italic; font-size:15px; color:var(--ink-700); letter-spacing:-0.005em; }
+  .phone-label b { font-style:normal; font-family:var(--sans); font-size:10px; font-weight:500; text-transform:uppercase; letter-spacing:0.14em; color:var(--accent); display:block; margin-bottom:4px; }
+
+  .foot { max-width:1240px; margin:0 auto; padding:32px 48px 80px; border-top:1px solid var(--border); font-size:13px; color:var(--ink-400); display:flex; justify-content:space-between; }
+  .foot a { color:var(--ink-400); text-decoration:none; }
+</style>
+</head>
+<body>
+
+<div class="gate">
+  <div class="crumbs"><a href="../index.html">Package</a> &nbsp;/&nbsp; Mobile dashboard</div>
+  <h1>Donna, <em>mobile.</em></h1>
+  <p class="lead">A one-page life-tracker dashboard for Aarav — 28, Mumbai, lives alone, health-curious. Donna is the whole app: your day, your body, your money. Scroll through the variations below.</p>
+</div>
+
+<!-- Density row -->
+<section class="row">
+  <div class="row-head">
+    <div>
+      <div class="n">01 · Density</div>
+      <h2>The same screen, <em>three</em> breathing rooms.</h2>
+      <p class="sub">Airy feels quiet and considered. Balanced is the default. Rich packs more in without getting noisy.</p>
+    </div>
+  </div>
+  <div id="densityMount" class="phones"></div>
+</section>
+
+<!-- Todo style row -->
+<section class="row">
+  <div class="row-head">
+    <div>
+      <div class="n">02 · Todo style</div>
+      <h2>How her <em>three</em> things should look.</h2>
+      <p class="sub">She picked three promises she thinks you should keep today. The visual pattern changes the emotional read — checkbox feels utilitarian, bullet feels editorial, card feels separate and intentional.</p>
+    </div>
+  </div>
+  <div id="todoMount" class="phones"></div>
+</section>
+
+<!-- Donna voice row -->
+<section class="row">
+  <div class="row-head">
+    <div>
+      <div class="n">03 · Donna voice</div>
+      <h2>How <em>present</em> she is on the home screen.</h2>
+      <p class="sub">You asked for minimal. Here's minimal next to subtle and loud, so you can feel the trade.</p>
+    </div>
+  </div>
+  <div id="voiceMount" class="phones"></div>
+</section>
+
+<!-- Tracker sheets -->
+<section class="row">
+  <div class="row-head">
+    <div>
+      <div class="n">04 · Tracker sheets</div>
+      <h2>What opens when you tap a <em>tracker</em>.</h2>
+      <p class="sub">Full tracker — quick log at the top, today's entries, last seven days, and what Donna has noticed. Bottom sheet on mobile; these are shown as full screens for clarity.</p>
+    </div>
+  </div>
+  <div id="sheetMount" class="phones"></div>
+</section>
+
+<div class="foot">
+  <a href="../index.html">← Package</a>
+  <span>Mobile dashboard · pick a density, todo style, and voice level</span>
+  <a href="dashboard.html">Web dashboard →</a>
+</div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="mobile-dashboard.jsx"></script>
+<script type="text/babel">
+  function Phone({ children, scale = 0.72 }) {
+    return (
+      <div style={{
+        width: 402 * scale, height: 874 * scale, overflow: 'hidden',
+        position: 'relative',
+      }}>
+        <div style={{ transform: `scale(${scale})`, transformOrigin: 'top left', width: 402, height: 874 }}>
+          <IOSDevice width={402} height={874}>
+            {children}
+          </IOSDevice>
+        </div>
+      </div>
+    );
+  }
+
+  function Label({ kicker, title }) {
+    return (
+      <div className="phone-label" style={{ textAlign: 'center' }}>
+        <b>{kicker}</b>{title}
+      </div>
+    );
+  }
+
+  // 01 Density
+  ReactDOM.createRoot(document.getElementById('densityMount')).render(
+    <>
+      <div className="phone-wrap"><Phone><DashboardContent density="airy"     todoStyle="checkbox" voice="minimal"/></Phone><Label kicker="01a" title="Airy"/></div>
+      <div className="phone-wrap"><Phone><DashboardContent density="balanced" todoStyle="checkbox" voice="minimal"/></Phone><Label kicker="01b" title="Balanced — default"/></div>
+      <div className="phone-wrap"><Phone><DashboardContent density="rich"     todoStyle="checkbox" voice="minimal"/></Phone><Label kicker="01c" title="Rich"/></div>
+    </>
+  );
+
+  // 02 Todo style
+  ReactDOM.createRoot(document.getElementById('todoMount')).render(
+    <>
+      <div className="phone-wrap"><Phone><DashboardContent density="balanced" todoStyle="checkbox" voice="minimal"/></Phone><Label kicker="02a" title="Checkbox"/></div>
+      <div className="phone-wrap"><Phone><DashboardContent density="balanced" todoStyle="bullet"   voice="minimal"/></Phone><Label kicker="02b" title="Bullet — editorial"/></div>
+      <div className="phone-wrap"><Phone><DashboardContent density="balanced" todoStyle="card"     voice="minimal"/></Phone><Label kicker="02c" title="Card"/></div>
+    </>
+  );
+
+  // 03 Voice
+  ReactDOM.createRoot(document.getElementById('voiceMount')).render(
+    <>
+      <div className="phone-wrap"><Phone><DashboardContent density="balanced" todoStyle="checkbox" voice="minimal"/></Phone><Label kicker="03a" title="Minimal — your pick"/></div>
+      <div className="phone-wrap"><Phone><DashboardContent density="balanced" todoStyle="checkbox" voice="subtle"/></Phone><Label kicker="03b" title="Subtle"/></div>
+      <div className="phone-wrap"><Phone><DashboardContent density="balanced" todoStyle="checkbox" voice="loud"/></Phone><Label kicker="03c" title="Loud"/></div>
+    </>
+  );
+
+  // 04 Sheets
+  ReactDOM.createRoot(document.getElementById('sheetMount')).render(
+    <>
+      <div className="phone-wrap"><Phone><HydrationSheet/></Phone><Label kicker="04a" title="Hydration"/></div>
+      <div className="phone-wrap"><Phone><CalorieSheet/></Phone><Label kicker="04b" title="Calories"/></div>
+      <div className="phone-wrap"><Phone><ExpenseSheet/></Phone><Label kicker="04c" title="Expenses"/></div>
+    </>
+  );
+</script>
+
+</body>
+</html>

@@ -1,0 +1,14 @@
+archive/
+.port_sessions/
+donna_traces.jsonl
+.donna_sessions.json
+node_modules/
+.next/
+dist/
+build/
+*.log
+.env
+.env.local
+__pycache__/
+*.pyc
+.pytest_cache/

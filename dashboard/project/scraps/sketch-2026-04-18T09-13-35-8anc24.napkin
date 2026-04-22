@@ -1,0 +1,277 @@
+{
+  "version": 1,
+  "created": "2026-04-18T09:13:35.332Z",
+  "modified": "2026-04-18T13:19:31.591Z",
+  "objects": [
+    {
+      "id": "arhv827bd",
+      "type": "rect",
+      "x": 289,
+      "y": 134,
+      "width": 285,
+      "height": 427,
+      "data": {
+        "fill": null,
+        "stroke": "#8B2500",
+        "strokeWidth": 2
+      }
+    },
+    {
+      "id": "x1tlcvzd0",
+      "type": "text",
+      "x": 297,
+      "y": 147,
+      "data": {
+        "content": "Donna",
+        "fontSize": 16,
+        "color": "#000000",
+        "bold": false
+      },
+      "width": 47,
+      "height": 21
+    },
+    {
+      "id": "smuke7em7",
+      "type": "rect",
+      "x": 304,
+      "y": 179,
+      "width": 262,
+      "height": 94,
+      "data": {
+        "fill": null,
+        "stroke": "#000000",
+        "strokeWidth": 2
+      }
+    },
+    {
+      "id": "oitaj44eq",
+      "type": "text",
+      "x": 310,
+      "y": 196,
+      "data": {
+        "content": "Day date city background iconic pitcure of their cityindia gate for india",
+        "fontSize": 16,
+        "color": "#000000",
+        "bold": false
+      },
+      "width": 244,
+      "height": 63
+    },
+    {
+      "id": "ut21sqhkh",
+      "type": "text",
+      "x": 302,
+      "y": 288,
+      "data": {
+        "content": "To do",
+        "fontSize": 16,
+        "color": "#000000",
+        "bold": false
+      },
+      "width": 40,
+      "height": 21
+    },
+    {
+      "id": "clinsugqn",
+      "type": "text",
+      "x": 302,
+      "y": 314,
+      "data": {
+        "content": "-\n-\n-\n-",
+        "fontSize": 16,
+        "color": "#000000",
+        "bold": false
+      },
+      "width": 254,
+      "height": 84
+    },
+    {
+      "id": "jhgszon9v",
+      "type": "rect",
+      "x": 304,
+      "y": 403,
+      "width": 96,
+      "height": 32,
+      "data": {
+        "fill": null,
+        "stroke": "#000000",
+        "strokeWidth": 2
+      }
+    },
+    {
+      "id": "c44aph9wo",
+      "type": "rect",
+      "x": 417,
+      "y": 404,
+      "width": 96,
+      "height": 31,
+      "data": {
+        "fill": null,
+        "stroke": "#000000",
+        "strokeWidth": 2
+      }
+    },
+    {
+      "id": "vlq3xnacf",
+      "type": "text",
+      "x": 299,
+      "y": 404,
+      "data": {
+        "content": "expense tracker opens from bottom",
+        "fontSize": 16,
+        "color": "#000000",
+        "bold": false
+      },
+      "width": 112,
+      "height": 63
+    },
+    {
+      "id": "atvzwzg9g",
+      "type": "text",
+      "x": 424,
+      "y": 413,
+      "data": {
+        "content": "Calorie tracker",
+        "fontSize": 16,
+        "color": "#000000",
+        "bold": false
+      },
+      "width": 102,
+      "height": 21
+    },
+    {
+      "id": "7f9jx0r2h",
+      "type": "rect",
+      "x": 312,
+      "y": 464,
+      "width": 112,
+      "height": 91,
+      "data": {
+        "fill": null,
+        "stroke": "#000000",
+        "strokeWidth": 2
+      }
+    },
+    {
+      "id": "lhy4c02g0",
+      "type": "rect",
+      "x": 436,
+      "y": 465,
+      "width": 48,
+      "height": 39,
+      "data": {
+        "fill": null,
+        "stroke": "#000000",
+        "strokeWidth": 2,
+        "text": ""
+      }
+    },
+    {
+      "id": "mrazy7p4b",
+      "type": "rect",
+      "x": 500,
+      "y": 466,
+      "width": 58,
+      "height": 34,
+      "data": {
+        "fill": null,
+        "stroke": "#000000",
+        "strokeWidth": 2
+      }
+    },
+    {
+      "id": "2jkt0d418",
+      "type": "rect",
+      "x": 442,
+      "y": 515,
+      "width": 46,
+      "height": 37,
+      "data": {
+        "fill": null,
+        "stroke": "#000000",
+        "strokeWidth": 2
+      }
+    },
+    {
+      "id": "te7c8ugeb",
+      "type": "rect",
+      "x": 510,
+      "y": 517,
+      "width": 52,
+      "height": 36,
+      "data": {
+        "fill": null,
+        "stroke": "#000000",
+        "strokeWidth": 2
+      }
+    },
+    {
+      "id": "87j9qo2pb",
+      "type": "text",
+      "x": 446,
+      "y": 477,
+      "data": {
+        "content": "CTA",
+        "fontSize": 16,
+        "color": "#000000",
+        "bold": false
+      },
+      "width": 28,
+      "height": 21
+    },
+    {
+      "id": "s7hlu7w55",
+      "type": "rect",
+      "x": 321,
+      "y": 471,
+      "width": 25,
+      "height": 20,
+      "data": {
+        "fill": null,
+        "stroke": "#000000",
+        "strokeWidth": 2
+      }
+    },
+    {
+      "id": "uud7smfzd",
+      "type": "text",
+      "x": 320,
+      "y": 507,
+      "data": {
+        "content": "Hydration",
+        "fontSize": 16,
+        "color": "#000000",
+        "bold": false
+      },
+      "width": 70,
+      "height": 21
+    },
+    {
+      "id": "ttncfltl9",
+      "type": "rect",
+      "x": 324,
+      "y": 532,
+      "width": 72,
+      "height": 20,
+      "data": {
+        "fill": null,
+        "stroke": "#000000",
+        "strokeWidth": 2
+      }
+    },
+    {
+      "id": "bbruzy8t9",
+      "type": "text",
+      "x": 328,
+      "y": 537,
+      "data": {
+        "content": "Start Now",
+        "fontSize": 16,
+        "color": "#000000",
+        "bold": false
+      },
+      "width": 70,
+      "height": 21
+    }
+  ]
+}

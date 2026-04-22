@@ -1,0 +1,5 @@
+name,target,measured,passed,notes
+shadow_tick_latency,< 5000 ms for 10 shadows,6.0 ms,True,
+promotion_decay,≥ 50% archived when signal absent,10/10 = 100%,True,
+duplicate_suppression,0 new shadows on second run,"run1 authored=1, run2 authored=0",True,
+offer_idempotency,accept/reject no-op on non-OFFERED statuses,all guards held,True,

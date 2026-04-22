@@ -1,0 +1,805 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Donna · Components</title>
+<link rel="stylesheet" href="../assets/tokens.css" />
+<link rel="stylesheet" href="../assets/docs.css" />
+<style>
+  /* ── Component demo frames ── */
+  .demo {
+    background: var(--paper-200);
+    border-radius: var(--radius-md);
+    padding: var(--space-7) var(--space-6);
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-4);
+    align-items: center;
+    margin: var(--space-4) 0 var(--space-3);
+  }
+  .demo.vertical { flex-direction: column; align-items: stretch; gap: var(--space-4); }
+  .demo.on-paper { background: var(--bg); border: 1px solid var(--border); }
+
+  .demo-caption {
+    font-size: var(--text-small);
+    color: var(--ink-500);
+    margin-top: var(--space-2);
+    display: flex;
+    justify-content: space-between;
+  }
+
+  /* ── BUTTONS ── */
+  .btn {
+    font-family: var(--font-sans);
+    font-size: 0.9375rem;
+    font-weight: var(--weight-medium);
+    line-height: 1;
+    padding: 12px 20px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--space-2);
+    text-decoration: none;
+    transition: all var(--duration-fast) var(--ease-out);
+    letter-spacing: 0.002em;
+  }
+  .btn-primary {
+    background: var(--ink);
+    color: var(--paper-100);
+  }
+  .btn-primary:hover { background: var(--ink-700); }
+  .btn-accent {
+    background: var(--accent);
+    color: var(--paper-100);
+  }
+  .btn-accent:hover { background: var(--rust-900); }
+  .btn-secondary {
+    background: var(--bg);
+    color: var(--ink);
+    border-color: var(--border-strong);
+  }
+  .btn-secondary:hover { background: var(--paper-200); border-color: var(--ink-500); }
+  .btn-ghost {
+    background: transparent;
+    color: var(--ink);
+    padding-left: 4px;
+    padding-right: 4px;
+  }
+  .btn-ghost:hover { color: var(--accent); }
+  .btn-ghost::after {
+    content: '→';
+    transition: transform var(--duration-fast) var(--ease-out);
+  }
+  .btn-ghost:hover::after { transform: translateX(3px); }
+  .btn-disabled {
+    background: var(--surface);
+    color: var(--ink-300);
+    cursor: not-allowed;
+    border-color: var(--border);
+  }
+  .btn-sm { padding: 8px 14px; font-size: 0.8125rem; }
+  .btn-lg { padding: 16px 28px; font-size: 1rem; }
+
+  /* ── INPUTS ── */
+  .field { display: flex; flex-direction: column; gap: var(--space-2); max-width: 380px; }
+  .field-label {
+    font-size: var(--text-micro);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    color: var(--ink-500);
+    font-weight: var(--weight-medium);
+  }
+  .input, .textarea {
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    padding: 12px 14px;
+    border: 1px solid var(--border-strong);
+    border-radius: var(--radius-sm);
+    background: var(--bg);
+    color: var(--ink);
+    transition: border-color var(--duration-fast) var(--ease-out), background var(--duration-fast) var(--ease-out);
+  }
+  .input:focus, .textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    background: var(--paper-50);
+  }
+  .input::placeholder, .textarea::placeholder { color: var(--ink-300); }
+  .textarea { min-height: 96px; resize: vertical; }
+  .field-help { font-size: var(--text-caption); color: var(--ink-400); }
+
+  /* Chat composer */
+  .composer {
+    display: flex;
+    gap: var(--space-3);
+    align-items: flex-end;
+    background: var(--surface);
+    padding: var(--space-3);
+    border-radius: var(--radius-lg);
+    border: 1px solid var(--border);
+    max-width: 560px;
+  }
+  .composer textarea {
+    flex: 1;
+    border: none;
+    background: transparent;
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    line-height: 1.5;
+    resize: none;
+    outline: none;
+    padding: 8px 4px;
+    color: var(--ink);
+  }
+  .composer textarea::placeholder { color: var(--ink-400); font-style: italic; font-family: var(--font-serif); font-size: 1.0625rem; }
+  .composer-send {
+    width: 36px; height: 36px;
+    border-radius: 999px;
+    background: var(--ink);
+    color: var(--paper-100);
+    border: none;
+    display: flex; align-items: center; justify-content: center;
+    cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius-md);
+    padding: var(--space-5);
+    border: 1px solid var(--border);
+  }
+  .card-hair {
+    background: var(--bg);
+    border: 1px solid var(--border);
+  }
+  .card-elevated {
+    background: var(--bg);
+    border: none;
+    box-shadow: var(--shadow-2);
+  }
+  .card-title {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: var(--text-h4);
+    line-height: var(--lh-snug);
+    margin: 0 0 var(--space-3);
+    color: var(--ink);
+  }
+  .card-body { color: var(--ink-700); font-size: var(--text-body); line-height: var(--lh-relaxed); margin: 0; }
+  .card-meta {
+    display: flex;
+    justify-content: space-between;
+    margin-top: var(--space-4);
+    padding-top: var(--space-3);
+    border-top: 1px solid var(--border);
+    font-size: var(--text-caption);
+    color: var(--ink-400);
+  }
+
+  /* ── CHAT BUBBLES ── */
+  .chat {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    max-width: 560px;
+    padding: var(--space-5);
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-md);
+  }
+  .bubble {
+    max-width: 78%;
+    padding: 10px 14px;
+    border-radius: var(--radius-md);
+    font-size: 0.9375rem;
+    line-height: 1.5;
+  }
+  .bubble.from-donna {
+    align-self: flex-start;
+    background: transparent;
+    padding-left: 0;
+    color: var(--ink);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 1.125rem;
+    line-height: 1.5;
+    border-left: 1px solid var(--accent);
+    padding-left: 14px;
+    border-radius: 0;
+    max-width: 92%;
+  }
+  .bubble.from-user {
+    align-self: flex-end;
+    background: var(--ink);
+    color: var(--paper-100);
+    border-bottom-right-radius: 4px;
+  }
+  .bubble-meta {
+    font-size: var(--text-micro);
+    color: var(--ink-400);
+    margin-top: var(--space-1);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    font-weight: var(--weight-medium);
+  }
+  .from-donna + .bubble-meta { align-self: flex-start; padding-left: 15px; }
+  .from-user + .bubble-meta { align-self: flex-end; }
+
+  /* ── CHIPS & STATUS ── */
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--font-sans);
+    font-size: var(--text-micro);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    font-weight: var(--weight-medium);
+    padding: 5px 10px;
+    border-radius: var(--radius-full);
+    background: var(--surface);
+    color: var(--ink-700);
+    border: 1px solid var(--border);
+  }
+  .chip::before {
+    content: '';
+    width: 5px; height: 5px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+  .chip-kept { color: var(--signal-success); }
+  .chip-due  { color: var(--signal-warning); }
+  .chip-miss { color: var(--signal-danger); }
+  .chip-live { color: var(--accent); }
+  .chip-live::before { animation: pulse 1.6s var(--ease-in-out) infinite; }
+  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  /* ── NAV TABS ── */
+  .tabs {
+    display: flex;
+    gap: var(--space-6);
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+  .tab {
+    font-family: var(--font-sans);
+    font-size: var(--text-small);
+    font-weight: var(--weight-medium);
+    color: var(--ink-500);
+    padding: var(--space-3) 0;
+    cursor: pointer;
+    text-decoration: none;
+    position: relative;
+    letter-spacing: 0.02em;
+  }
+  .tab:hover { color: var(--ink); }
+  .tab.active { color: var(--ink); }
+  .tab.active::after {
+    content: '';
+    position: absolute;
+    bottom: -1px;
+    left: 0; right: 0;
+    height: 1px;
+    background: var(--accent);
+  }
+
+  /* ── TOAST ── */
+  .toast {
+    display: flex;
+    gap: var(--space-3);
+    align-items: flex-start;
+    padding: var(--space-4);
+    background: var(--ink);
+    color: var(--paper-100);
+    border-radius: var(--radius-md);
+    box-shadow: var(--shadow-3);
+    max-width: 360px;
+  }
+  .toast-dot {
+    width: 6px; height: 6px;
+    border-radius: 999px;
+    background: var(--accent);
+    margin-top: 8px;
+    flex-shrink: 0;
+  }
+  .toast-body {
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 1rem;
+    line-height: 1.4;
+  }
+  .toast-time {
+    font-family: var(--font-sans);
+    font-size: var(--text-micro);
+    color: var(--ink-300);
+    text-transform: uppercase;
+    letter-spacing: var(--tracking-caps);
+    font-weight: var(--weight-medium);
+    margin-top: 4px;
+  }
+
+  /* ── AVATAR / WATERMARK ── */
+  .donna-mark {
+    width: 36px; height: 36px;
+    border-radius: 999px;
+    background: var(--bg);
+    border: 1px solid var(--border-accent);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent);
+    font-family: var(--font-serif);
+    font-style: italic;
+    font-size: 18px;
+    position: relative;
+  }
+  .donna-mark::after {
+    content: '';
+    position: absolute;
+    bottom: -1px; right: -1px;
+    width: 8px; height: 8px;
+    background: var(--accent);
+    border-radius: 999px;
+    border: 2px solid var(--bg);
+  }
+
+  /* ── LIST ITEM ── */
+  .list-row {
+    display: grid;
+    grid-template-columns: 1fr auto auto;
+    gap: var(--space-4);
+    padding: var(--space-4) 0;
+    border-top: 1px solid var(--border);
+    align-items: center;
+  }
+  .list-row:first-child { border-top: none; }
+  .list-main { display: flex; flex-direction: column; gap: 2px; }
+  .list-title { font-size: 0.9375rem; color: var(--ink); font-weight: var(--weight-medium); }
+  .list-sub { font-size: var(--text-caption); color: var(--ink-500); }
+
+  /* Code token snippet style */
+  code.token {
+    font-family: var(--font-sans);
+    font-size: 0.8125rem;
+    background: var(--paper-300);
+    padding: 2px 6px;
+    border-radius: var(--radius-xs);
+    color: var(--ink-700);
+    font-weight: var(--weight-medium);
+  }
+</style>
+</head>
+<body>
+
+<div class="ds-shell">
+
+  <aside class="ds-nav">
+    <a href="../index.html" class="ds-nav-brand">donna</a>
+
+    <div class="ds-nav-section">System</div>
+    <a href="foundations.html">Foundations</a>
+    <a href="components.html" class="active">Components</a>
+    <a href="patterns.html">Patterns &amp; Voice</a>
+
+    <div class="ds-nav-section">In this page</div>
+    <a href="#buttons">Buttons</a>
+    <a href="#inputs">Inputs &amp; composer</a>
+    <a href="#cards">Cards</a>
+    <a href="#chat">Chat bubbles</a>
+    <a href="#chips">Chips &amp; status</a>
+    <a href="#nav">Nav &amp; tabs</a>
+    <a href="#toasts">Toasts</a>
+    <a href="#avatar">Her mark</a>
+    <a href="#lists">Lists</a>
+
+    <div class="ds-nav-section">Screens</div>
+    <a href="../screens/dashboard.html">Dashboard</a>
+  </aside>
+
+  <main class="ds-main">
+
+    <div class="ds-page-label">02 · Components</div>
+    <h1 class="ds-page-title"><em>Every part she&rsquo;s made of.</em></h1>
+    <p class="ds-page-lead">
+      Specified, stated, and assembled. Each component uses only the tokens on the foundations page · padding, color, radius, type · so the family resemblance holds everywhere.
+    </p>
+
+    <!-- BUTTONS -->
+    <section class="ds-section" id="buttons">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Buttons</em></h2>
+        <p class="ds-section-desc">Four variants. One primary action per surface. The rust button is reserved for <em>accept / promise / keep</em> moments · the one thing that matters most.</p>
+      </div>
+
+      <div class="demo">
+        <button class="btn btn-primary">Begin</button>
+        <button class="btn btn-accent">Keep it for me</button>
+        <button class="btn btn-secondary">Not now</button>
+        <button class="btn btn-ghost">See everything</button>
+        <button class="btn btn-disabled" disabled>Sending</button>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">Primary · ink</div>
+        <div class="rule-body">
+          <p>The default for 90% of actions. <code class="token">bg: --ink</code>, <code class="token">color: --paper-100</code>, <code class="token">radius: --radius-sm</code>, padding <code class="token">12px 20px</code>.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Accent · rust</div>
+        <div class="rule-body">
+          <p>Reserved for the single <em>keeping</em> action on a screen · saving a memory, confirming she should remember, accepting her suggestion. One per screen, always.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Secondary</div>
+        <div class="rule-body">
+          <p>Paper background, hairline border. Pairs with primary to offer a quiet decline. Never two secondaries next to each other.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Ghost · text link</div>
+        <div class="rule-body">
+          <p>No chrome. Sans, medium weight, with a small arrow that translates on hover. For tertiary actions and &ldquo;see more&rdquo;.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- INPUTS -->
+    <section class="ds-section" id="inputs">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Inputs &amp; the composer</em></h2>
+        <p class="ds-section-desc">The composer is the most-used surface in the product. It should feel like an open page, not a form field. Placeholder text is <em>always serif italic</em> · she&rsquo;s suggesting, not labeling.</p>
+      </div>
+
+      <div class="demo vertical">
+        <div class="field">
+          <label class="field-label">Your name</label>
+          <input class="input" placeholder="What should she call you?" />
+          <div class="field-help">She&rsquo;ll only use it when it matters.</div>
+        </div>
+        <div class="field" style="max-width: 560px;">
+          <label class="field-label">Something to remember</label>
+          <textarea class="textarea" placeholder="Maya likes oat milk now, don&rsquo;t forget"></textarea>
+        </div>
+      </div>
+
+      <div class="demo on-paper">
+        <div class="composer">
+          <textarea rows="1" placeholder="Tell her."></textarea>
+          <button class="composer-send" aria-label="Send">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none"><path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="demo-caption"><span>Chat composer · the hero of the product</span><span><code class="token">radius-lg</code> · <code class="token">surface</code> · serif italic placeholder</span></div>
+    </section>
+
+    <!-- CARDS -->
+    <section class="ds-section" id="cards">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Cards</em></h2>
+        <p class="ds-section-desc">Three flavors. Surface (default), hairline on paper (quieter), and elevated (only when the card is momentarily distinct from the page · a popover, a highlighted briefing moment).</p>
+      </div>
+
+      <div class="demo" style="align-items: stretch; display: grid; grid-template-columns: repeat(3, 1fr);">
+        <div class="card">
+          <h4 class="card-title">This week with Maya.</h4>
+          <p class="card-body">You said you&rsquo;d pick up the frame from Oscar&rsquo;s before Thursday. She mentioned her sister&rsquo;s flight lands Friday.</p>
+          <div class="card-meta"><span>3 things kept</span><span>Updated 2h ago</span></div>
+        </div>
+        <div class="card card-hair">
+          <h4 class="card-title">Lea&rsquo;s birthday.</h4>
+          <p class="card-body">April 29. You thought the book idea was good · want me to find it before the week?</p>
+          <div class="card-meta"><span>In 11 days</span><span><span class="chip chip-due" style="border: none; background: transparent; padding: 0;">Due soon</span></span></div>
+        </div>
+        <div class="card card-elevated">
+          <h4 class="card-title">A small thing.</h4>
+          <p class="card-body">You mentioned your dad&rsquo;s back was bothering him. Want me to check in with him this weekend?</p>
+          <div class="card-meta"><span>From Sunday</span><span>Elevated · popover</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CHAT -->
+    <section class="ds-section" id="chat">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Chat bubbles</em></h2>
+        <p class="ds-section-desc">Donna&rsquo;s messages are <em>not bubbles</em>. They&rsquo;re serif italic, indented with a hairline rust rule. She&rsquo;s speaking, not sending a chat. Your messages are bubbles in ink · the mechanical side of the exchange.</p>
+      </div>
+
+      <div class="chat">
+        <div class="bubble from-donna">Morning, Arnav. You had a restless sleep · your phone was up at 3:14.</div>
+        <div class="bubble-meta">Donna · 8:02</div>
+
+        <div class="bubble from-donna">Before the day gets loud: Maya&rsquo;s sister lands at 4. You wanted to send flowers. Still want to?</div>
+        <div class="bubble-meta">Donna · 8:02</div>
+
+        <div class="bubble from-user">Yeah, pick something she&rsquo;d actually like</div>
+        <div class="bubble-meta">You · 8:04</div>
+
+        <div class="bubble from-donna">On it. Peonies if they have them.</div>
+        <div class="bubble-meta">Donna · 8:04</div>
+      </div>
+    </section>
+
+    <!-- CHIPS -->
+    <section class="ds-section" id="chips">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Chips &amp; status</em></h2>
+        <p class="ds-section-desc">Pill-shaped, only ever as status indicators. Small caps, tracked. Signal color on the dot and text; surface background. Never as buttons or filters unless the thing being filtered <em>is</em> a status.</p>
+      </div>
+
+      <div class="demo">
+        <span class="chip chip-kept">Kept</span>
+        <span class="chip chip-due">Due Friday</span>
+        <span class="chip chip-miss">Missed</span>
+        <span class="chip chip-live">Listening</span>
+        <span class="chip">Private</span>
+      </div>
+    </section>
+
+    <!-- NAV / TABS -->
+    <section class="ds-section" id="nav">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Navigation &amp; tabs</em></h2>
+        <p class="ds-section-desc">A thin 1px hairline. The active item carries a single rust tick underneath · that&rsquo;s the one accent moment most pages get.</p>
+      </div>
+
+      <div class="demo on-paper" style="padding: var(--space-4) var(--space-6); display: block;">
+        <div class="tabs">
+          <a class="tab active">Today</a>
+          <a class="tab">Kept</a>
+          <a class="tab">People</a>
+          <a class="tab">Memory</a>
+          <a class="tab">Settings</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- TOASTS -->
+    <section class="ds-section" id="toasts">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>Toasts &amp; notifications</em></h2>
+        <p class="ds-section-desc">When she needs a half-second of attention. Ink background, serif italic body, rust dot. Fades in over <code class="token">duration-slow</code>. Never stacks more than two.</p>
+      </div>
+
+      <div class="demo">
+        <div class="toast">
+          <div class="toast-dot"></div>
+          <div>
+            <div class="toast-body">Kept. I&rsquo;ll nudge you Wednesday evening.</div>
+            <div class="toast-time">Just now</div>
+          </div>
+        </div>
+        <div class="toast">
+          <div class="toast-dot"></div>
+          <div>
+            <div class="toast-body">Maya&rsquo;s sister lands in 40 minutes.</div>
+            <div class="toast-time">3:20 PM</div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BRAND LOCKUP -->
+    <section class="ds-section" id="avatar">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>The lockup</em></h2>
+        <p class="ds-section-desc">One wordmark. One mark. One dot. <em>donna</em> is always set in EB Garamond italic, lowercase, with a single rust period at the baseline · the small thing she keeps after everything else. The mark is that same idea compressed: a lowercase italic <em>d</em> in a hairline circle, with the dot just off the edge. Avatar in conversation. Watermark on assets.</p>
+      </div>
+
+      <!-- Primary hero -->
+      <div style="background: var(--paper-50); border: 1px solid var(--border); padding: var(--space-8) var(--space-7); margin: var(--space-5) 0; display: flex; align-items: center; justify-content: center; min-height: 280px; position: relative;">
+        <div class="wordmark" style="font-size: 7rem;">donna</div>
+        <span class="t-label" style="position: absolute; top: var(--space-4); left: var(--space-5); color: var(--ink-400);">Primary · wordmark</span>
+      </div>
+      <p class="t-small t-muted" style="margin: 0 0 var(--space-7); max-width: 60ch;">The dot is not a period. Do not replace it with a full stop, and do not remove it. It sits at the baseline with a fixed offset of 0.12em · scaled with the wordmark, never alone.</p>
+
+      <!-- Wordmark sizes -->
+      <div class="ds-subhead" style="font-size: var(--text-micro); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--ink-400); font-weight: var(--weight-medium); margin-bottom: var(--space-4);">Wordmark · scale</div>
+      <div style="display: flex; flex-direction: column; gap: var(--space-5); border: 1px solid var(--border); padding: var(--space-6); margin-bottom: var(--space-7);">
+        <div style="display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px dashed var(--border); padding-bottom: var(--space-4);">
+          <div class="wordmark" style="font-size: 4.5rem;">donna</div>
+          <span class="t-meta">Display · 72px · hero surfaces, splash</span>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px dashed var(--border); padding-bottom: var(--space-4);">
+          <div class="wordmark" style="font-size: 2.25rem;">donna</div>
+          <span class="t-meta">Heading · 36px · page masthead</span>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between; border-bottom: 1px dashed var(--border); padding-bottom: var(--space-4);">
+          <div class="wordmark" style="font-size: 1.5rem;">donna</div>
+          <span class="t-meta">Nav · 24px · site header, footer</span>
+        </div>
+        <div style="display: flex; align-items: baseline; justify-content: space-between;">
+          <div class="wordmark" style="font-size: 1rem;">donna</div>
+          <span class="t-meta">Minimum · 16px · favicon context, inline mentions</span>
+        </div>
+      </div>
+
+      <!-- Lockup with tagline -->
+      <div class="ds-subhead" style="font-size: var(--text-micro); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--ink-400); font-weight: var(--weight-medium); margin-bottom: var(--space-4);">With tagline</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: var(--space-7);">
+        <div style="background: var(--bg); padding: var(--space-7) var(--space-6); display: flex; flex-direction: column; align-items: flex-start; gap: var(--space-3); min-height: 200px; justify-content: center;">
+          <div class="wordmark" style="font-size: 3rem;">donna</div>
+          <div style="height: 1px; width: 48px; background: var(--border-strong);"></div>
+          <div class="t-small" style="font-family: var(--font-serif); font-style: italic; color: var(--ink-700); font-size: 1rem;">the small things kept.</div>
+        </div>
+        <div style="background: var(--bg); padding: var(--space-7) var(--space-6); display: flex; align-items: center; gap: var(--space-5); min-height: 200px;">
+          <div class="wordmark" style="font-size: 3rem;">donna</div>
+          <div style="width: 1px; height: 48px; background: var(--border-strong);"></div>
+          <div class="t-small" style="font-family: var(--font-serif); font-style: italic; color: var(--ink-700); font-size: 1rem; max-width: 14ch; line-height: 1.3;">the small things<br/>kept.</div>
+        </div>
+      </div>
+
+      <!-- Clear space diagram -->
+      <div class="ds-subhead" style="font-size: var(--text-micro); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--ink-400); font-weight: var(--weight-medium); margin-bottom: var(--space-4);">Clear space</div>
+      <div style="background: var(--paper-50); border: 1px solid var(--border); padding: var(--space-7); margin-bottom: var(--space-7); position: relative;">
+        <div style="position: relative; display: inline-block; padding: 52px;">
+          <!-- Dashed safe box -->
+          <div style="position: absolute; inset: 0; border: 1px dashed var(--border-accent); pointer-events: none;"></div>
+          <!-- x-height indicators -->
+          <div style="position: absolute; top: 50%; left: 6px; transform: translateY(-50%); width: 34px; height: 1px; background: var(--accent); opacity: 0.5;"></div>
+          <div style="position: absolute; top: 50%; right: 6px; transform: translateY(-50%); width: 34px; height: 1px; background: var(--accent); opacity: 0.5;"></div>
+          <div style="position: absolute; top: 6px; left: 50%; transform: translateX(-50%); height: 34px; width: 1px; background: var(--accent); opacity: 0.5;"></div>
+          <div style="position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%); height: 34px; width: 1px; background: var(--accent); opacity: 0.5;"></div>
+          <div style="position: absolute; top: 50%; left: -24px; transform: translateY(-50%) rotate(-90deg); font-size: var(--text-micro); color: var(--accent); letter-spacing: var(--tracking-caps); text-transform: uppercase;">x</div>
+          <div class="wordmark" style="font-size: 4rem;">donna</div>
+        </div>
+        <p class="t-small t-muted" style="margin: var(--space-4) 0 0; max-width: 48ch;">Minimum clear space on all sides = <em style="font-family: var(--font-serif); font-style: italic; color: var(--ink);">x</em>, the x-height of the lowercase letters. Nothing enters that halo · no text, no edge, no other logo.</p>
+      </div>
+
+      <!-- Mark sizes -->
+      <div class="ds-subhead" style="font-size: var(--text-micro); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--ink-400); font-weight: var(--weight-medium); margin-bottom: var(--space-4);">The mark · avatar &amp; watermark</div>
+      <div style="display: flex; align-items: flex-end; gap: var(--space-7); padding: var(--space-7) var(--space-6); border: 1px solid var(--border); background: var(--bg); margin-bottom: var(--space-5);">
+        <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-3);">
+          <div class="donna-mark" style="width: 96px; height: 96px; font-size: 48px; border-width: 1.5px;">d</div>
+          <span class="t-meta">96px · watermark</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-3);">
+          <div class="donna-mark" style="width: 64px; height: 64px; font-size: 32px;">d</div>
+          <span class="t-meta">64px · profile</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-3);">
+          <div class="donna-mark" style="width: 48px; height: 48px; font-size: 24px;">d</div>
+          <span class="t-meta">48px · conversation</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-3);">
+          <div class="donna-mark">d</div>
+          <span class="t-meta">36px · inline</span>
+        </div>
+        <div style="display: flex; flex-direction: column; align-items: center; gap: var(--space-3);">
+          <div class="donna-mark" style="width: 24px; height: 24px; font-size: 13px;">d</div>
+          <span class="t-meta">24px · minimum</span>
+        </div>
+      </div>
+
+      <!-- On surfaces -->
+      <div class="ds-subhead" style="font-size: var(--text-micro); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--ink-400); font-weight: var(--weight-medium); margin-bottom: var(--space-4);">On surfaces</div>
+      <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: var(--space-7);">
+        <div style="background: var(--bg); padding: var(--space-7) var(--space-5); display: flex; align-items: center; justify-content: center; min-height: 180px;">
+          <div class="wordmark" style="font-size: 2.5rem;">donna</div>
+        </div>
+        <div style="background: var(--surface); padding: var(--space-7) var(--space-5); display: flex; align-items: center; justify-content: center; min-height: 180px;">
+          <div class="wordmark" style="font-size: 2.5rem;">donna</div>
+        </div>
+        <div style="background: var(--ink-900); padding: var(--space-7) var(--space-5); display: flex; align-items: center; justify-content: center; min-height: 180px;">
+          <div class="wordmark" style="font-size: 2.5rem; color: var(--paper-100);">donna</div>
+        </div>
+        <div style="background: var(--bg); padding: var(--space-3) var(--space-4); text-align: center;">
+          <span class="t-meta">On paper · default</span>
+        </div>
+        <div style="background: var(--bg); padding: var(--space-3) var(--space-4); text-align: center;">
+          <span class="t-meta">On surface · cards</span>
+        </div>
+        <div style="background: var(--bg); padding: var(--space-3) var(--space-4); text-align: center;">
+          <span class="t-meta">On ink · dark moments only</span>
+        </div>
+      </div>
+
+      <!-- Do / Don't -->
+      <div class="ds-subhead" style="font-size: var(--text-micro); text-transform: uppercase; letter-spacing: var(--tracking-caps); color: var(--ink-400); font-weight: var(--weight-medium); margin-bottom: var(--space-4);">Do not</div>
+      <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; background: var(--border); border: 1px solid var(--border); margin-bottom: var(--space-7);">
+        <div style="background: var(--bg); padding: var(--space-6) var(--space-4); display: flex; flex-direction: column; align-items: center; gap: var(--space-4); min-height: 160px; justify-content: space-between;">
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; width: 100%;">
+            <span style="font-family: var(--font-serif); font-style: italic; font-size: 2rem; color: var(--ink); font-weight: 700;">donna<span style="color: var(--accent);">.</span></span>
+          </div>
+          <span class="t-meta" style="color: var(--signal-danger);">Don&rsquo;t bold the wordmark</span>
+        </div>
+        <div style="background: var(--bg); padding: var(--space-6) var(--space-4); display: flex; flex-direction: column; align-items: center; gap: var(--space-4); min-height: 160px; justify-content: space-between;">
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; width: 100%;">
+            <span style="font-family: var(--font-sans); font-size: 2rem; color: var(--ink);">donna<span style="color: var(--accent);">.</span></span>
+          </div>
+          <span class="t-meta" style="color: var(--signal-danger);">Don&rsquo;t set in sans</span>
+        </div>
+        <div style="background: var(--bg); padding: var(--space-6) var(--space-4); display: flex; flex-direction: column; align-items: center; gap: var(--space-4); min-height: 160px; justify-content: space-between;">
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; width: 100%;">
+            <span style="font-family: var(--font-serif); font-style: italic; font-size: 2rem; text-transform: uppercase; color: var(--ink);">Donna<span style="color: var(--accent);">.</span></span>
+          </div>
+          <span class="t-meta" style="color: var(--signal-danger);">Don&rsquo;t capitalize</span>
+        </div>
+        <div style="background: var(--bg); padding: var(--space-6) var(--space-4); display: flex; flex-direction: column; align-items: center; gap: var(--space-4); min-height: 160px; justify-content: space-between;">
+          <div style="flex: 1; display: flex; align-items: center; justify-content: center; width: 100%;">
+            <span style="font-family: var(--font-serif); font-style: italic; font-size: 2rem; color: var(--ink);">donna</span>
+          </div>
+          <span class="t-meta" style="color: var(--signal-danger);">Don&rsquo;t drop the dot</span>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-label">Clear space</div>
+        <div class="rule-body">
+          <p>Minimum clear space around the wordmark = the x-height of the lowercase letters. Nothing enters that halo.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">The rust dot</div>
+        <div class="rule-body">
+          <p>Not a period. It&rsquo;s her · the small thing she keeps after everything else. Baseline, offset by 0.12em. Scales with the wordmark, never alone, never recolored.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Case</div>
+        <div class="rule-body">
+          <p>Always lowercase. Never DONNA, never Donna. The softness is the point.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-label">Weight &amp; style</div>
+        <div class="rule-body">
+          <p>EB Garamond · italic · regular (400). Never bold, never roman, never another serif. If italic is unavailable, nothing is.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- LISTS -->
+    <section class="ds-section" id="lists">
+      <div class="ds-section-head">
+        <h2 class="ds-section-title"><em>List rows</em></h2>
+        <p class="ds-section-desc">Divided by hairlines, never boxed. Comfortable density · <code class="token">space-4</code> vertical padding. One primary line, one sub, one right-aligned action or status.</p>
+      </div>
+
+      <div class="demo on-paper" style="display: block; padding: var(--space-5) var(--space-6);">
+        <div class="list-row">
+          <div class="list-main">
+            <span class="list-title">Pick up the frame from Oscar&rsquo;s</span>
+            <span class="list-sub">You said Thursday.</span>
+          </div>
+          <span class="chip chip-due">Due Thu</span>
+          <span class="t-meta">→</span>
+        </div>
+        <div class="list-row">
+          <div class="list-main">
+            <span class="list-title">Call mum about the trip</span>
+            <span class="list-sub">Kept from Sunday&rsquo;s conversation.</span>
+          </div>
+          <span class="chip chip-kept">Kept</span>
+          <span class="t-meta">→</span>
+        </div>
+        <div class="list-row">
+          <div class="list-main">
+            <span class="list-title">Lea&rsquo;s birthday · book idea</span>
+            <span class="list-sub">You wanted to find it before the week.</span>
+          </div>
+          <span class="chip">In 11 days</span>
+          <span class="t-meta">→</span>
+        </div>
+      </div>
+    </section>
+
+    <footer style="margin-top: var(--space-9); padding-top: var(--space-6); border-top: 1px solid var(--border); display: flex; justify-content: space-between; font-size: var(--text-small); color: var(--ink-500);">
+      <a href="foundations.html" style="color: var(--ink-500); text-decoration: none;">← Foundations</a>
+      <a href="patterns.html" style="color: var(--accent); text-decoration: none;">Next · Patterns &amp; Voice →</a>
+    </footer>
+
+  </main>
+</div>
+
+</body>
+</html>

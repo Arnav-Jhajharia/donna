@@ -1,0 +1,469 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Donna — Type</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet" />
+<style>
+  :root {
+    --serif: 'EB Garamond', Georgia, serif;
+    --sans: 'Red Hat Text', -apple-system, sans-serif;
+    --bg: #FBF7F5;
+    --ink: #1E1A18;
+    --ink-700: #3A3331;
+    --ink-500: #6B615C;
+    --ink-400: #8F837C;
+    --accent: #7B5544;
+    --surface: #F0EAE4;
+    --border: rgba(30,26,24,0.08);
+    --border-strong: rgba(30,26,24,0.14);
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    -webkit-font-smoothing: antialiased;
+  }
+
+  .page { max-width: 960px; margin: 0 auto; padding: 96px 48px 128px; }
+
+  .crumbs {
+    font-family: var(--sans);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-400);
+    font-weight: 500;
+    margin-bottom: 64px;
+  }
+  .crumbs a { color: var(--ink-400); text-decoration: none; }
+
+  h1.page-title {
+    font-family: var(--serif);
+    font-size: 56px;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+    font-weight: 400;
+    font-style: normal;
+    margin: 0 0 20px;
+    max-width: 20ch;
+  }
+  p.page-lead {
+    font-family: var(--sans);
+    font-size: 17px;
+    line-height: 1.6;
+    color: var(--ink-700);
+    max-width: 62ch;
+    margin: 0 0 80px;
+    font-weight: 400;
+  }
+
+  section { margin-top: 96px; }
+  section:first-of-type { margin-top: 0; }
+
+  .sec-label {
+    font-family: var(--sans);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--accent);
+    font-weight: 500;
+    margin-bottom: 16px;
+  }
+  h2.sec-title {
+    font-family: var(--serif);
+    font-size: 36px;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+    font-weight: 400;
+    font-style: normal;
+    margin: 0 0 12px;
+  }
+  p.sec-lead {
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    color: var(--ink-700);
+    max-width: 58ch;
+    margin: 0 0 40px;
+  }
+
+  .table { border-top: 1px solid var(--border); }
+  .row {
+    display: grid;
+    grid-template-columns: 180px 1fr 1fr;
+    gap: 32px;
+    padding: 28px 0;
+    border-bottom: 1px solid var(--border);
+    align-items: baseline;
+  }
+  .row-role {
+    font-family: var(--sans);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    color: var(--ink-500);
+    font-weight: 500;
+  }
+  .row-role small {
+    display: block;
+    margin-top: 6px;
+    font-size: 12px;
+    color: var(--ink-400);
+    text-transform: none;
+    letter-spacing: 0;
+    font-weight: 400;
+  }
+  .row-specs {
+    font-family: var(--sans);
+    font-size: 12px;
+    color: var(--ink-400);
+    font-variant-numeric: tabular-nums;
+    line-height: 1.6;
+  }
+  .row-specs b { color: var(--ink-700); font-weight: 500; }
+
+  .s-display { font-family: var(--serif); font-size: 64px; line-height: 1.02; letter-spacing: -0.025em; font-weight: 400; font-style: normal; }
+  .s-h1 { font-family: var(--serif); font-size: 44px; line-height: 1.08; letter-spacing: -0.02em; font-weight: 400; font-style: normal; }
+  .s-h2 { font-family: var(--serif); font-size: 32px; line-height: 1.12; letter-spacing: -0.015em; font-weight: 400; font-style: normal; }
+  .s-h3 { font-family: var(--serif); font-size: 22px; line-height: 1.25; letter-spacing: -0.01em; font-weight: 500; font-style: normal; }
+  .s-h4 { font-family: var(--sans); font-size: 15px; line-height: 1.35; font-weight: 600; color: var(--ink); }
+  .s-lead { font-family: var(--sans); font-size: 18px; line-height: 1.6; color: var(--ink-700); font-weight: 400; }
+  .s-body { font-family: var(--sans); font-size: 16px; line-height: 1.55; color: var(--ink); font-weight: 400; }
+  .s-small { font-family: var(--sans); font-size: 14px; line-height: 1.55; color: var(--ink-500); font-weight: 400; }
+  .s-caption { font-family: var(--sans); font-size: 12px; line-height: 1.5; color: var(--ink-400); font-weight: 400; }
+  .s-label { font-family: var(--sans); font-size: 11px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--ink-500); font-weight: 500; }
+  .s-button { font-family: var(--sans); font-size: 15px; line-height: 1; color: var(--bg); font-weight: 500; background: var(--ink); padding: 12px 20px; border-radius: 6px; display: inline-block; }
+  .s-input { font-family: var(--sans); font-size: 16px; line-height: 1.5; color: var(--ink-400); font-weight: 400; padding: 12px 14px; border: 1px solid var(--border-strong); border-radius: 6px; background: var(--bg); display: inline-block; min-width: 280px; }
+
+  .rules { display: grid; gap: 28px; margin-top: 8px; }
+  .rule {
+    display: grid;
+    grid-template-columns: 220px 1fr;
+    gap: 48px;
+    padding-top: 28px;
+    border-top: 1px solid var(--border);
+  }
+  .rule:first-child { padding-top: 0; border-top: none; }
+  .rule-t {
+    font-family: var(--serif);
+    font-size: 20px;
+    line-height: 1.3;
+    color: var(--ink);
+    font-weight: 500;
+  }
+  .rule-b {
+    font-family: var(--sans);
+    font-size: 15px;
+    line-height: 1.7;
+    color: var(--ink-700);
+    max-width: 58ch;
+  }
+  .rule-b p { margin: 0 0 8px; }
+  .rule-b p:last-child { margin-bottom: 0; }
+  .rule-b code {
+    font-family: var(--sans);
+    font-weight: 500;
+    font-size: 13px;
+    color: var(--accent);
+    background: #F5EFEA;
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  .rule-b em { font-family: var(--serif); font-style: italic; }
+
+  .dd {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0;
+    border: 1px solid var(--border-strong);
+    margin-top: 24px;
+  }
+  .dd > div { padding: 32px; }
+  .dd > div + div { border-left: 1px solid var(--border-strong); }
+  .dd-tag {
+    font-family: var(--sans);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+    font-weight: 500;
+    margin-bottom: 20px;
+  }
+  .dd-do .dd-tag { color: #5C6B4A; }
+  .dd-no .dd-tag { color: #8B3A2E; }
+  .dd-note {
+    font-family: var(--sans);
+    font-size: 13px;
+    line-height: 1.6;
+    color: var(--ink-500);
+    margin-top: 16px;
+  }
+
+  .foot {
+    margin-top: 128px;
+    padding-top: 24px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    justify-content: space-between;
+    font-family: var(--sans);
+    font-size: 13px;
+    color: var(--ink-400);
+  }
+  .foot a { color: var(--ink-400); text-decoration: none; }
+  .foot a:hover { color: var(--accent); }
+</style>
+</head>
+<body>
+
+<div class="page">
+
+  <div class="crumbs">
+    <a href="../index.html">Package</a> &nbsp;/&nbsp; <span>Type · locked</span>
+  </div>
+
+  <h1 class="page-title">Type, upright and quiet.</h1>
+  <p class="page-lead">
+    Serif is upright by default. Italic is a rare accent, not a voice. Sans does the work the product needs to do. Everything else follows from these three rules.
+  </p>
+
+  <section>
+    <div class="sec-label">01 · The scale</div>
+    <h2 class="sec-title">What to use, and where.</h2>
+    <p class="sec-lead">
+      Eleven roles. Each has one job. Serif (EB Garamond) carries hierarchy · upright, never italic by default. Sans (Red Hat Text) does everything the interface needs to do its work.
+    </p>
+
+    <div class="table">
+      <div class="row">
+        <div class="row-role">Display<small>Marketing hero only</small></div>
+        <div class="s-display">A quieter AI.</div>
+        <div class="row-specs"><b>EB Garamond · 400</b><br/>64 / 65 · −2.5%<br/>Never in-product</div>
+      </div>
+      <div class="row">
+        <div class="row-role">H1 · Page title<small>One per page</small></div>
+        <div class="s-h1">Good morning, Arnav.</div>
+        <div class="row-specs"><b>EB Garamond · 400</b><br/>44 / 48 · −2%</div>
+      </div>
+      <div class="row">
+        <div class="row-role">H2 · Section<small>Chapter on a page</small></div>
+        <div class="s-h2">Today</div>
+        <div class="row-specs"><b>EB Garamond · 400</b><br/>32 / 36 · −1.5%</div>
+      </div>
+      <div class="row">
+        <div class="row-role">H3 · Subsection<small>Grouped content</small></div>
+        <div class="s-h3">Things you said you'd do</div>
+        <div class="row-specs"><b>EB Garamond · 500</b><br/>22 / 28 · −1%</div>
+      </div>
+      <div class="row">
+        <div class="row-role">H4 · Card title<small>The most used heading</small></div>
+        <div class="s-h4">This week with Maya</div>
+        <div class="row-specs"><b>Red Hat Text · 600</b><br/>15 / 20</div>
+      </div>
+      <div class="row">
+        <div class="row-role">Lead<small>Page / section intro</small></div>
+        <div class="s-lead">A warm intro paragraph, two sentences maximum, then it steps aside.</div>
+        <div class="row-specs"><b>Red Hat Text · 400</b><br/>18 / 29</div>
+      </div>
+      <div class="row">
+        <div class="row-role">Body<small>The default voice</small></div>
+        <div class="s-body">The default voice of the product. Card body, chat, running copy · anything longer than a label.</div>
+        <div class="row-specs"><b>Red Hat Text · 400</b><br/>16 / 25</div>
+      </div>
+      <div class="row">
+        <div class="row-role">Small · Meta<small>Supporting</small></div>
+        <div class="s-small">Timestamps, helper text, secondary information.</div>
+        <div class="row-specs"><b>Red Hat Text · 400</b><br/>14 / 22</div>
+      </div>
+      <div class="row">
+        <div class="row-role">Caption<small>Minor</small></div>
+        <div class="s-caption">The smallest comfortable size. Annotations, form hints.</div>
+        <div class="row-specs"><b>Red Hat Text · 400</b><br/>12 / 18</div>
+      </div>
+      <div class="row">
+        <div class="row-role">Label · caps<small>Categorical</small></div>
+        <div class="s-label">Section label · 01</div>
+        <div class="row-specs"><b>Red Hat Text · 500</b><br/>11 · +14% tracking</div>
+      </div>
+      <div class="row">
+        <div class="row-role">Button<small>Action</small></div>
+        <div><span class="s-button">Keep it for me</span></div>
+        <div class="row-specs"><b>Red Hat Text · 500</b><br/>15 / 1 · no tracking</div>
+      </div>
+      <div class="row">
+        <div class="row-role">Input<small>Placeholder</small></div>
+        <div><span class="s-input">What should she remember?</span></div>
+        <div class="row-specs"><b>Red Hat Text · 400</b><br/>16 / 25 · upright</div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-label">02 · The two families</div>
+    <h2 class="sec-title">One serif. One sans. Each with one job.</h2>
+
+    <div class="rules">
+      <div class="rule">
+        <div class="rule-t">EB Garamond · for hierarchy</div>
+        <div class="rule-b">
+          <p><b>Upright, weight 400.</b> Used for H1, H2, Display. The serif holding the reader's eye on a page title or a section opener. Not used for emotion, mood, or decoration.</p>
+          <p>Weight 500 is allowed for H3, where the type sits smaller and needs a touch more stem weight to hold its own at 22px.</p>
+          <p>Serif is <b>never bold (700)</b>. If you need more emphasis than 500, the layout is wrong.</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-t">Red Hat Text · for the product</div>
+        <div class="rule-b">
+          <p><b>400 for reading, 500 for action, 600 for card titles.</b> Body copy, buttons, inputs, labels, metadata, chat, navigation · everything the user reads in order to do something.</p>
+          <p>Sans is <b>never italic in UI</b>. Italic sans reads as apology or error state and Donna is neither.</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-t">Italic · the single accent</div>
+        <div class="rule-b">
+          <p>Italic is <b>a highlight, not a default</b>. It appears in exactly three places:</p>
+          <p>· Inside running body copy, for a <em style="font-weight:500;">book title</em> or a proper name of something.<br/>
+             · Inside a serif heading, for <em>one word</em> the designer wants to lean into.<br/>
+             · In her spoken memory · quoted text she is recalling to you verbatim.</p>
+          <p>That is the whole list. No italic placeholder text. No italic captions. No italic page titles. No italic section labels.</p>
+        </div>
+      </div>
+
+      <div class="rule">
+        <div class="rule-t">Weights used, in total</div>
+        <div class="rule-b">
+          <p>Serif: <code>400</code>, <code>500</code>. That is all.</p>
+          <p>Sans: <code>400</code>, <code>500</code>, <code>600</code>. <code>700</code> only for tabular numerals.</p>
+          <p>Anything outside this list is not part of the system.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-label">03 · Color in type</div>
+    <h2 class="sec-title">When text is rust, and when it is ink.</h2>
+    <p class="sec-lead">
+      Ink (<code style="font-family:var(--sans); font-size:13px; color:var(--accent); background:#F5EFEA; padding:1px 6px; border-radius:3px;">#1E1A18</code>) is the voice. Rust (<code style="font-family:var(--sans); font-size:13px; color:var(--accent); background:#F5EFEA; padding:1px 6px; border-radius:3px;">#7B5544</code>) is the accent. Exactly five places rust is allowed on type.
+    </p>
+
+    <div class="rules">
+      <div class="rule">
+        <div class="rule-t">1 · One word in an H1 or H2</div>
+        <div class="rule-b">
+          <p>A single word or short phrase inside a heading may be rust. Used at most once per page.</p>
+          <p style="font-family:var(--serif); font-size:32px; line-height:1.2; font-weight:400; color:var(--ink); margin-top:12px;">Good morning, <em style="color:var(--accent);">Arnav</em>.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">2 · Section labels (caps)</div>
+        <div class="rule-b">
+          <p>The uppercase micro-label above a section title is rust · the one consistent categorical use of color. It tells you "this is a new chapter".</p>
+          <p class="s-label" style="color:var(--accent); margin-top:12px;">01 · The scale</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">3 · The accent button label</div>
+        <div class="rule-b">
+          <p>The text <b>inside</b> the accent-filled button is paper-colored, not rust. Rust on type appears only as <em>text</em>, never as a button fill swap.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">4 · Inline links (rare)</div>
+        <div class="rule-b">
+          <p>An in-prose link is rust, no underline, with a <code>border-bottom: 1px solid rgba(123,85,68,0.3)</code>. Used only where a click is the natural next step · not for navigation.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">5 · Live status dot text</div>
+        <div class="rule-b">
+          <p>When a status chip says "Listening" or "Thinking" · i.e. she is actively present · the chip label is rust with a pulsing dot. Otherwise the chip label is ink-500.</p>
+        </div>
+      </div>
+      <div class="rule">
+        <div class="rule-t">Everywhere else</div>
+        <div class="rule-b">
+          <p>Ink. Page titles, body, labels, buttons, chat, metadata, captions, nav items. The serif upright is already doing the work of weight · color would be a second signal doing the same job.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-label">04 · Before &amp; after</div>
+    <h2 class="sec-title">Four corrections from the first pass.</h2>
+    <p class="sec-lead">
+      Four places where italic was doing too much work in the original.
+    </p>
+
+    <div class="dd">
+      <div class="dd-do">
+        <div class="dd-tag">After</div>
+        <div style="font-family:var(--serif); font-size:40px; line-height:1.05; font-weight:400; color:var(--ink); letter-spacing:-0.02em;">Good morning, <em style="font-style:italic; color:var(--accent);">Arnav</em>.</div>
+        <div class="dd-note">Upright serif page title. One word in italic rust as the accent.</div>
+      </div>
+      <div class="dd-no">
+        <div class="dd-tag">Before</div>
+        <div style="font-family:var(--serif); font-style:italic; font-size:40px; line-height:1.05; font-weight:400; color:var(--ink); letter-spacing:-0.02em;">Good morning, <span style="color:var(--accent);">Arnav</span>.</div>
+        <div class="dd-note">Whole heading in italic · reads as wistful, generic AI product.</div>
+      </div>
+    </div>
+
+    <div class="dd">
+      <div class="dd-do">
+        <div class="dd-tag">After</div>
+        <div style="font-family:var(--sans); font-size:15px; font-weight:600; color:var(--ink); margin-bottom:6px;">This week with Maya</div>
+        <div style="font-family:var(--sans); font-size:15px; color:var(--ink-700); line-height:1.5;">You said you'd pick up the frame from Oscar's before Thursday.</div>
+        <div class="dd-note">Card title in sans 600. Legible at 15px, clear heading without competing with page title.</div>
+      </div>
+      <div class="dd-no">
+        <div class="dd-tag">Before</div>
+        <div style="font-family:var(--serif); font-style:italic; font-size:20px; font-weight:400; color:var(--ink); margin-bottom:6px;">This week with Maya.</div>
+        <div style="font-family:var(--sans); font-size:15px; color:var(--ink-700); line-height:1.5;">You said you'd pick up the frame from Oscar's before Thursday.</div>
+        <div class="dd-note">Italic serif card titles · four cards becomes four italics competing. Hierarchy collapses.</div>
+      </div>
+    </div>
+
+    <div class="dd">
+      <div class="dd-do">
+        <div class="dd-tag">After</div>
+        <div style="font-family:var(--sans); font-size:16px; color:var(--ink-400); padding:12px 14px; border:1px solid var(--border-strong); border-radius:6px; background:var(--bg); display:inline-block;">What should she remember?</div>
+        <div class="dd-note">Sans upright placeholder · reads as a prompt. Matches the font the user will type in.</div>
+      </div>
+      <div class="dd-no">
+        <div class="dd-tag">Before</div>
+        <div style="font-family:var(--serif); font-style:italic; font-size:18px; color:var(--ink-400); padding:12px 14px; border:1px solid var(--border-strong); border-radius:6px; background:var(--bg); display:inline-block;">Tell her.</div>
+        <div class="dd-note">Serif italic placeholder · looks like a pull-quote, not a functional input.</div>
+      </div>
+    </div>
+
+    <div class="dd">
+      <div class="dd-do">
+        <div class="dd-tag">After</div>
+        <div style="border-left:1px solid var(--accent); padding-left:14px; font-family:var(--sans); font-size:15px; color:var(--ink); line-height:1.5;">Maya's sister lands in 40 minutes. Do you still want flowers?</div>
+        <div class="dd-note">Her message in sans. The rust rule does the attribution. Direct, not dreamy.</div>
+      </div>
+      <div class="dd-no">
+        <div class="dd-tag">Before</div>
+        <div style="border-left:1px solid var(--accent); padding-left:14px; font-family:var(--serif); font-style:italic; font-size:18px; color:var(--ink); line-height:1.5;">Maya's sister lands in 40 minutes. Do you still want flowers?</div>
+        <div class="dd-note">Every message in italic serif quickly becomes a performance of warmth rather than warmth.</div>
+      </div>
+    </div>
+  </section>
+
+  <div class="foot">
+    <a href="../index.html">← Package</a>
+    <span>Type · locked</span>
+    <a href="colors.html">Colors →</a>
+  </div>
+
+</div>
+
+</body>
+</html>

@@ -1,0 +1,7 @@
+name,target,measured,samples,passed,notes
+proposer_precision,≥ 0.80,"3/3 = 100% (suppressed_rejects=2, missed_accepts=0)",5,True,
+proposer_recall,≥ 0.70,pending — needs signal-injection shims,2,False,"implement per-proposer fetcher stubs, then match emitted raw_intent against gold"
+hit_calibration,agreement ≥ 0.85,4/4 = 100%,4,True,
+conversion_time,median ≤ 500 ms per shadow (deterministic path),1.2 ms avg (5/5 offered),5,True,
+author_retry_rate,≤ 0.15,0/5 = 0%,5,True,
+cost_per_cycle,mean ≤ $0.01,mean=$0.00468 max=$0.00481 n=5,5,True,
