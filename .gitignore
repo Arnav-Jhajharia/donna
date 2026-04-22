@@ -46,3 +46,6 @@ dashboard/**/.turbo/
 # Legacy (declared dead in CLAUDE.md)
 archive/
 .port_sessions/
+
+# Git worktrees
+.worktrees/
