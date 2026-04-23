@@ -129,6 +129,44 @@ class OpenLoop(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
+class Fact(Base):
+    """Bi-temporal facts about the user or their entities.
+
+    Two time axes:
+      t_valid_*    — when the fact was true in the real world
+      t_recorded_* — when we learned / stopped believing the fact
+
+    A "current belief" row has t_valid_to = NULL and t_recorded_to = NULL.
+    Superseded rows close out their t_recorded_to and set superseded_by.
+    To correct a historical fact, close t_valid_to and insert a new row
+    with the corrected t_valid_from.
+    """
+
+    __tablename__ = "facts"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    subject: Mapped[str] = mapped_column(String, nullable=False)
+    predicate: Mapped[str] = mapped_column(String, nullable=False)
+    object: Mapped[str] = mapped_column(Text, nullable=False)
+    object_json: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    confidence: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    source: Mapped[str] = mapped_column(String, default="chat", nullable=False)
+    t_valid_from: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    t_valid_to: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    t_recorded_from: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+    t_recorded_to: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    superseded_by: Mapped[str | None] = mapped_column(
+        String, ForeignKey("facts.id"), nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+
+    __table_args__ = (
+        Index("idx_facts_user_subj_pred", "user_id", "subject", "predicate"),
+        Index("idx_facts_user_valid_from", "user_id", "t_valid_from"),
+        Index("idx_facts_user_recorded_from", "user_id", "t_recorded_from"),
+    )
+
+
 class CalendarEntry(Base):
     """Synced calendar events from Google Calendar (via Composio)."""
     __tablename__ = "calendar_entries"
