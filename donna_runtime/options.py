@@ -34,12 +34,12 @@ def build_mcp_server(config: DonnaAgentConfig | None = None):
 
 def build_options(config: DonnaAgentConfig | None = None) -> ClaudeAgentOptions:
     config = config or DonnaAgentConfig()
+    # Keep system_prompt stable across turns so the SDK's prefix cache stays
+    # warm. Per-turn volatile context is prepended to the user message by the
+    # runner via wrap_user_message_with_context().
     kwargs = {
         "model": config.model,
-        "system_prompt": build_system_prompt(
-            runtime_context=config.system_context,
-            tool_mode=config.tool_mode,
-        ),
+        "system_prompt": build_system_prompt(tool_mode=config.tool_mode),
         "mcp_servers": {TOOL_NAMESPACE: build_mcp_server(config)},
         "extra_args": {
             "thinking": "enabled" if config.thinking_enabled else "disabled",

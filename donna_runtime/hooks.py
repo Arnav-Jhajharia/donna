@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 _CURRENT_TRACE: ContextVar[TurnTrace | None] = ContextVar("donna_current_trace", default=None)
 _CURRENT_USER_ID: ContextVar[str | None] = ContextVar("donna_current_user_id", default=None)
 _OUTBOUND_BUFFER: ContextVar[list | None] = ContextVar("donna_outbound_buffer", default=None)
+_CHAT_ALREADY_PERSISTED: ContextVar[bool] = ContextVar(
+    "donna_chat_already_persisted", default=False
+)
 
 _PENDING_HOOK_TASKS: set[asyncio.Task] = set()
 
@@ -26,14 +29,20 @@ async def drain_memory_hooks() -> None:
 
 
 @contextmanager
-def trace_hook_context(trace: TurnTrace, user_id: str | None = None) -> Iterator[None]:
+def trace_hook_context(
+    trace: TurnTrace,
+    user_id: str | None = None,
+    chat_already_persisted: bool = False,
+) -> Iterator[None]:
     trace_token = _CURRENT_TRACE.set(trace)
     user_token = _CURRENT_USER_ID.set(user_id)
+    chat_token = _CHAT_ALREADY_PERSISTED.set(chat_already_persisted)
     try:
         yield
     finally:
         _CURRENT_TRACE.reset(trace_token)
         _CURRENT_USER_ID.reset(user_token)
+        _CHAT_ALREADY_PERSISTED.reset(chat_token)
 
 
 async def pre_tool_hook(input_data, tool_use_id, context):
@@ -68,14 +77,17 @@ def _fire_memory_hooks(trace: TurnTrace | None, send_burst_input: dict) -> None:
     outbound = send_burst_input.get("messages") or []
     if not isinstance(outbound, list):
         outbound = []
+    from .tool_logic import render_burst_items_text
+    rendered_outbound = render_burst_items_text(outbound)
     tool_names = [c["tool"] for c in trace.tool_calls]
     ctx = {
         "user_id": user_id,
         "inbound": trace.user_message,
-        "outbound": [str(m) for m in outbound],
+        "outbound": rendered_outbound,
         "tool_names": tool_names,
         "terminator": "send_burst",
         "user_facts": {},
+        "chat_already_persisted": _CHAT_ALREADY_PERSISTED.get(),
     }
     for hook in ALL_HOOKS:
         try:

@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import json
+from typing import Any
+
 from claude_agent_sdk import tool
 
 from .hooks import _CURRENT_TRACE, _CURRENT_USER_ID, _fire_memory_hooks
@@ -13,10 +16,54 @@ from .tool_logic import (
 )
 
 
+def _current_user_id() -> str | None:
+    return _CURRENT_USER_ID.get()
+
+
+def _tool_text(
+    result: dict[str, Any],
+    *,
+    no_hits_text: str = "No hits.",
+    degraded_text: str = "Memory unavailable.",
+) -> dict[str, list[dict[str, str]]]:
+    status = result.get("status")
+    payload = result.get("payload")
+    if status == "degraded":
+        reason = payload.get("reason") if isinstance(payload, dict) else None
+        return text_content(f"{degraded_text}{f' {reason}' if reason else ''}")
+    if status == "no_hits" or not payload:
+        return text_content(no_hits_text)
+    return text_content(_render_payload(payload))
+
+
+def _render_payload(payload: Any) -> str:
+    if isinstance(payload, list):
+        lines: list[str] = []
+        for item in payload[:10]:
+            if isinstance(item, dict):
+                lines.append("- " + _render_dict_item(item))
+            else:
+                lines.append(f"- {item}")
+        return "\n".join(lines)
+    if isinstance(payload, dict):
+        return json.dumps(payload, default=str, sort_keys=True)
+    return str(payload)
+
+
+def _render_dict_item(item: dict[str, Any]) -> str:
+    for key in ("content", "fact", "rule", "title"):
+        if item.get(key):
+            prefix = f"{item.get('source')}: " if item.get("source") else ""
+            return prefix + str(item[key])
+    return json.dumps(item, default=str, sort_keys=True)
+
+
 @tool(
     "recall_episodic",
     "Search episodic memory for past-conversation snippets not in the Living Profile. "
-    "Returns up to 5 dated snippets. Skip if Living Profile already has the answer.",
+    "Returns up to 5 dated snippets. "
+    "Do NOT use if the Living Profile already has the answer, for countable "
+    "observations (use read_tracker), or for relational facts (use recall_graph).",
     {"query": str},
 )
 @traceable(name="donna.tool.recall_episodic", run_type="tool")
@@ -27,8 +74,21 @@ async def recall_episodic(args):
 @tool(
     "read_tracker",
     "Read-only tracker lookup by observation type (e.g. 'expense', 'mood'). "
-    "Returns JSON list of recent observations.",
-    {"name": str},
+    "Use period for local-time questions like today, this week, or last week. "
+    "Returns JSON list of recent observations with local timestamps. "
+    "Do NOT use for free-text memory recall or for non-countable events; "
+    "use recall_episodic or smart_recall instead.",
+    {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+            "name": {"type": "string"},
+            "period": {
+                "type": "string",
+                "description": "Optional local-time period: today, yesterday, this_week, or last_week.",
+            },
+        },
+    },
 )
 @traceable(name="donna.tool.read_tracker", run_type="tool")
 async def read_tracker(args):
@@ -38,55 +98,435 @@ async def read_tracker(args):
 @tool(
     "recall_graph",
     "Search the user's knowledge graph for relational facts (people, decisions, "
-    "commitments). Returns up to 10 facts with timestamps.",
+    "commitments). Returns up to 10 facts with timestamps. "
+    "Do NOT use for countable observations (use read_tracker) or for "
+    "free-text episodic snippets (use recall_episodic).",
     {"query": str},
 )
 @traceable(name="donna.tool.recall_graph", run_type="tool")
 async def recall_graph(args):
     from backend.memory.tools.recall_graph import recall_graph as _recall_graph
 
-    user_id = _CURRENT_USER_ID.get()
+    user_id = _current_user_id()
     query = str(args.get("query", "")).strip()
     if not user_id or not query:
         return text_content("No graph hits.")
     res = await _recall_graph(user_id=user_id, query=query, limit=10)
-    payload = res.get("payload") or []
-    if not payload:
-        return text_content("No graph hits.")
-    lines = [f"- {f.get('fact', '')}" for f in payload if isinstance(f, dict)]
-    return text_content("\n".join(lines) or "No graph hits.")
+    return _tool_text(res, no_hits_text="No graph hits.", degraded_text="Graph unavailable.")
 
 
 @tool(
     "smart_recall",
     "Adaptive recall across episodic, graph, and document memory. Use when you "
-    "need the best-ranked hits without choosing a specific source.",
+    "need the best-ranked hits without choosing a specific source. "
+    "Do NOT use when the source is obvious (prefer the specific tool) or "
+    "when the Living Profile already answers the question.",
     {"message": str},
 )
 @traceable(name="donna.tool.smart_recall", run_type="tool")
 async def smart_recall(args):
     from backend.memory.tools.smart_recall import smart_recall as _smart_recall
 
-    user_id = _CURRENT_USER_ID.get()
+    user_id = _current_user_id()
     message = str(args.get("message", "")).strip()
     if not user_id or not message:
         return text_content("No hits.")
     res = await _smart_recall(user_id=user_id, message=message, top_k=8)
-    payload = res.get("payload") or []
-    if not payload:
-        return text_content("No hits.")
-    lines = []
-    for item in payload[:8]:
-        if isinstance(item, dict):
-            lines.append(f"- {item.get('content') or item.get('fact') or item}")
-    return text_content("\n".join(lines) or "No hits.")
+    return _tool_text(res, no_hits_text="No hits.", degraded_text="Recall unavailable.")
+
+
+@tool(
+    "list_open_loops",
+    "List active unresolved threads for this user. Use when deciding what the "
+    "user may be forgetting or what needs follow-up. "
+    "Do NOT use for calendar events (use list_calendar) or for historical "
+    "context (use recall_episodic).",
+    {
+        "type": "object",
+        "properties": {
+            "status": {"type": "string"},
+            "limit": {"type": "integer"},
+        },
+    },
+)
+@traceable(name="donna.tool.list_open_loops", run_type="tool")
+async def list_open_loops(args):
+    from backend.memory.tools.list_open_loops import list_open_loops as _list_open_loops
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("No open loops.")
+    res = await _list_open_loops(
+        user_id=user_id,
+        status=str(args.get("status") or "active"),
+        limit=int(args.get("limit") or 10),
+    )
+    return _tool_text(res, no_hits_text="No open loops.", degraded_text="Open loops unavailable.")
+
+
+@tool(
+    "list_calendar",
+    "List upcoming calendar entries. Use for schedule-aware replies. "
+    "Do NOT use for past events, open-ended reminders (use list_open_loops), "
+    "or when no time-of-day question is on the table.",
+    {
+        "type": "object",
+        "properties": {
+            "within_days": {"type": "integer"},
+            "limit": {"type": "integer"},
+        },
+    },
+)
+@traceable(name="donna.tool.list_calendar", run_type="tool")
+async def list_calendar(args):
+    from backend.memory.tools.list_calendar import list_calendar as _list_calendar
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("No calendar entries.")
+    res = await _list_calendar(
+        user_id=user_id,
+        within_days=int(args.get("within_days") or 7),
+        limit=int(args.get("limit") or 10),
+    )
+    return _tool_text(res, no_hits_text="No calendar entries.", degraded_text="Calendar unavailable.")
+
+
+@tool(
+    "log_observation",
+    "Record a countable user event such as expense, meal, mood, sleep, habit, "
+    "or exercise. Use only when the user states trackable data.",
+    {
+        "type": "object",
+        "required": ["type", "fields"],
+        "properties": {
+            "type": {"type": "string"},
+            "fields": {"type": "object"},
+            "tags": {"type": "object"},
+            "raw": {"type": "string"},
+            "event_time": {
+                "type": "string",
+                "description": "Optional ISO timestamp for when the event happened.",
+            },
+            "confidence": {"type": "number"},
+        },
+    },
+)
+@traceable(name="donna.tool.log_observation", run_type="tool")
+async def log_observation(args):
+    from backend.memory.tools.log_observation import log_observation as _log_observation
+
+    user_id = _current_user_id()
+    obs_type = str(args.get("type") or "").strip()
+    fields = args.get("fields") if isinstance(args.get("fields"), dict) else {}
+    if not user_id or not obs_type or not fields:
+        return text_content("Observation not logged.")
+    res = await _log_observation(
+        user_id=user_id,
+        type=obs_type,
+        fields=fields,
+        tags=args.get("tags") if isinstance(args.get("tags"), dict) else {},
+        raw=str(args.get("raw") or ""),
+        event_time=str(args.get("event_time") or ""),
+        confidence=float(args.get("confidence") or 1.0),
+    )
+    return _tool_text(res, no_hits_text="Observation not logged.", degraded_text="Observation unavailable.")
+
+
+@tool(
+    "track_open_loop",
+    "Record an unresolved thread or commitment. Use when the user leaves a "
+    "follow-up, decision, or obligation hanging. "
+    "Do NOT use for timed reminders (use schedule_reminder) or for completed "
+    "facts (use log_observation).",
+    {
+        "type": "object",
+        "required": ["content"],
+        "properties": {
+            "content": {"type": "string"},
+            "source_message": {"type": "string"},
+        },
+    },
+)
+@traceable(name="donna.tool.track_open_loop", run_type="tool")
+async def track_open_loop(args):
+    from backend.memory.tools.track_open_loop import track_open_loop as _track_open_loop
+
+    user_id = _current_user_id()
+    content = str(args.get("content") or "").strip()
+    if not user_id or not content:
+        return text_content("Open loop not tracked.")
+    res = await _track_open_loop(
+        user_id=user_id,
+        content=content,
+        source_message=str(args.get("source_message") or ""),
+    )
+    return _tool_text(res, no_hits_text="Open loop not tracked.", degraded_text="Open loops unavailable.")
+
+
+@tool(
+    "close_open_loop",
+    "Mark a prior open loop resolved. Use a loop id from list_open_loops. "
+    "Do NOT use without a loop_id or on a loop the user has not confirmed resolved.",
+    {
+        "type": "object",
+        "required": ["loop_id"],
+        "properties": {"loop_id": {"type": "string"}},
+    },
+)
+@traceable(name="donna.tool.close_open_loop", run_type="tool")
+async def close_open_loop(args):
+    from backend.memory.tools.close_open_loop import close_open_loop as _close_open_loop
+
+    user_id = _current_user_id()
+    loop_id = str(args.get("loop_id") or "").strip()
+    if not user_id or not loop_id:
+        return text_content("Open loop not closed.")
+    res = await _close_open_loop(user_id=user_id, loop_id=loop_id)
+    return _tool_text(res, no_hits_text="Open loop not found.", degraded_text="Open loops unavailable.")
+
+
+@tool(
+    "set_timezone",
+    "Set the user's timezone (IANA string like 'Asia/Singapore'). Use only when the user explicitly confirms or corrects it.",
+    {
+        "type": "object",
+        "required": ["timezone"],
+        "properties": {
+            "timezone": {"type": "string"},
+            "source": {"type": "string", "description": "Optional provenance label (default: user_correction)."},
+        },
+    },
+)
+@traceable(name="donna.tool.set_timezone", run_type="tool")
+async def set_timezone(args):
+    from backend.memory.tools.set_timezone import set_timezone as _set_timezone
+
+    user_id = _current_user_id()
+    tz = str(args.get("timezone") or "").strip()
+    if not user_id or not tz:
+        return text_content("Timezone not updated.")
+    res = await _set_timezone(
+        user_id=user_id,
+        timezone=tz,
+        source=str(args.get("source") or "user_correction"),
+    )
+    return _tool_text(res, no_hits_text="Timezone not updated.", degraded_text="Timezone unavailable.")
+
+
+@tool(
+    "schedule_reminder",
+    "Schedule a one-shot reminder to be delivered later. Use only when the user explicitly asks for a timed reminder.",
+    {
+        "type": "object",
+        "required": ["text"],
+        "properties": {
+            "text": {"type": "string"},
+            "fire_at": {"type": "string", "description": "Optional ISO timestamp (use offset when known)."},
+            "in_minutes": {"type": "integer", "description": "Optional relative delay in minutes (alternative to fire_at)."},
+        },
+    },
+)
+@traceable(name="donna.tool.schedule_reminder", run_type="tool")
+async def schedule_reminder(args):
+    from backend.memory.tools.schedule_reminder import schedule_reminder as _schedule_reminder
+
+    user_id = _current_user_id()
+    text = str(args.get("text") or "").strip()
+    if not user_id or not text:
+        return text_content("Reminder not scheduled.")
+    res = await _schedule_reminder(
+        user_id=user_id,
+        text=text,
+        fire_at=str(args.get("fire_at") or "") or None,
+        in_minutes=(int(args["in_minutes"]) if args.get("in_minutes") is not None else None),
+        origin="user",
+    )
+    return _tool_text(res, no_hits_text="Reminder not scheduled.", degraded_text="Scheduling unavailable.")
+
+
+SEND_BURST_INPUT_SCHEMA: dict = {
+    "type": "object",
+    "required": ["messages"],
+    "properties": {
+        "messages": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 6,
+            "description": (
+                "Ordered list of UI items to render as one WhatsApp turn. "
+                "Items render in order. At most 3 non-delay items per burst. "
+                "Voice: lowercase, no em dashes. Each text body <=200 chars typical."
+            ),
+            "items": {
+                "oneOf": [
+                    {
+                        "type": "object",
+                        "required": ["type", "body"],
+                        "properties": {
+                            "type": {"const": "text"},
+                            "body": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 1000,
+                                "description": "Plain text bubble. Lowercase, no em dashes.",
+                            },
+                            "reply_to_message_id": {
+                                "type": ["string", "null"],
+                                "description": (
+                                    "Optional WA message id to quote-reply to. "
+                                    "Omit unless you specifically want this bubble "
+                                    "to visually thread to a prior message."
+                                ),
+                            },
+                        },
+                    },
+                    {
+                        "type": "object",
+                        "required": ["type", "body", "buttons"],
+                        "properties": {
+                            "type": {"const": "cta"},
+                            "body": {"type": "string", "minLength": 1, "maxLength": 1024},
+                            "buttons": {
+                                "type": "array",
+                                "minItems": 1,
+                                "maxItems": 3,
+                                "description": (
+                                    "1-3 reply buttons. Tapping a button sends "
+                                    "its title back as the user's next inbound text. "
+                                    "Use ONLY when the answer is a small known set "
+                                    "(yes/no, pick from <=3 options). Not for "
+                                    "open-ended questions."
+                                ),
+                                "items": {
+                                    "type": "object",
+                                    "required": ["id", "title"],
+                                    "properties": {
+                                        "id": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 64,
+                                            "description": "Short stable machine id, e.g. 'confirm_tz'.",
+                                        },
+                                        "title": {
+                                            "type": "string",
+                                            "minLength": 1,
+                                            "maxLength": 20,
+                                            "description": "User-facing label, <=20 chars.",
+                                        },
+                                    },
+                                },
+                            },
+                            "reply_to_message_id": {"type": ["string", "null"]},
+                        },
+                    },
+                    {
+                        "type": "object",
+                        "required": ["type", "body", "display_text", "url"],
+                        "properties": {
+                            "type": {"const": "cta_url"},
+                            "body": {"type": "string", "minLength": 1, "maxLength": 1024},
+                            "display_text": {
+                                "type": "string",
+                                "minLength": 1,
+                                "maxLength": 20,
+                                "description": "Label on the URL button (e.g. 'Open', 'Connect').",
+                            },
+                            "url": {"type": "string", "minLength": 1, "format": "uri"},
+                            "reply_to_message_id": {"type": ["string", "null"]},
+                        },
+                    },
+                    {
+                        "type": "object",
+                        "required": ["type", "body", "button_label", "sections"],
+                        "properties": {
+                            "type": {"const": "list"},
+                            "body": {"type": "string", "minLength": 1, "maxLength": 1024},
+                            "button_label": {"type": "string", "minLength": 1, "maxLength": 20},
+                            "sections": {
+                                "type": "array",
+                                "minItems": 1,
+                                "description": (
+                                    "Up to 10 rows total across all sections. "
+                                    "Use when there are >3 options to pick from. Rare."
+                                ),
+                                "items": {
+                                    "type": "object",
+                                    "required": ["title", "rows"],
+                                    "properties": {
+                                        "title": {"type": "string", "maxLength": 24},
+                                        "rows": {
+                                            "type": "array",
+                                            "minItems": 1,
+                                            "items": {
+                                                "type": "object",
+                                                "required": ["id", "title"],
+                                                "properties": {
+                                                    "id": {"type": "string", "maxLength": 64},
+                                                    "title": {"type": "string", "maxLength": 24},
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                            },
+                            "reply_to_message_id": {"type": ["string", "null"]},
+                        },
+                    },
+                    {
+                        "type": "object",
+                        "required": ["type", "url"],
+                        "properties": {
+                            "type": {"const": "image"},
+                            "url": {
+                                "type": "string",
+                                "minLength": 1,
+                                "format": "uri",
+                                "description": "Publicly accessible URL. Never invent.",
+                            },
+                            "caption": {"type": "string", "maxLength": 1024},
+                            "reply_to_message_id": {"type": ["string", "null"]},
+                        },
+                    },
+                    {
+                        "type": "object",
+                        "required": ["type", "seconds"],
+                        "properties": {
+                            "type": {"const": "delay"},
+                            "seconds": {
+                                "type": "number",
+                                "minimum": 0.5,
+                                "maximum": 4.0,
+                                "description": (
+                                    "Pause before next item, 0.5-4.0s. Use sparingly "
+                                    "for pacing (greeting before a question, ack "
+                                    "before advice). Never first or last item."
+                                ),
+                            },
+                        },
+                    },
+                ]
+            },
+        },
+    },
+}
 
 
 @tool(
     "send_burst",
-    "TERMINATOR. Send 1-3 WhatsApp messages (<200 chars each, lowercase, no em dashes). "
-    "tone: 'crisp' | 'direct' | 'warm'.",
-    {"messages": list, "tone": str},
+    (
+        "TERMINATOR. Render one WhatsApp turn as a list of UI items. "
+        "Items: text | cta (reply buttons, <=3) | cta_url (link button) | "
+        "list (scrollable options) | image (url) | delay (pause). "
+        "At most 3 non-delay items. Lowercase voice, no em dashes. "
+        "Use cta when the answer is a small known set; text otherwise. "
+        "Use image when a visual makes the answer clearer. "
+        "Do NOT use for ambient chatter not directed at Donna (use stay_silent), "
+        "and do NOT emit em dashes, semicolons, or banned filler phrases: a "
+        "deterministic voice filter runs downstream and will strip them, so "
+        "triggering it costs a trace-logged violation."
+    ),
+    SEND_BURST_INPUT_SCHEMA,
 )
 @traceable(name="donna.tool.send_burst", run_type="tool")
 async def send_burst(args):
@@ -98,7 +538,9 @@ async def send_burst(args):
 @tool(
     "stay_silent",
     "TERMINATOR. Choose not to respond (ambient chatter, not directed at Donna, etc). "
-    "Log a short reason.",
+    "Log a short reason. "
+    "Do NOT use when the user directly addressed Donna or asked a question; "
+    "use send_burst even if the reply is one word.",
     {"reason": str},
 )
 @traceable(name="donna.tool.stay_silent", run_type="tool")
@@ -111,6 +553,13 @@ DONNA_TOOLS = (
     read_tracker,
     recall_graph,
     smart_recall,
+    list_open_loops,
+    list_calendar,
+    log_observation,
+    track_open_loop,
+    close_open_loop,
+    set_timezone,
+    schedule_reminder,
     send_burst,
     stay_silent,
 )

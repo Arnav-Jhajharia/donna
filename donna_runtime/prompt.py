@@ -213,10 +213,10 @@ _TERMINATOR_CONTRACT = """
 
 Every turn MUST end by calling exactly one of these tools. This is a hard runtime invariant.
 
-- send_burst(messages, tone) — 1 to 3 short WhatsApp messages, each ≤ 200 chars. tones: "crisp" | "direct" | "warm".
+- send_burst(messages) — render the turn as a list of UI items. Items: text | cta (1-3 reply buttons) | cta_url (link button) | list (scrollable options) | image (url) | delay (pause). At most 3 non-delay items. Lowercase, no em dashes. Use cta when the answer is a small known set; image when a visual makes the answer clearer; text otherwise.
 - stay_silent(reason) — for ambient chatter not directed at you, or when silence is the right call.
 
-No other way to close a turn exists. If you are mid-thinking and run out of tokens, call send_burst with what you have."""
+Every turn MUST end with send_burst or stay_silent. No other way to close a turn exists. If you are mid-thinking and run out of tokens, call send_burst with what you have."""
 
 
 _STAGE_0_TAIL = """
@@ -230,7 +230,17 @@ _STAGE_0_5_TAIL = """
 
 # RIGHT NOW
 
-Memory and action tools are available through the MCP tool interface. Each tool carries its own when-to-use and when-NOT-to-use description. Reach for a tool only when it changes the answer. Do not call tools on ambient chatter. Do not call smart_recall after you already called a specific recall tool this turn. Use what you retrieve. Never ignore a tool result you just fetched."""
+Memory and action tools are available through the MCP tool interface. Each tool carries its own when-to-use and when-NOT-to-use description. Reach for a tool only when it changes the answer. Do not call tools on ambient chatter. Do not call smart_recall after you already called a specific recall tool this turn. Use what you retrieve. Never ignore a tool result you just fetched.
+
+Write memory narrowly:
+- log_observation only for measurable/countable events; include event_time when the event happened earlier than this message.
+- read_tracker should use period=today, yesterday, this_week, or last_week for time-bounded tracker questions.
+- set_timezone only when the user explicitly confirms or corrects their timezone.
+- schedule_reminder only when the user explicitly asks for a timed reminder.
+- track_open_loop only for unresolved commitments, decisions, errands, or follow-ups.
+- close_open_loop only when the user clearly resolved a tracked loop.
+
+Do not directly maintain the living profile. The backend compiles the temporal situation brief from timestamped memory."""
 
 
 STAGE_0_PROMPT = _DONNA_CORE + _TERMINATOR_CONTRACT + _STAGE_0_TAIL
@@ -242,14 +252,28 @@ def build_system_prompt(
     runtime_context: str = "",
     tool_mode: str = "stage0",
 ) -> str:
-    """Select a prompt based on tool_mode.
+    """Select a stable, cache-friendly system prompt.
 
-    stage0 -> Donna core + terminator + 'no tools' note.
-    fake   -> Donna core + terminator + 'tools available' note. Tool catalog
-              itself is carried by the MCP @tool descriptions.
-    real   -> same as fake until we add situational injection.
+    The system prompt is stable across turns so the SDK's prefix caching
+    stays warm. Per-turn volatile state (local_time, recent chat, open loops,
+    tracker) is carried into the user message by the runner, NOT here.
+
+    `runtime_context` is accepted for back-compat with older callers but is
+    IGNORED to protect prefix stability. Use DonnaAgentConfig.system_context
+    and the runner's user-message preamble path instead.
     """
     del living_profile, runtime_context
-    if tool_mode in ("fake", "real"):
-        return STAGE_0_5_PROMPT
-    return STAGE_0_PROMPT
+    return STAGE_0_5_PROMPT if tool_mode in ("fake", "real") else STAGE_0_PROMPT
+
+
+def wrap_user_message_with_context(user_message: str, runtime_context: str) -> str:
+    """Prepend per-turn runtime context to the user message.
+
+    Keeps the system prompt byte-stable across turns (cache hit) while still
+    surfacing local_time, recent chat, open loops, tracker to the model.
+    """
+    ctx = (runtime_context or "").strip()
+    msg = (user_message or "").strip()
+    if not ctx:
+        return msg
+    return f"{ctx}\n\n## USER MESSAGE\n{msg}"

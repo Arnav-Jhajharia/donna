@@ -168,12 +168,20 @@ async def smart_recall(args):
     "read_tracker",
     (
         "Read recent entries for a named tracker. Known names: 'expense', 'mood', 'sleep'. "
-        "Returns a JSON-ish list of recent observations. "
+        "Returns a JSON-ish list of recent observations. Accepts optional local-time period "
+        "today, yesterday, this_week, or last_week. "
         "USE WHEN: the user asks how much/how often/how they've been feeling ('how much did "
         "I spend', 'was I sleeping ok', 'mood this week'). "
         "DO NOT USE: to log a new entry — use log_observation. Do not use for non-tracker data."
     ),
-    {"name": str},
+    {
+        "type": "object",
+        "required": ["name"],
+        "properties": {
+            "name": {"type": "string"},
+            "period": {"type": "string"},
+        },
+    },
 )
 async def read_tracker(args):
     name = str(args.get("name", "")).strip().lower()

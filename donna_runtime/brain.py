@@ -12,9 +12,10 @@ from dataclasses import replace
 from delivery.messages import TextMessage
 
 from .config import DonnaAgentConfig
+from .context_builder import render_turn_context
 from .hooks import _OUTBOUND_BUFFER
 from .runner import traced_donna_turn
-from .session_store import resolve_session_id, save_user_session
+from .session_store import resolve_session_id_db, save_user_session_db
 
 logger = logging.getLogger(__name__)
 
@@ -30,12 +31,22 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
         return state
 
     cfg = config or DonnaAgentConfig()
-    resume_id = resolve_session_id(
+    resume_id = await resolve_session_id_db(
         explicit_session_id=None,
         user_id=user_id,
-        store_path=cfg.session_store_file,
     )
-    cfg = replace(cfg, user_id=user_id, resume_session_id=resume_id, fork_session=False)
+    turn_context = await render_turn_context(state)
+    system_context = "\n\n".join(
+        part for part in (cfg.system_context.strip(), turn_context.strip()) if part
+    )
+    cfg = replace(
+        cfg,
+        user_id=user_id,
+        resume_session_id=resume_id,
+        fork_session=False,
+        system_context=system_context,
+        chat_already_persisted=True,
+    )
 
     buffer: list = []
     token = _OUTBOUND_BUFFER.set(buffer)
@@ -59,7 +70,7 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
 
     if trace.session_id:
         try:
-            save_user_session(cfg.session_store_file, user_id, trace.session_id)
+            await save_user_session_db(user_id, trace.session_id)
         except Exception:
             logger.exception("brain: save_user_session failed")
 
