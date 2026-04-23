@@ -1,4 +1,4 @@
-"""12 memory tools. Each exports a callable + DESCRIPTION + INPUT_SCHEMA."""
+"""Memory tools registry. Each tool exports a callable + DESCRIPTION + INPUT_SCHEMA."""
 from __future__ import annotations
 
 from backend.memory.tools import (
@@ -8,11 +8,15 @@ from backend.memory.tools import (
     list_open_loops,
     list_rules,
     log_observation,
+    read_situation_brief,
     recall_chat_thread,
     recall_document_chunks,
     recall_episodic,
     recall_graph,
+    refresh_situation_brief,
+    schedule_reminder,
     smart_recall,
+    set_timezone,
     track_open_loop,
     update_living_profile,
 )
@@ -26,9 +30,13 @@ ALL_TOOLS = {
     "list_open_loops": list_open_loops,
     "list_rules": list_rules,
     "list_calendar": list_calendar,
+    "read_situation_brief": read_situation_brief,
     "smart_recall": smart_recall,
     "log_observation": log_observation,
     "track_open_loop": track_open_loop,
     "close_open_loop": close_open_loop,
+    "set_timezone": set_timezone,
+    "schedule_reminder": schedule_reminder,
+    "refresh_situation_brief": refresh_situation_brief,
     "update_living_profile": update_living_profile,
 }

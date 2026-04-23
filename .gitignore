@@ -42,6 +42,8 @@ dashboard/**/.turbo/
 
 # Claude Code local settings
 .claude/settings.local.json
+.claude/phase-1-backup/
+.claude/worktrees/
 
 # Legacy (declared dead in CLAUDE.md)
 archive/

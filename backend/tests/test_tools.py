@@ -11,18 +11,16 @@ from backend.memory.tools import ALL_TOOLS
 from backend.memory.tools._shape import degraded, no_hits, ok
 
 
-def test_all_twelve_tools_registered():
-    # 12 per the spec; implementation exposes 13 (recall_chat_thread is listed
-    # for chat history, and all 12 write/read tools are present — close_open_loop
-    # is listed separately from track_open_loop, bringing the count to 13 when
-    # the chat thread tool is included). Spec §5 table shows 9 read + 4 write = 13.
-    assert len(ALL_TOOLS) == 13
+def test_all_memory_tools_registered():
+    # The original memory surface plus the temporal situation-brief maintenance tools.
+    assert len(ALL_TOOLS) == 17
 
 
 @pytest.mark.parametrize("name", list({
     "recall_episodic", "recall_graph", "recall_document_chunks", "recall_chat_thread",
-    "list_observations", "list_open_loops", "list_rules", "list_calendar", "smart_recall",
-    "log_observation", "track_open_loop", "close_open_loop", "update_living_profile",
+    "list_observations", "list_open_loops", "list_rules", "list_calendar",
+    "read_situation_brief", "smart_recall", "refresh_situation_brief",
+    "log_observation", "track_open_loop", "close_open_loop", "set_timezone", "schedule_reminder", "update_living_profile",
 }))
 def test_tool_module_surface(name):
     mod = ALL_TOOLS[name]
@@ -40,3 +38,30 @@ def test_tool_result_shape_helpers():
     d = degraded("nope")
     assert d["status"] == "degraded"
     assert d["payload"]["reason"] == "nope"
+
+
+def test_backend_db_imports_root_models():
+    from backend.db.models import Base as BackendBase, User as BackendUser
+    from backend.db.session import async_session as backend_session
+    from db.models import Base as RootBase, User as RootUser
+    from db.session import async_session as root_session
+
+    assert BackendBase is RootBase
+    assert BackendUser is RootUser
+    assert backend_session is root_session
+
+
+def test_log_observation_coerces_event_time_to_naive_utc():
+    from backend.memory.tools.log_observation import _coerce_event_time
+
+    dt = _coerce_event_time("2026-04-21T10:30:00+08:00")
+
+    assert dt.isoformat() == "2026-04-21T02:30:00"
+
+
+def test_log_observation_coerces_naive_event_time_from_user_timezone():
+    from backend.memory.tools.log_observation import _coerce_event_time
+
+    dt = _coerce_event_time("2026-04-21T10:30:00", "Asia/Singapore")
+
+    assert dt.isoformat() == "2026-04-21T02:30:00"

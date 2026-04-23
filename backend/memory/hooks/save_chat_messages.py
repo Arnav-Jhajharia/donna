@@ -16,6 +16,8 @@ async def run(ctx: Mapping[str, Any]) -> None:
     outbound = list(ctx.get("outbound") or [])
     if not user_id:
         return
+    if ctx.get("chat_already_persisted"):
+        return
 
     from sqlalchemy import insert
 

@@ -54,6 +54,17 @@ async def test_hooks_noop_without_user_id():
 
 
 @pytest.mark.asyncio
+async def test_save_chat_messages_skips_when_already_persisted():
+    ctx = _ctx(
+        user_id="u1",
+        inbound="already stored",
+        outbound=["already stored too"],
+        chat_already_persisted=True,
+    )
+    await save_chat_messages.run(ctx)
+
+
+@pytest.mark.asyncio
 async def test_ingest_skipped_when_gate_rejects(monkeypatch):
     """Gate rejects short inbound; graphiti ingest must not be called."""
     called = {"n": 0}

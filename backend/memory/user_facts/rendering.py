@@ -57,6 +57,37 @@ def render_user_model_block(facts: dict) -> str:
     return "USER MODEL\n" + "\n".join(lines)
 
 
+def render_living_profile_block(profile: dict | None) -> str:
+    if not profile:
+        return ""
+    lines: list[str] = []
+    situation = profile.get("situation_brief")
+    if isinstance(situation, dict):
+        lines.append("SITUATION BRIEF")
+        summary = situation.get("summary")
+        if summary:
+            lines.append(f"  summary: {summary}")
+        for key, label in (
+            ("current_status", "current"),
+            ("last_week", "last week"),
+            ("this_week", "this week"),
+            ("next_week", "next week"),
+            ("open_loops", "open loops"),
+            ("stale_or_uncertain", "stale/uncertain"),
+        ):
+            values = situation.get(key)
+            if isinstance(values, list) and values:
+                rendered = "; ".join(str(value) for value in values[:4])
+                lines.append(f"  {label}: {rendered}")
+
+    summary = profile.get("summary") or profile.get("narrative") or ""
+    if summary and not lines:
+        lines.extend(["LIVING PROFILE", str(summary)])
+    elif summary and str(summary) not in "\n".join(lines):
+        lines.extend(["", "LIVING PROFILE", str(summary)])
+    return "\n".join(lines).strip()
+
+
 async def load_and_render(user_id: str) -> str:
     """Load facts + living_profile from DB and render; empty string if nothing."""
     from backend.memory.user_facts.api import get_living_profile, get_user_facts
@@ -64,8 +95,7 @@ async def load_and_render(user_id: str) -> str:
     facts = await get_user_facts(user_id)
     block = render_user_model_block(facts)
     profile = await get_living_profile(user_id)
-    if profile:
-        summary = profile.get("summary") or profile.get("narrative") or ""
-        if summary:
-            block = (block + "\n\nLIVING PROFILE\n" + str(summary)).strip()
+    profile_block = render_living_profile_block(profile)
+    if profile_block:
+        block = (block + "\n\n" + profile_block).strip()
     return block

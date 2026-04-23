@@ -1,8 +1,9 @@
 """list_calendar — upcoming events."""
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import timedelta
 
+from backend.memory.time import format_local, timezone_label, utcnow_naive
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
 
 DESCRIPTION = (
@@ -26,14 +27,18 @@ async def list_calendar(
     try:
         from sqlalchemy import select
 
-        from backend.db.models import CalendarEntry
+        from backend.db.models import CalendarEntry, User
         from backend.db.session import async_session
     except Exception:
         return degraded("db unavailable")
-    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    now = utcnow_naive()
     until = now + timedelta(days=within_days)
     try:
         async with async_session() as session:
+            user = (
+                await session.execute(select(User).where(User.id == user_id))
+            ).scalar_one_or_none()
+            timezone_name = user.timezone if user else None
             stmt = (
                 select(CalendarEntry)
                 .where(CalendarEntry.user_id == user_id)
@@ -54,6 +59,9 @@ async def list_calendar(
                 "title": r.title,
                 "start_time": r.start_time.isoformat() if r.start_time else None,
                 "end_time": r.end_time.isoformat() if r.end_time else None,
+                "start_time_local": format_local(r.start_time, timezone_name),
+                "end_time_local": format_local(r.end_time, timezone_name),
+                "timezone": timezone_label(timezone_name),
                 "location": r.location,
             }
             for r in rows
