@@ -1,0 +1,758 @@
+[
+  {
+    "intent": "keep an eye on ICA for anything about EP renewal rules",
+    "runs": [
+      {
+        "fingerprint": {
+          "card": "event_stream",
+          "cadence": "scheduled",
+          "subject_type": "entity",
+          "sources": [
+            "web_domain",
+            "web_exa",
+            "web_google_news"
+          ],
+          "domain_tags": [
+            "logistics",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.018142500000000002,
+        "normalize_path": "heuristic(score=0.162)",
+        "normalize_ms": 0.3,
+        "retrieve_ms": 0.3,
+        "author_ms": 6415.9,
+        "total_ms": 6416.5
+      },
+      {
+        "fingerprint": {
+          "card": "event_stream",
+          "cadence": "scheduled",
+          "subject_type": "entity",
+          "sources": [
+            "web_domain",
+            "web_exa",
+            "web_google_news"
+          ],
+          "domain_tags": [
+            "logistics",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.005180800000000001,
+        "normalize_path": "heuristic(score=0.162)",
+        "normalize_ms": 0.1,
+        "retrieve_ms": 0.2,
+        "author_ms": 6844.2,
+        "total_ms": 6844.5
+      },
+      {
+        "fingerprint": {
+          "card": "event_stream",
+          "cadence": "scheduled",
+          "subject_type": "entity",
+          "sources": [
+            "web_domain",
+            "web_exa",
+            "web_google_news"
+          ],
+          "domain_tags": [
+            "logistics",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0051508000000000005,
+        "normalize_path": "heuristic(score=0.162)",
+        "normalize_ms": 0.0,
+        "retrieve_ms": 0.1,
+        "author_ms": 6072.4,
+        "total_ms": 6072.5
+      }
+    ],
+    "within_agreement": 1.0,
+    "card_stable": true,
+    "cadence_stable": true
+  },
+  {
+    "intent": "watch RBI, ping me when they move rates",
+    "runs": [
+      {
+        "fingerprint": {
+          "card": "event_stream",
+          "cadence": "scheduled",
+          "subject_type": "domain",
+          "sources": [
+            "web_exa",
+            "web_google_news",
+            "web_rss"
+          ],
+          "domain_tags": [
+            "finance",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.005104800000000001,
+        "normalize_path": "llm(score=0.101,short=False)",
+        "normalize_ms": 1726.3,
+        "retrieve_ms": 0.2,
+        "author_ms": 5846.3,
+        "total_ms": 7572.8
+      },
+      {
+        "fingerprint": {
+          "card": "event_stream",
+          "cadence": "on_relevance",
+          "subject_type": "entity",
+          "sources": [
+            "web_exa",
+            "web_google_news",
+            "web_search_google"
+          ],
+          "domain_tags": [
+            "finance",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.004814800000000001,
+        "normalize_path": "llm(score=0.101,short=False)",
+        "normalize_ms": 1735.1,
+        "retrieve_ms": 0.3,
+        "author_ms": 6583.1,
+        "total_ms": 8318.5
+      },
+      {
+        "fingerprint": {
+          "card": "event_stream",
+          "cadence": "scheduled",
+          "subject_type": "entity",
+          "sources": [
+            "web_exa",
+            "web_google_news",
+            "web_search_google"
+          ],
+          "domain_tags": [
+            "finance",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0049198,
+        "normalize_path": "llm(score=0.101,short=False)",
+        "normalize_ms": 1614.8,
+        "retrieve_ms": 0.2,
+        "author_ms": 5732.8,
+        "total_ms": 7347.8
+      }
+    ],
+    "within_agreement": 0.0,
+    "card_stable": true,
+    "cadence_stable": false
+  },
+  {
+    "intent": "track my grab spend this month, flag if i cross 400 sgd",
+    "runs": [
+      {
+        "fingerprint": {
+          "card": "tally",
+          "cadence": "scheduled",
+          "subject_type": "domain",
+          "sources": [
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "finance",
+            "logistics"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0046458,
+        "normalize_path": "heuristic(score=0.189)",
+        "normalize_ms": 0.1,
+        "retrieve_ms": 0.2,
+        "author_ms": 5467.8,
+        "total_ms": 5468.1
+      },
+      {
+        "fingerprint": {
+          "card": "tally",
+          "cadence": "scheduled",
+          "subject_type": "domain",
+          "sources": [
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "finance",
+            "logistics"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0046108,
+        "normalize_path": "heuristic(score=0.189)",
+        "normalize_ms": 0.0,
+        "retrieve_ms": 0.1,
+        "author_ms": 6925.7,
+        "total_ms": 6925.8
+      },
+      {
+        "fingerprint": {
+          "card": "tally",
+          "cadence": "scheduled",
+          "subject_type": "domain",
+          "sources": [
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "finance",
+            "logistics"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0042358000000000005,
+        "normalize_path": "heuristic(score=0.189)",
+        "normalize_ms": 0.1,
+        "retrieve_ms": 0.3,
+        "author_ms": 5311.2,
+        "total_ms": 5311.5
+      }
+    ],
+    "within_agreement": 1.0,
+    "card_stable": true,
+    "cadence_stable": true
+  },
+  {
+    "intent": "every friday evening summarise how nifty and sgx moved this week",
+    "runs": [
+      {
+        "fingerprint": {
+          "card": "brief",
+          "cadence": "scheduled",
+          "subject_type": "domain",
+          "sources": [
+            "web_google_news",
+            "web_google_news",
+            "web_search_google",
+            "web_search_google"
+          ],
+          "domain_tags": [
+            "finance",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0051508000000000005,
+        "normalize_path": "heuristic(score=0.346)",
+        "normalize_ms": 0.1,
+        "retrieve_ms": 0.1,
+        "author_ms": 5987.9,
+        "total_ms": 5988.1
+      },
+      {
+        "fingerprint": {
+          "card": "brief",
+          "cadence": "scheduled",
+          "subject_type": "domain",
+          "sources": [
+            "web_google_news",
+            "web_google_news",
+            "web_search_google"
+          ],
+          "domain_tags": [
+            "finance",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0051258,
+        "normalize_path": "heuristic(score=0.346)",
+        "normalize_ms": 0.1,
+        "retrieve_ms": 0.2,
+        "author_ms": 6513.9,
+        "total_ms": 6514.2
+      },
+      {
+        "fingerprint": {
+          "card": "brief",
+          "cadence": "scheduled",
+          "subject_type": "domain",
+          "sources": [
+            "web_exa",
+            "web_google_news",
+            "web_search_google"
+          ],
+          "domain_tags": [
+            "finance",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0052158,
+        "normalize_path": "heuristic(score=0.346)",
+        "normalize_ms": 0.0,
+        "retrieve_ms": 0.1,
+        "author_ms": 6194.6,
+        "total_ms": 6194.7
+      }
+    ],
+    "within_agreement": 0.0,
+    "card_stable": true,
+    "cadence_stable": true
+  },
+  {
+    "intent": "monday 8am digest of indian startup funding rounds over 5m",
+    "runs": [
+      {
+        "fingerprint": {
+          "card": "brief",
+          "cadence": "scheduled",
+          "subject_type": "domain",
+          "sources": [
+            "web_exa",
+            "web_google_news"
+          ],
+          "domain_tags": [
+            "fundraising",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.004708800000000001,
+        "normalize_path": "llm(score=0.103,short=False)",
+        "normalize_ms": 1709.3,
+        "retrieve_ms": 0.2,
+        "author_ms": 6353.5,
+        "total_ms": 8063.0
+      },
+      {
+        "fingerprint": {
+          "card": "brief",
+          "cadence": "scheduled",
+          "subject_type": "domain",
+          "sources": [
+            "web_exa",
+            "web_google_news",
+            "web_search_google"
+          ],
+          "domain_tags": [
+            "competitive_intel",
+            "fundraising"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0052598,
+        "normalize_path": "llm(score=0.103,short=False)",
+        "normalize_ms": 1631.9,
+        "retrieve_ms": 0.2,
+        "author_ms": 6228.9,
+        "total_ms": 7861.0
+      },
+      {
+        "fingerprint": {
+          "card": "brief",
+          "cadence": "one_shot",
+          "subject_type": "domain",
+          "sources": [
+            "web_exa",
+            "web_google_news"
+          ],
+          "domain_tags": [
+            "competitive_intel",
+            "fundraising",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0050098,
+        "normalize_path": "llm(score=0.103,short=False)",
+        "normalize_ms": 1442.4,
+        "retrieve_ms": 0.2,
+        "author_ms": 6443.5,
+        "total_ms": 7886.1
+      }
+    ],
+    "within_agreement": 0.0,
+    "card_stable": true,
+    "cadence_stable": false
+  },
+  {
+    "intent": "30 min before any call with a mumbai client pull their last 3 emails",
+    "runs": [
+      {
+        "fingerprint": {
+          "card": "prep_doc",
+          "cadence": "on_event",
+          "subject_type": "entity",
+          "sources": [
+            "calendar_events",
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "meeting",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0046128,
+        "normalize_path": "llm(score=0.136,short=False)",
+        "normalize_ms": 1778.2,
+        "retrieve_ms": 0.2,
+        "author_ms": 5481.9,
+        "total_ms": 7260.3
+      },
+      {
+        "fingerprint": {
+          "card": "prep_doc",
+          "cadence": "on_event",
+          "subject_type": "entity",
+          "sources": [
+            "calendar_events",
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "meeting",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.004511800000000001,
+        "normalize_path": "llm(score=0.136,short=False)",
+        "normalize_ms": 1957.3,
+        "retrieve_ms": 0.1,
+        "author_ms": 7216.3,
+        "total_ms": 9173.6
+      },
+      {
+        "fingerprint": {
+          "card": "prep_doc",
+          "cadence": "on_event",
+          "subject_type": "entity",
+          "sources": [
+            "calendar_events",
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "meeting",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0046668000000000005,
+        "normalize_path": "llm(score=0.136,short=False)",
+        "normalize_ms": 1485.7,
+        "retrieve_ms": 0.1,
+        "author_ms": 5178.3,
+        "total_ms": 6664.2
+      }
+    ],
+    "within_agreement": 1.0,
+    "card_stable": true,
+    "cadence_stable": true
+  },
+  {
+    "intent": "brief me before my 1:1 with the dbs rm next wed",
+    "runs": [
+      {
+        "fingerprint": {
+          "card": "prep_doc",
+          "cadence": "on_event",
+          "subject_type": "entity",
+          "sources": [
+            "calendar_events",
+            "entity_memory",
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "fundraising",
+            "meeting",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0050238,
+        "normalize_path": "heuristic(score=0.496)",
+        "normalize_ms": 0.0,
+        "retrieve_ms": 0.1,
+        "author_ms": 6040.3,
+        "total_ms": 6040.5
+      },
+      {
+        "fingerprint": {
+          "card": "prep_doc",
+          "cadence": "on_event",
+          "subject_type": "entity",
+          "sources": [
+            "calendar_events",
+            "entity_memory",
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "finance",
+            "meeting",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.005093800000000001,
+        "normalize_path": "heuristic(score=0.496)",
+        "normalize_ms": 0.0,
+        "retrieve_ms": 0.1,
+        "author_ms": 6120.1,
+        "total_ms": 6120.3
+      },
+      {
+        "fingerprint": {
+          "card": "prep_doc",
+          "cadence": "on_event",
+          "subject_type": "entity",
+          "sources": [
+            "calendar_events",
+            "entity_memory",
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "fundraising",
+            "meeting",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0050638,
+        "normalize_path": "heuristic(score=0.496)",
+        "normalize_ms": 0.1,
+        "retrieve_ms": 0.3,
+        "author_ms": 6277.6,
+        "total_ms": 6278.1
+      }
+    ],
+    "within_agreement": 0.333,
+    "card_stable": true,
+    "cadence_stable": true
+  },
+  {
+    "intent": "chase the iras gst refund, nudge me if nothing in 10 days",
+    "runs": [
+      {
+        "fingerprint": {
+          "card": "open_loop",
+          "cadence": "scheduled",
+          "subject_type": "entity",
+          "sources": [
+            "gmail_inbox",
+            "internal_observations"
+          ],
+          "domain_tags": [
+            "finance",
+            "openloop"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0053098,
+        "normalize_path": "llm(score=0.081,short=False)",
+        "normalize_ms": 1354.4,
+        "retrieve_ms": 0.2,
+        "author_ms": 6589.2,
+        "total_ms": 7943.7
+      },
+      {
+        "fingerprint": {
+          "card": "open_loop",
+          "cadence": "scheduled",
+          "subject_type": "entity",
+          "sources": [
+            "entity_memory",
+            "gmail_inbox",
+            "internal_observations"
+          ],
+          "domain_tags": [
+            "finance",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0056918,
+        "normalize_path": "llm(score=0.081,short=False)",
+        "normalize_ms": 1437.0,
+        "retrieve_ms": 0.1,
+        "author_ms": 9192.0,
+        "total_ms": 10629.1
+      },
+      {
+        "fingerprint": {
+          "card": "open_loop",
+          "cadence": "scheduled",
+          "subject_type": "entity",
+          "sources": [
+            "entity_memory",
+            "internal_observations"
+          ],
+          "domain_tags": [
+            "finance",
+            "openloop"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.005454800000000001,
+        "normalize_path": "llm(score=0.081,short=False)",
+        "normalize_ms": 1534.8,
+        "retrieve_ms": 0.2,
+        "author_ms": 7863.3,
+        "total_ms": 9398.3
+      }
+    ],
+    "within_agreement": 0.0,
+    "card_stable": true,
+    "cadence_stable": true
+  },
+  {
+    "intent": "close the loop on the term sheet we sent accel last tuesday",
+    "runs": [
+      {
+        "fingerprint": {
+          "card": "open_loop",
+          "cadence": "scheduled",
+          "subject_type": "thread",
+          "sources": [
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "fundraising",
+            "openloop",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.004618800000000001,
+        "normalize_path": "heuristic(score=0.155)",
+        "normalize_ms": 0.0,
+        "retrieve_ms": 0.1,
+        "author_ms": 5530.2,
+        "total_ms": 5530.4
+      },
+      {
+        "fingerprint": {
+          "card": "open_loop",
+          "cadence": "scheduled",
+          "subject_type": "thread",
+          "sources": [
+            "entity_memory",
+            "gmail_inbox",
+            "gmail_thread"
+          ],
+          "domain_tags": [
+            "fundraising",
+            "openloop",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.0053738,
+        "normalize_path": "heuristic(score=0.155)",
+        "normalize_ms": 0.0,
+        "retrieve_ms": 0.1,
+        "author_ms": 6816.5,
+        "total_ms": 6816.7
+      },
+      {
+        "fingerprint": {
+          "card": "open_loop",
+          "cadence": "scheduled",
+          "subject_type": "thread",
+          "sources": [
+            "entity_memory",
+            "gmail_inbox"
+          ],
+          "domain_tags": [
+            "fundraising",
+            "openloop",
+            "work"
+          ]
+        },
+        "via": "llm",
+        "cost_usd": 0.004998800000000001,
+        "normalize_path": "heuristic(score=0.155)",
+        "normalize_ms": 0.0,
+        "retrieve_ms": 0.1,
+        "author_ms": 7207.8,
+        "total_ms": 7208.0
+      }
+    ],
+    "within_agreement": 0.0,
+    "card_stable": true,
+    "cadence_stable": true
+  },
+  {
+    "intent": "remind me to pay mcst on the 5th every month",
+    "runs": [
+      {
+        "fingerprint": {
+          "card": "ping",
+          "cadence": "one_shot",
+          "subject_type": "event",
+          "sources": [
+            "user_elicitation"
+          ],
+          "domain_tags": [
+            "finance",
+            "reminder"
+          ]
+        },
+        "via": "ping_shortcircuit",
+        "cost_usd": 0.0,
+        "normalize_path": "llm(score=0.130,short=False)",
+        "normalize_ms": 2033.8,
+        "retrieve_ms": 0.1,
+        "author_ms": 0.3,
+        "total_ms": 2034.3
+      },
+      {
+        "fingerprint": {
+          "card": "ping",
+          "cadence": "one_shot",
+          "subject_type": "event",
+          "sources": [
+            "user_elicitation"
+          ],
+          "domain_tags": [
+            "finance",
+            "reminder"
+          ]
+        },
+        "via": "ping_shortcircuit",
+        "cost_usd": 0.0,
+        "normalize_path": "llm(score=0.130,short=False)",
+        "normalize_ms": 1568.4,
+        "retrieve_ms": 0.2,
+        "author_ms": 0.2,
+        "total_ms": 1568.8
+      },
+      {
+        "fingerprint": {
+          "card": "ping",
+          "cadence": "one_shot",
+          "subject_type": "event",
+          "sources": [
+            "user_elicitation"
+          ],
+          "domain_tags": [
+            "finance",
+            "reminder"
+          ]
+        },
+        "via": "ping_shortcircuit",
+        "cost_usd": 0.0,
+        "normalize_path": "llm(score=0.130,short=False)",
+        "normalize_ms": 1489.9,
+        "retrieve_ms": 0.2,
+        "author_ms": 0.2,
+        "total_ms": 1490.4
+      }
+    ],
+    "within_agreement": 1.0,
+    "card_stable": true,
+    "cadence_stable": true
+  }
+]
