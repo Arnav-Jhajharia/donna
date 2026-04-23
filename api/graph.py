@@ -77,17 +77,28 @@ async def user_lookup(state: dict) -> dict:
     profile_name = state.get("platform_profile_name") or ""
     is_first_message = False
 
+    guessed_prefix = ""
     async with async_session() as session:
         result = await session.execute(select(User).where(User.phone == phone))
         user = result.scalar_one_or_none()
         if user is None:
-            guessed_tz, _ = phone_info(phone)
+            guessed_tz, guessed_prefix = phone_info(phone)
             user = User(
                 id=str(uuid.uuid4()),
                 phone=phone,
                 name=profile_name or None,
                 timezone=guessed_tz,
             )
+            try:
+                goals = dict(user.onboarding_goals or {})
+                goals.setdefault("tz_done", False)
+                goals.setdefault("watch_done", False)
+                goals["tz_source"] = "phone_guess"
+                if guessed_prefix:
+                    goals["tz_guess_prefix"] = guessed_prefix
+                user.onboarding_goals = goals
+            except Exception:
+                pass
             session.add(user)
             await session.commit()
             await session.refresh(user)
@@ -101,11 +112,18 @@ async def user_lookup(state: dict) -> dict:
             )
             is_first_message = (count_result.scalar() or 0) == 0
 
+    goals = user.onboarding_goals if isinstance(getattr(user, "onboarding_goals", None), dict) else {}
+    tz_done = bool(goals.get("tz_done")) if isinstance(goals, dict) else False
+    tz_source = str(goals.get("tz_source") or ("phone_guess" if is_first_message else "")) if isinstance(goals, dict) else ""
+
     state.update({
         "user_id": user.id,
         "_user_timezone": user.timezone or "Asia/Singapore",
         "_user_name": user.name or profile_name or "",
         "_user_facts": dict(user.facts or {}),
         "_is_first_message": is_first_message,
+        "_tz_done": tz_done,
+        "_tz_source": tz_source,
+        "_tz_guess_prefix": str(goals.get("tz_guess_prefix") or guessed_prefix or "") if isinstance(goals, dict) else "",
     })
     return state
