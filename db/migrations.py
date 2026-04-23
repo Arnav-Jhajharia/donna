@@ -6,6 +6,7 @@ Usage:
 import asyncio
 import logging
 
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import create_async_engine
 
 from config import settings
@@ -29,6 +30,9 @@ async def create_tables() -> None:
     engine = create_async_engine(url, connect_args=connect_args)
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await conn.execute(
+            text("ALTER TABLE users ADD COLUMN IF NOT EXISTS living_profile JSONB")
+        )
     await engine.dispose()
     logger.info("donna tables created")
 

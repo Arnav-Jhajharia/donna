@@ -23,7 +23,7 @@ from typing import Any, Protocol
 
 from donna.attention.dry_run import CalendarFetcher
 from donna.attention.harness import run_attention_pipeline
-from donna.attention.normalize import UserContext
+from donna.attention.normalize import UserContext, load_user_timezone
 from donna.attention.schema import (
     Attention,
     AttentionOrigin,
@@ -231,7 +231,8 @@ async def propose_and_shadow(
         existing_titles = {a.spec.title.lower() for a in store.list()}
 
     candidates = propose_candidates(user_id, proposers=proposers)
-    ctx = UserContext(user_id=user_id)
+    tz = await load_user_timezone(user_id)
+    ctx = UserContext(user_id=user_id, user_tz=tz) if tz else UserContext(user_id=user_id)
     results: list[ShadowResult] = []
 
     for candidate in candidates:

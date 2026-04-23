@@ -40,6 +40,7 @@ class User(Base):
         nullable=False,
         default=dict,
     )
+    living_profile: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     voice_model: Mapped[str | None] = mapped_column(Text, nullable=True)
     voice_model_generated_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     has_google: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -281,3 +282,44 @@ class OAuthToken(Base):
     __table_args__ = (
         Index("idx_oauth_user_provider", "user_id", "provider", unique=True),
     )
+
+
+class InboundMessage(Base):
+    """Durable inbox for WhatsApp inbound messages.
+
+    Every parsed inbound message is persisted before dispatch so a crashed
+    or redeployed replica can replay unprocessed rows on startup. Status
+    transitions: queued → processed (success) | failed (non-cancel exception).
+    Cancelled pipelines leave rows as 'queued' so the restart picks them up.
+
+    body stores the minimal WA envelope needed to re-parse on replay:
+        {"message": <raw message dict>, "value": <raw value dict>}
+    """
+    __tablename__ = "inbound_messages"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    phone: Mapped[str] = mapped_column(String, nullable=False, index=True)
+    wa_message_id: Mapped[str | None] = mapped_column(String, nullable=True, unique=True)
+    body: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="queued", index=True)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    received_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    processed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index("idx_inbound_status_phone_received", "status", "phone", "received_at"),
+    )
+
+
+class UserSession(Base):
+    """Maps Donna user_id → most-recent Claude Agent SDK session_id.
+
+    The SDK carries conversation history on its side keyed by session_id;
+    resuming a session reinstates the full transcript so the brain sees prior
+    turns without stuffing them into the prompt. This table is the durable,
+    cross-replica replacement for the old local JSON file.
+    """
+    __tablename__ = "user_sessions"
+    user_id: Mapped[str] = mapped_column(String, primary_key=True)
+    session_id: Mapped[str] = mapped_column(String, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)

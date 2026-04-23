@@ -113,20 +113,31 @@ class WhatsAppChannel:
 
     # ── Public interface ───────────────────────────────────────────────────────
 
-    async def send(self, phone: str, message: OutboundMessage) -> None:
+    async def send(self, phone: str, message: OutboundMessage) -> str | None:
         payload = self._render(phone, message)
-        await self._post(payload)
+        data = await self._post(payload)
+        try:
+            messages = data.get("messages") or []
+            if messages:
+                return messages[0].get("id")
+        except Exception:
+            return None
+        return None
 
-    async def send_many(self, phone: str, messages: list) -> None:
+    async def send_many(self, phone: str, messages: list) -> list[str]:
         """Send messages sequentially — WA doesn't guarantee order on concurrent sends.
 
         Supports Delay marker objects in the list to pause between messages.
         """
+        wamids: list[str] = []
         for message in messages:
             if isinstance(message, Delay):
                 await asyncio.sleep(message.seconds)
                 continue
-            await self.send(phone, message)
+            wamid = await self.send(phone, message)
+            if wamid:
+                wamids.append(wamid)
+        return wamids
 
     async def send_typing(self, phone: str, message_id: str | None = None) -> None:
         """Show typing indicator. Requires message_id to mark the incoming message as read.
@@ -249,7 +260,7 @@ class WhatsAppChannel:
 
     # ── HTTP ───────────────────────────────────────────────────────────────────
 
-    async def _post(self, payload: dict) -> None:
+    async def _post(self, payload: dict) -> dict:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 self._messages_url, headers=self._headers, json=payload
@@ -259,3 +270,4 @@ class WhatsAppChannel:
                     "WhatsApp API error %s: %s", resp.status_code, resp.text[:200]
                 )
                 resp.raise_for_status()
+            return resp.json()
