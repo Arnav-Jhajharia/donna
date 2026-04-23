@@ -27,6 +27,7 @@ ALLOWED_TOOLS = (
     "mcp__donna__close_open_loop",
     "mcp__donna__set_timezone",
     "mcp__donna__schedule_reminder",
+    "mcp__donna__resolve_time_expression",
     "mcp__donna__send_burst",
     "mcp__donna__stay_silent",
 )

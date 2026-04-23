@@ -345,6 +345,51 @@ async def schedule_reminder(args):
     return _tool_text(res, no_hits_text="Reminder not scheduled.", degraded_text="Scheduling unavailable.")
 
 
+@tool(
+    "resolve_time_expression",
+    (
+        "Resolve a natural-language time expression ('last tuesday', "
+        "'3 hours ago', 'tomorrow at 6pm') to a concrete UTC ISO timestamp "
+        "anchored in the user's timezone. Use before filtering bi-temporal "
+        "facts by t_valid or before scheduling. "
+        "Do NOT use for ISO timestamps the user already gave, for vague "
+        "durations like 'a few days' (ask the user), or when no time "
+        "dimension is present."
+    ),
+    {
+        "type": "object",
+        "required": ["expression"],
+        "properties": {
+            "expression": {"type": "string"},
+            "now": {
+                "type": "string",
+                "description": "Optional ISO anchor for 'now' (testing only).",
+            },
+        },
+    },
+)
+@traceable(name="donna.tool.resolve_time_expression", run_type="tool")
+async def resolve_time_expression(args):
+    from backend.memory.tools.resolve_time_expression import (
+        resolve_time_expression as _resolve,
+    )
+
+    user_id = _current_user_id()
+    expression = str(args.get("expression") or "").strip()
+    if not user_id or not expression:
+        return text_content("Could not resolve time expression.")
+    res = await _resolve(
+        user_id=user_id,
+        expression=expression,
+        now=args.get("now") or None,
+    )
+    return _tool_text(
+        res,
+        no_hits_text="Could not resolve time expression.",
+        degraded_text="Could not resolve time expression.",
+    )
+
+
 SEND_BURST_INPUT_SCHEMA: dict = {
     "type": "object",
     "required": ["messages"],
@@ -560,6 +605,7 @@ DONNA_TOOLS = (
     close_open_loop,
     set_timezone,
     schedule_reminder,
+    resolve_time_expression,
     send_burst,
     stay_silent,
 )
