@@ -14,6 +14,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
@@ -111,9 +112,23 @@ _BARE_REMINDER_PATTERNS = [
     r"^set (a )?reminder\b",
     r"don'?t let me forget\b",
 ]
-_TIME_RE = re.compile(
-    r"\b(?:at\s+)?(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", re.IGNORECASE
-)
+
+_DOW_MAP = {
+    "monday": 1, "mon": 1,
+    "tuesday": 2, "tue": 2, "tues": 2,
+    "wednesday": 3, "wed": 3,
+    "thursday": 4, "thu": 4, "thurs": 4,
+    "friday": 5, "fri": 5,
+    "saturday": 6, "sat": 6,
+    "sunday": 0, "sun": 0,
+}
+
+_MONTH_MAP = {
+    "january": 1, "jan": 1, "february": 2, "feb": 2, "march": 3, "mar": 3,
+    "april": 4, "apr": 4, "may": 5, "june": 6, "jun": 6, "july": 7, "jul": 7,
+    "august": 8, "aug": 8, "september": 9, "sep": 9, "sept": 9,
+    "october": 10, "oct": 10, "november": 11, "nov": 11, "december": 12, "dec": 12,
+}
 
 
 def _looks_like_bare_reminder(raw: str) -> bool:
@@ -121,30 +136,154 @@ def _looks_like_bare_reminder(raw: str) -> bool:
     return any(re.search(p, low) for p in _BARE_REMINDER_PATTERNS)
 
 
-def _extract_trigger_iso(raw: str) -> str:
-    match = _TIME_RE.search(raw)
-    now = datetime.now(timezone.utc)
-    if not match:
-        return (now + timedelta(hours=1)).isoformat()
-    hour = int(match.group(1))
-    minute = int(match.group(2) or 0)
-    meridiem = (match.group(3) or "").lower()
-    if meridiem == "pm" and hour < 12:
+def _to_24h(hour: int, minute: int, meridiem: str) -> tuple[int, int]:
+    m = (meridiem or "").lower()
+    if m == "pm" and hour < 12:
         hour += 12
-    if meridiem == "am" and hour == 12:
+    if m == "am" and hour == 12:
         hour = 0
-    target = now.replace(hour=hour % 24, minute=minute, second=0, microsecond=0)
-    if target <= now:
-        target += timedelta(days=1)
-    return target.isoformat()
+    return hour % 24, minute
 
 
-def _ping_spec(raw: str, normalized: NormalizedIntent) -> AttentionSpec:
+def _parse_time_hhmm(raw: str) -> tuple[int, int] | None:
+    """Find the first HH(:MM)?(am|pm)? near 'at ...' preferentially."""
+    low = raw.lower()
+    m = re.search(
+        r"\bat\s+(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\b", low
+    )
+    if not m:
+        m = re.search(r"\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b", low)
+    if not m:
+        return None
+    hour = int(m.group(1))
+    minute = int(m.group(2) or 0)
+    meridiem = m.group(3) or ""
+    return _to_24h(hour, minute, meridiem)
+
+
+def _parse_reminder(raw: str, user_tz: str) -> Cadence:
+    """Parse a bare reminder into a Cadence honoring user_tz.
+
+    Priority: interval > weekly > monthly-day > daily > in-N > at-time > fallback.
+    """
+    tz = ZoneInfo(user_tz)
+    now = datetime.now(tz=tz)
+    low = raw.lower()
+
+    # every N minutes/hours
+    m = re.search(r"\bevery\s+(\d+)\s*(minute|minutes|min|mins|hour|hours|hr|hrs)\b", low)
+    if m:
+        n = int(m.group(1))
+        unit = m.group(2)
+        seconds = n * 60 if unit.startswith("min") else n * 3600
+        return Cadence(type=CadenceType.SCHEDULED, params={"interval_seconds": seconds})
+
+    # every N days -> scheduled cron at 9am every N days (approximate via interval)
+    m = re.search(r"\bevery\s+(\d+)\s*days?\b", low)
+    if m:
+        n = int(m.group(1))
+        return Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"interval_seconds": n * 86400},
+        )
+
+    # every <dow> [at HH(:MM) (am|pm)?]
+    dow_re = r"\bevery\s+(" + "|".join(_DOW_MAP.keys()) + r")\b"
+    m = re.search(dow_re, low)
+    if m:
+        dow = _DOW_MAP[m.group(1)]
+        t = _parse_time_hhmm(raw) or (9, 0)
+        return Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"cron": f"{t[1]} {t[0]} * * {dow}"},
+        )
+
+    # on the Nth (of every month | each month | every month | of the month) with optional time
+    m = re.search(
+        r"\bon the (\d{1,2})(?:st|nd|rd|th)?\b.*?\b(of every month|of each month|every month|each month|of the month)\b",
+        low,
+    )
+    if m:
+        day = int(m.group(1))
+        t = _parse_time_hhmm(raw) or (9, 0)
+        return Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"cron": f"{t[1]} {t[0]} {day} * *"},
+        )
+    # "on the 5th every month" (order variant)
+    m = re.search(r"\bon the (\d{1,2})(?:st|nd|rd|th)?\s+every month\b", low)
+    if m:
+        day = int(m.group(1))
+        t = _parse_time_hhmm(raw) or (9, 0)
+        return Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"cron": f"{t[1]} {t[0]} {day} * *"},
+        )
+
+    # every day at HH(:MM)
+    if re.search(r"\bevery day\b|\bdaily\b", low):
+        t = _parse_time_hhmm(raw) or (9, 0)
+        return Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"cron": f"{t[1]} {t[0]} * * *"},
+        )
+
+    # "in N minutes|hours|days" or "N minutes from now"
+    m = re.search(r"\bin\s+(\d+)\s*(minute|minutes|min|mins|hour|hours|hr|hrs|day|days)\b", low)
+    if not m:
+        m = re.search(r"\b(\d+)\s*(minute|minutes|min|mins|hour|hours|hr|hrs|day|days)\s+from now\b", low)
+    if m:
+        n = int(m.group(1))
+        unit = m.group(2)
+        if unit.startswith("min"):
+            delta = timedelta(minutes=n)
+        elif unit.startswith("h"):
+            delta = timedelta(hours=n)
+        else:
+            delta = timedelta(days=n)
+        target = now + delta
+        return Cadence(type=CadenceType.ONE_SHOT, params={"trigger_at": target.isoformat()})
+
+    # date like "june 5" or "on june 5"
+    month_re = r"\b(?:on\s+)?(" + "|".join(_MONTH_MAP.keys()) + r")\s+(\d{1,2})(?:st|nd|rd|th)?\b"
+    m = re.search(month_re, low)
+    if m:
+        month = _MONTH_MAP[m.group(1)]
+        day = int(m.group(2))
+        t = _parse_time_hhmm(raw) or (9, 0)
+        year = now.year
+        candidate = datetime(year, month, day, t[0], t[1], tzinfo=tz)
+        if candidate <= now:
+            candidate = datetime(year + 1, month, day, t[0], t[1], tzinfo=tz)
+        return Cadence(
+            type=CadenceType.ONE_SHOT, params={"trigger_at": candidate.isoformat()}
+        )
+
+    # at HH(:MM) (am|pm)? with optional tomorrow/today
+    t = _parse_time_hhmm(raw)
+    if t is not None:
+        target = now.replace(hour=t[0], minute=t[1], second=0, microsecond=0)
+        if "tomorrow" in low:
+            target = target + timedelta(days=1)
+        elif target <= now:
+            target = target + timedelta(days=1)
+        return Cadence(type=CadenceType.ONE_SHOT, params={"trigger_at": target.isoformat()})
+
+    # fallback: now + 1h in user_tz
+    target = now + timedelta(hours=1)
+    return Cadence(type=CadenceType.ONE_SHOT, params={"trigger_at": target.isoformat()})
+
+
+def _ping_spec(
+    raw: str, normalized: NormalizedIntent, user_tz: str = "Asia/Singapore"
+) -> AttentionSpec:
     subject_name = normalized.signals.subject_name or raw.strip()[:60] or "reminder"
     question = raw.strip().rstrip(".?!")[:200] or "reminder"
+    cadence = _parse_reminder(raw, user_tz)
+    desc_prefix = "Scheduled reminder" if cadence.type is CadenceType.SCHEDULED else "One-shot reminder"
     return AttentionSpec(
         title=subject_name[:70] or "reminder",
-        description=f"One-shot reminder: {question}",
+        description=f"{desc_prefix}: {question}",
         card=CardType.PING,
         subject=Subject(name=subject_name[:140], type=SubjectType.EVENT),
         domain_tags=[normalized.signals.domain_tag_or_reminder()]
@@ -157,9 +296,7 @@ def _ping_spec(raw: str, normalized: NormalizedIntent) -> AttentionSpec:
             )
         ],
         extractor=Extractor(prompt="Deliver the reminder message at trigger time."),
-        cadence=Cadence(
-            type=CadenceType.ONE_SHOT, params={"trigger_at": _extract_trigger_iso(raw)}
-        ),
+        cadence=cadence,
         surface_policy=SurfacePolicy(default=SurfaceLevel.NOTIFY),
     )
 
@@ -263,7 +400,7 @@ async def author_spec(
 
     if _looks_like_bare_reminder(raw):
         try:
-            spec = _ping_spec(raw, normalized)
+            spec = _ping_spec(raw, normalized, user_context.user_tz)
             return AuthorResult(
                 spec=spec,
                 confidence=0.9,

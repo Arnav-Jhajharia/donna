@@ -37,6 +37,7 @@ class UserContext:
     user_id: str
     living_profile: str = ""
     active_state: str = ""
+    user_tz: str = "Asia/Singapore"
 
 
 class NormalizedSignals(BaseModel):
