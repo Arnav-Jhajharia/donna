@@ -14,6 +14,7 @@ from backend.memory.tools import (
     recall_episodic,
     recall_graph,
     refresh_situation_brief,
+    resolve_time_expression,
     schedule_reminder,
     smart_recall,
     set_timezone,
@@ -38,5 +39,6 @@ ALL_TOOLS = {
     "set_timezone": set_timezone,
     "schedule_reminder": schedule_reminder,
     "refresh_situation_brief": refresh_situation_brief,
+    "resolve_time_expression": resolve_time_expression,
     "update_living_profile": update_living_profile,
 }
