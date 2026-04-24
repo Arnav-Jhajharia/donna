@@ -7,8 +7,8 @@ from typing import Literal
 
 TRACE_FILE = Path("donna_traces.jsonl")
 SESSION_STORE_FILE = Path(".donna_sessions.json")
-MODEL_NAME = "claude-haiku-4-5-20251001"
-PROACTIVE_MODEL_NAME = "claude-haiku-4-5-20251001"
+MODEL_NAME = "claude-sonnet-4-6"
+PROACTIVE_MODEL_NAME = "claude-sonnet-4-6"
 UPGRADE_MODEL_NAME = "claude-sonnet-4-6"
 
 TOOL_NAMESPACE = "donna"
@@ -28,8 +28,8 @@ ALLOWED_TOOLS = (
     "mcp__donna__set_timezone",
     "mcp__donna__schedule_reminder",
     "mcp__donna__resolve_time_expression",
+    "mcp__donna__read_situation_brief",
     "mcp__donna__send_burst",
-    "mcp__donna__stay_silent",
 )
 
 DISALLOWED_TOOLS = (
@@ -84,6 +84,7 @@ class DonnaAgentConfig:
     disallowed_tools: tuple[str, ...] = DISALLOWED_TOOLS
     thinking_enabled: bool = False
     system_context: str = ""
+    user_model_block: str = ""
     resume_session_id: str | None = None
     user_id: str | None = None
     fork_session: bool = False

@@ -1,9 +1,12 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from claude_agent_sdk import tool
+
+logger = logging.getLogger(__name__)
 
 from .hooks import _CURRENT_TRACE, _CURRENT_USER_ID, _fire_memory_hooks
 from .langsmith_tracing import traceable
@@ -11,7 +14,6 @@ from .tool_logic import (
     read_tracker_result,
     recall_episodic_result,
     send_burst_result,
-    stay_silent_result,
     text_content,
 )
 
@@ -119,8 +121,9 @@ async def recall_graph(args):
     "smart_recall",
     "Adaptive recall across episodic, graph, and document memory. Use when you "
     "need the best-ranked hits without choosing a specific source. "
-    "Do NOT use when the source is obvious (prefer the specific tool) or "
-    "when the Living Profile already answers the question.",
+    "Do NOT use when the source is obvious (prefer the specific tool), "
+    "when the Living Profile already answers the question, or after you "
+    "already called a specific recall tool this turn — use what you got.",
     {"message": str},
 )
 @traceable(name="donna.tool.smart_recall", run_type="tool")
@@ -131,7 +134,11 @@ async def smart_recall(args):
     message = str(args.get("message", "")).strip()
     if not user_id or not message:
         return text_content("No hits.")
-    res = await _smart_recall(user_id=user_id, message=message, top_k=8)
+    try:
+        res = await _smart_recall(user_id=user_id, message=message, top_k=8)
+    except Exception:
+        logger.exception("smart_recall: pipeline failure")
+        return text_content("Recall unavailable.")
     return _tool_text(res, no_hits_text="No hits.", degraded_text="Recall unavailable.")
 
 
@@ -166,9 +173,14 @@ async def list_open_loops(args):
 
 @tool(
     "list_calendar",
-    "List upcoming calendar entries. Use for schedule-aware replies. "
-    "Do NOT use for past events, open-ended reminders (use list_open_loops), "
-    "or when no time-of-day question is on the table.",
+    "List upcoming calendar entries synced from the user's Google Calendar. "
+    "Returns title, start/end in the user's local time, and location when set. "
+    "Optional `within_days` (default horizon ~7) and `limit` (default 10). "
+    "Use for schedule-aware replies: conflict checks, 'what's next', "
+    "availability, context-aware timing ('8am meds while going out for lunch' "
+    "-> check lunch time). Do NOT use for past events (use recall_episodic), "
+    "untimed follow-ups (use list_open_loops), or when the user's question "
+    "has no time dimension.",
     {
         "type": "object",
         "properties": {
@@ -194,8 +206,15 @@ async def list_calendar(args):
 
 @tool(
     "log_observation",
-    "Record a countable user event such as expense, meal, mood, sleep, habit, "
-    "or exercise. Use only when the user states trackable data.",
+    "Record a countable user event. `type` is the category (expense, meal, mood, "
+    "sleep, habit, exercise, symptom). `fields` is the numeric/structured payload "
+    "('amount_usd': 6 for an expense, 'hours': 7 for sleep, 'score': 4 for mood 1-5). "
+    "Include `event_time` as an ISO timestamp when the event happened earlier than "
+    "this message ('coffee was 6 bucks this morning' -> event_time = this morning). "
+    "Do NOT use for feelings, intentions, decisions, commitments, or vague statements "
+    "('i feel tired', 'thinking about quitting') — those are open_loops or memory, "
+    "not observations. Do NOT invent a number the user did not state. Do NOT use for "
+    "the same event twice within a turn.",
     {
         "type": "object",
         "required": ["type", "fields"],
@@ -288,7 +307,13 @@ async def close_open_loop(args):
 
 @tool(
     "set_timezone",
-    "Set the user's timezone (IANA string like 'Asia/Singapore'). Use only when the user explicitly confirms or corrects it.",
+    "Set the user's timezone. `timezone` MUST be a valid IANA string "
+    "('Asia/Singapore', 'America/New_York', 'Europe/London') — never an "
+    "abbreviation ('PST', 'IST') or UTC offset ('+05:30'). Use only when the "
+    "user explicitly confirms or corrects their timezone. Do NOT use on a "
+    "passing location reference ('i'm in tokyo this week' ≠ timezone change), "
+    "on a guess, or when the timezone check in runtime context already shows "
+    "confirmed=true.",
     {
         "type": "object",
         "required": ["timezone"],
@@ -316,7 +341,16 @@ async def set_timezone(args):
 
 @tool(
     "schedule_reminder",
-    "Schedule a one-shot reminder to be delivered later. Use only when the user explicitly asks for a timed reminder.",
+    "Schedule a one-shot reminder to be delivered to the user at a specific "
+    "time. `text` is what the reminder will say (write it as Donna, not as the "
+    "user). Provide EITHER `fire_at` (ISO timestamp, resolve ambiguous times "
+    "via resolve_time_expression first) OR `in_minutes` (relative offset) — "
+    "not both. Use when the user explicitly asks to be reminded at a time "
+    "('remind me at 6pm', 'text me in an hour', 'ping me tomorrow morning'). "
+    "Do NOT use for open-ended follow-ups with no clock time ('remind me about "
+    "sarah', 'don't let me forget the deck') — those are track_open_loop. Do "
+    "NOT use for recurring reminders (not supported — one-shot only). Do NOT "
+    "invent a time the user did not give.",
     {
         "type": "object",
         "required": ["text"],
@@ -387,6 +421,38 @@ async def resolve_time_expression(args):
         res,
         no_hits_text="Could not resolve time expression.",
         degraded_text="Could not resolve time expression.",
+    )
+
+
+@tool(
+    "read_situation_brief",
+    (
+        "Read the raw stored situation brief (last/this/next week model), "
+        "including generated_at timestamp and evidence counts. Use to verify "
+        "freshness or cite evidence counts. "
+        "Do NOT use for normal 'what's my week' questions — the rendered "
+        "brief is already in the system prompt."
+    ),
+    {
+        "type": "object",
+        "properties": {},
+        "required": [],
+    },
+)
+@traceable(name="donna.tool.read_situation_brief", run_type="tool")
+async def read_situation_brief(args):
+    from backend.memory.tools.read_situation_brief import (
+        read_situation_brief as _read,
+    )
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("No situation brief.")
+    res = await _read(user_id=user_id)
+    return _tool_text(
+        res,
+        no_hits_text="No situation brief.",
+        degraded_text="Situation brief unavailable.",
     )
 
 
@@ -560,16 +626,13 @@ SEND_BURST_INPUT_SCHEMA: dict = {
 @tool(
     "send_burst",
     (
-        "TERMINATOR. Render one WhatsApp turn as a list of UI items. "
-        "Items: text | cta (reply buttons, <=3) | cta_url (link button) | "
-        "list (scrollable options) | image (url) | delay (pause). "
-        "At most 3 non-delay items. Lowercase voice, no em dashes. "
-        "Use cta when the answer is a small known set; text otherwise. "
-        "Use image when a visual makes the answer clearer. "
-        "Do NOT use for ambient chatter not directed at Donna (use stay_silent), "
-        "and do NOT emit em dashes, semicolons, or banned filler phrases: a "
-        "deterministic voice filter runs downstream and will strip them, so "
-        "triggering it costs a trace-logged violation."
+        "TERMINATOR — the ONLY way to end a turn. Exactly one send_burst per "
+        "turn, never twice, no silent exit. For ambient chatter, emit a "
+        "single minimal text item ('k', 'noted') — still terminates. See "
+        "`# HOW YOU USE WHATSAPP` in the system prompt for which widget to "
+        "pick. A downstream voice filter strips em dashes, semicolons, and "
+        "banned filler phrases and logs a violation, so produce clean text "
+        "on first write."
     ),
     SEND_BURST_INPUT_SCHEMA,
 )
@@ -578,19 +641,6 @@ async def send_burst(args):
     result = await send_burst_result(args)
     _fire_memory_hooks(_CURRENT_TRACE.get(), args)
     return result
-
-
-@tool(
-    "stay_silent",
-    "TERMINATOR. Choose not to respond (ambient chatter, not directed at Donna, etc). "
-    "Log a short reason. "
-    "Do NOT use when the user directly addressed Donna or asked a question; "
-    "use send_burst even if the reply is one word.",
-    {"reason": str},
-)
-@traceable(name="donna.tool.stay_silent", run_type="tool")
-async def stay_silent(args):
-    return await stay_silent_result(args)
 
 
 DONNA_TOOLS = (
@@ -606,6 +656,6 @@ DONNA_TOOLS = (
     set_timezone,
     schedule_reminder,
     resolve_time_expression,
+    read_situation_brief,
     send_burst,
-    stay_silent,
 )
