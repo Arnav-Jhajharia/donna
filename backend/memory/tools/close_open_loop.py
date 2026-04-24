@@ -5,6 +5,7 @@ import logging
 from datetime import datetime, timezone
 
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("postgres.open_loops")
 async def close_open_loop(user_id: str, loop_id: str) -> ToolResult:
     try:
         from sqlalchemy import select

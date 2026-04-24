@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from backend.memory.time import format_local, period_bounds, timezone_label, utcnow_naive
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "List countable events the user has logged (meals, expenses, mood, sleep, exercise). "
@@ -26,6 +27,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("postgres.observations")
 async def list_observations(
     user_id: str,
     type: str | None = None,

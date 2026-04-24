@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from backend.memory.clients.supermemory import get_memory_client
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "Search the user's stored conversational memories (episodes). "
@@ -20,6 +21,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("supermemory")
 async def recall_episodic(user_id: str, query: str, limit: int = 8) -> ToolResult:
     client = get_memory_client()
     if not client.available:

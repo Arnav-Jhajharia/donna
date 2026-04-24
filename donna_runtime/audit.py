@@ -50,7 +50,7 @@ def audit_trace(trace: dict[str, Any]) -> list[TraceFinding]:
                 turn_id,
                 "error",
                 "missing_terminator",
-                f"final tool was {final_tool}, expected send_burst or stay_silent",
+                f"final tool was {final_tool}, expected send_burst",
             )
         )
     return findings

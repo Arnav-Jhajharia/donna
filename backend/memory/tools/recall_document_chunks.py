@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from backend.memory.clients.supermemory import get_memory_client
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "Search chunks of the user's uploaded documents. Use for doc Q&A "
@@ -20,6 +21,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("supermemory.docs")
 async def recall_document_chunks(
     user_id: str, query: str, doc_id: str | None = None, limit: int = 8
 ) -> ToolResult:

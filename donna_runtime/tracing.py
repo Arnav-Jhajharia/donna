@@ -7,7 +7,43 @@ from pathlib import Path
 from typing import Any
 
 
-TERMINATOR_TOOL_SUFFIXES = ("send_burst", "stay_silent")
+TERMINATOR_TOOL_SUFFIXES = ("send_burst",)
+
+# Rates per 1M tokens (USD). Input / Output / CacheWrite5m / CacheRead.
+_MODEL_RATES: dict[str, tuple[float, float, float, float]] = {
+    "haiku-4-5": (1.00, 5.00, 1.25, 0.10),
+    "sonnet-4-6": (3.00, 15.00, 3.75, 0.30),
+    "opus-4-7": (15.00, 75.00, 18.75, 1.50),
+}
+_DEFAULT_RATES = _MODEL_RATES["sonnet-4-6"]
+
+
+def _rates_for(model: str | None) -> tuple[float, float, float, float]:
+    if not model:
+        return _DEFAULT_RATES
+    for key, rates in _MODEL_RATES.items():
+        if key in model:
+            return rates
+    return _DEFAULT_RATES
+
+
+def _estimate_cost_from_usage(usage: dict[str, Any], model: str | None = None) -> float:
+    """Fallback cost estimate when the SDK returns total_cost_usd=0.
+
+    input_tokens in the SDK usage dict already excludes cached tokens,
+    so we add the cache buckets separately.
+    """
+    input_tokens = int(usage.get("input_tokens") or 0)
+    output_tokens = int(usage.get("output_tokens") or 0)
+    cache_write = int(usage.get("cache_creation_input_tokens") or 0)
+    cache_read = int(usage.get("cache_read_input_tokens") or 0)
+    in_rate, out_rate, cw_rate, cr_rate = _rates_for(model or usage.get("model"))
+    return (
+        input_tokens * in_rate
+        + output_tokens * out_rate
+        + cache_write * cw_rate
+        + cache_read * cr_rate
+    ) / 1_000_000
 
 
 class TurnTrace:
@@ -104,6 +140,8 @@ class TurnTrace:
         self.usage = dict(usage)
         self.cache_creation_input_tokens = int(usage.get("cache_creation_input_tokens") or 0)
         self.cache_read_input_tokens = int(usage.get("cache_read_input_tokens") or 0)
+        if not self.total_cost_usd:
+            self.total_cost_usd = _estimate_cost_from_usage(usage)
 
     def record_resume_session_id(self, session_id: str | None) -> None:
         self.resume_session_id = session_id

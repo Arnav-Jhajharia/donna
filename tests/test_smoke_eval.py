@@ -16,8 +16,16 @@ def _trace_with_burst(message: str, tool_calls: list[tuple[str, dict]]) -> TurnT
 
 
 class SmokeFixtureShapeTests(unittest.TestCase):
-    def test_fifteen_fixtures(self) -> None:
-        self.assertEqual(len(SMOKE_FIXTURES), 15)
+    def test_has_enough_fixtures_per_category(self) -> None:
+        by_cat: dict[str, int] = {}
+        for f in SMOKE_FIXTURES:
+            by_cat[f.category] = by_cat.get(f.category, 0) + 1
+        for required in ("voice", "tool_choice", "memory_write", "memory_recall", "widget"):
+            self.assertGreaterEqual(
+                by_cat.get(required, 0),
+                3,
+                f"category {required} needs at least 3 fixtures (has {by_cat.get(required, 0)})",
+            )
 
     def test_unique_ids(self) -> None:
         ids = [f.id for f in SMOKE_FIXTURES]
@@ -25,7 +33,12 @@ class SmokeFixtureShapeTests(unittest.TestCase):
 
     def test_every_fixture_has_terminal(self) -> None:
         for f in SMOKE_FIXTURES:
-            self.assertIn(f.expected_terminal, {"send_burst", "stay_silent"})
+            self.assertEqual(f.expected_terminal, "send_burst")
+
+    def test_every_fixture_has_category(self) -> None:
+        valid = {"voice", "tool_choice", "memory_write", "memory_recall", "widget", "mixed"}
+        for f in SMOKE_FIXTURES:
+            self.assertIn(f.category, valid)
 
 
 class EvaluatorTests(unittest.TestCase):
@@ -37,10 +50,10 @@ class EvaluatorTests(unittest.TestCase):
         r = _evaluate(f, trace)
         self.assertTrue(r.passed, r.reasons)
 
-    def test_fail_on_wrong_terminal(self) -> None:
-        f = SmokeFixture(id="x", message="hi", expected_terminal="stay_silent")
+    def test_fail_on_missing_terminal(self) -> None:
+        f = SmokeFixture(id="x", message="hi", expected_terminal="send_burst")
         trace = _trace_with_burst(
-            "hi", [("mcp__donna__send_burst", {"messages": [{"type": "text", "body": "ok"}]})]
+            "hi", [("mcp__donna__recall_graph", {"query": "x"})]
         )
         r = _evaluate(f, trace)
         self.assertFalse(r.passed)

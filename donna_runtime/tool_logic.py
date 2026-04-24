@@ -42,10 +42,6 @@ def send_burst_text(messages: Sequence[Any]) -> str:
     return f"Sent {len(real)} messages."
 
 
-def stay_silent_text() -> str:
-    return "Silence logged."
-
-
 def _current_user_id() -> str | None:
     return _CURRENT_USER_ID.get()
 
@@ -285,7 +281,3 @@ async def send_burst_result(args: Mapping[str, Any]) -> dict[str, list[dict[str,
     if buffer is not None:
         buffer.extend(constructed)
     return text_content(send_burst_text(constructed))
-
-
-async def stay_silent_result(args: Mapping[str, Any]) -> dict[str, list[dict[str, str]]]:
-    return text_content(stay_silent_text())

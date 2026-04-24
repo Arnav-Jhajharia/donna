@@ -39,7 +39,10 @@ def build_options(config: DonnaAgentConfig | None = None) -> ClaudeAgentOptions:
     # runner via wrap_user_message_with_context().
     kwargs = {
         "model": config.model,
-        "system_prompt": build_system_prompt(tool_mode=config.tool_mode),
+        "system_prompt": build_system_prompt(
+            tool_mode=config.tool_mode,
+            user_model_block=config.user_model_block,
+        ),
         "mcp_servers": {TOOL_NAMESPACE: build_mcp_server(config)},
         "extra_args": {
             "thinking": "enabled" if config.thinking_enabled else "disabled",

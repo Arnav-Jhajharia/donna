@@ -5,6 +5,7 @@ import logging
 
 from backend.memory.synthesis.temporal_brief import BriefImplementation
 from backend.memory.tools._shape import ToolResult, degraded, ok
+from donna_runtime.observability import instrument_memory_op
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("living_profile")
 async def refresh_situation_brief(
     user_id: str,
     implementation: str = BriefImplementation.WINDOWED_TIMELINE.value,

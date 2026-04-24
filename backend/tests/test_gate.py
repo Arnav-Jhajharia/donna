@@ -20,11 +20,6 @@ def test_reject_ambient_filler():
     assert v is not None and v.worth_ingesting is False
 
 
-def test_reject_stay_silent_no_work():
-    v = _fast_reject(_g(inbound="a" * 50, terminator="stay_silent", tools=("stay_silent",)))
-    assert v is not None and v.worth_ingesting is False
-
-
 def test_accept_multi_burst():
     v = _fast_accept(_g(inbound="a" * 50, outbound=["one", "two"]))
     assert v is not None and v.worth_ingesting is True

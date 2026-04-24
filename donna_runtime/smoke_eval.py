@@ -33,6 +33,8 @@ class FixtureResult:
     terminal_tool: str | None = None
     tool_calls: list[str] = field(default_factory=list)
     reply_bodies: list[str] = field(default_factory=list)
+    media_types: list[str] = field(default_factory=list)
+    category: str = "voice"
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -42,6 +44,8 @@ class FixtureResult:
             "terminal_tool": self.terminal_tool,
             "tool_calls": self.tool_calls,
             "reply_bodies": self.reply_bodies,
+            "media_types": self.media_types,
+            "category": self.category,
         }
 
 
@@ -54,8 +58,6 @@ def _terminal_tool(trace: TurnTrace) -> str | None:
         name = _call_name(call)
         if name.endswith("send_burst"):
             return "send_burst"
-        if name.endswith("stay_silent"):
-            return "stay_silent"
     return None
 
 
@@ -79,11 +81,29 @@ def _extract_reply_bodies(trace: TurnTrace) -> list[str]:
     return bodies
 
 
+def _extract_media_types(trace: TurnTrace) -> list[str]:
+    """Widget types emitted by send_burst in the order they appear."""
+    types: list[str] = []
+    for call in trace.to_dict().get("tool_calls", []):
+        if not _call_name(call).endswith("send_burst"):
+            continue
+        messages = call.get("inputs", {}).get("messages", [])
+        for m in messages:
+            if isinstance(m, str):
+                types.append("text")
+            elif isinstance(m, dict):
+                t = m.get("type")
+                if isinstance(t, str):
+                    types.append(t)
+    return types
+
+
 def _evaluate(fixture: SmokeFixture, trace: TurnTrace) -> FixtureResult:
-    result = FixtureResult(fixture_id=fixture.id, passed=True)
+    result = FixtureResult(fixture_id=fixture.id, passed=True, category=fixture.category)
     result.terminal_tool = _terminal_tool(trace)
     result.tool_calls = _tool_names(trace)
     result.reply_bodies = _extract_reply_bodies(trace)
+    result.media_types = _extract_media_types(trace)
 
     if result.terminal_tool != fixture.expected_terminal:
         result.passed = False
@@ -113,6 +133,20 @@ def _evaluate(fixture: SmokeFixture, trace: TurnTrace) -> FixtureResult:
         result.reasons.append(
             f"reply too long: {word_count} > {fixture.max_reply_words}"
         )
+
+    for required_type in fixture.expected_media:
+        if required_type not in result.media_types:
+            result.passed = False
+            result.reasons.append(
+                f"expected media {required_type!r} not in burst (got {result.media_types})"
+            )
+
+    for forbidden_type in fixture.forbidden_media:
+        if forbidden_type in result.media_types:
+            result.passed = False
+            result.reasons.append(
+                f"forbidden media {forbidden_type!r} appeared in burst"
+            )
 
     return result
 
@@ -151,6 +185,16 @@ def _print_report(results: list[FixtureResult]) -> int:
     passed = sum(1 for r in results if r.passed)
     total = len(results)
     print(f"\n=== smoke eval: {passed}/{total} passed ===\n")
+
+    by_category: dict[str, list[FixtureResult]] = {}
+    for r in results:
+        by_category.setdefault(r.category, []).append(r)
+    print("by category:")
+    for cat, cat_results in sorted(by_category.items()):
+        cat_pass = sum(1 for r in cat_results if r.passed)
+        print(f"  {cat:<16} {cat_pass}/{len(cat_results)}")
+    print()
+
     for r in results:
         mark = "PASS" if r.passed else "FAIL"
         print(f"[{mark}] {r.fixture_id}")
@@ -161,6 +205,8 @@ def _print_report(results: list[FixtureResult]) -> int:
                 print(f"    terminal: {r.terminal_tool}")
             if r.tool_calls:
                 print(f"    tools: {r.tool_calls}")
+            if r.media_types:
+                print(f"    media: {r.media_types}")
     return 0 if passed == total else 1
 
 

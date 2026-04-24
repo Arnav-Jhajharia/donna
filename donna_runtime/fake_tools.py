@@ -315,7 +315,7 @@ async def schedule_reminder(args):
 # Export
 # ---------------------------------------------------------------------------
 
-from .tool_logic import send_burst_result, stay_silent_result  # noqa: E402
+from .tool_logic import send_burst_result  # noqa: E402
 from .hooks import _CURRENT_TRACE, _fire_memory_hooks  # noqa: E402
 from .langsmith_tracing import traceable  # noqa: E402
 
@@ -333,17 +333,6 @@ async def send_burst(args):
     return result
 
 
-@tool(
-    "stay_silent",
-    "TERMINATOR. Choose not to respond (ambient chatter, not directed at Donna, etc). "
-    "Log a short reason.",
-    {"reason": str},
-)
-@traceable(name="donna.tool.stay_silent", run_type="tool")
-async def stay_silent(args):
-    return await stay_silent_result(args)
-
-
 FAKE_DONNA_TOOLS = (
     recall_episodic,
     recall_graph,
@@ -357,7 +346,6 @@ FAKE_DONNA_TOOLS = (
     close_open_loop,
     schedule_reminder,
     send_burst,
-    stay_silent,
 )
 
 
@@ -376,6 +364,5 @@ FAKE_ALLOWED_TOOLS = tuple(
         "close_open_loop",
         "schedule_reminder",
         "send_burst",
-        "stay_silent",
     )
 )

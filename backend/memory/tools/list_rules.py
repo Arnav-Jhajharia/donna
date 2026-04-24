@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "List inferred procedural rules about this user's behavior and preferences. "
@@ -18,6 +19,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("postgres.rules")
 async def list_rules(
     user_id: str, type: str | None = None, limit: int = 20
 ) -> ToolResult:

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -71,6 +72,17 @@ DEFAULT_TEST_MESSAGES = (
 ToolMode = Literal["stage0", "fake", "real"]
 
 
+def _stateless_sessions_default() -> bool:
+    """Honor DONNA_STATELESS_SESSIONS env var.
+
+    When 1, brain.donna_turn skips SDK session resume/save entirely. The
+    SDK runs as a pure tool-use loop; conversation history lives in the
+    chat_messages table and is rendered into the per-turn user message
+    via context_builder.render_turn_context.
+    """
+    return os.environ.get("DONNA_STATELESS_SESSIONS") == "1"
+
+
 @dataclass(frozen=True)
 class DonnaAgentConfig:
     model: str = MODEL_NAME
@@ -95,3 +107,4 @@ class DonnaAgentConfig:
     chat_already_persisted: bool = False
     mode: Literal["reactive", "proactive"] = "reactive"
     voice_filter_enabled: bool = True
+    stateless_sessions: bool = False

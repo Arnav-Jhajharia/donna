@@ -29,6 +29,7 @@ from backend.memory.time import (
     zone,
 )
 from backend.memory.tools._shape import ToolResult, degraded, ok
+from donna_runtime.observability import instrument_memory_op
 
 logger = logging.getLogger(__name__)
 
@@ -170,6 +171,7 @@ def _resolve_local(expression: str, now_utc: datetime, tz) -> datetime | None:
     return None
 
 
+@instrument_memory_op("time")
 async def resolve_time_expression(
     user_id: str,
     *,

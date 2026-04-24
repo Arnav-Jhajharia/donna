@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import time
+from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
 from typing import Any
@@ -11,6 +13,14 @@ from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, Tex
 from .config import DonnaAgentConfig
 from .hooks import _OUTBOUND_BUFFER, drain_memory_hooks, trace_hook_context
 from .langsmith_tracing import end_run, flush as langsmith_flush, trace_run, tracing_context
+from .observability import (
+    _CURRENT_TURN_ID,
+    emit,
+    emit_error,
+    emit_turn_end,
+    emit_turn_start,
+    turn_span,
+)
 from .options import build_options
 from .prompt import wrap_user_message_with_context
 from .session_store import save_user_session
@@ -53,25 +63,44 @@ async def _donna_turn_core(user_message: str, config: DonnaAgentConfig) -> TurnT
     existing = _OUTBOUND_BUFFER.get()
     buffer: list = existing if existing is not None else []
     token = _OUTBOUND_BUFFER.set(buffer) if existing is None else None
+
+    owns_turn_span = _CURRENT_TURN_ID.get() is None
+    turn_id = f"turn_{int(time.time() * 1000)}" if owns_turn_span else None
+    span_cm = turn_span(turn_id, config.user_id) if owns_turn_span else _nullspan()
+
     try:
-        with trace_hook_context(
-            trace,
-            user_id=config.user_id,
-            chat_already_persisted=config.chat_already_persisted,
-        ):
-            try:
-                wrapped_prompt = wrap_user_message_with_context(
-                    user_message, config.system_context
+        with span_cm:
+            if owns_turn_span:
+                emit_turn_start(
+                    turn_id=turn_id,
+                    user_id=config.user_id,
+                    user_message=user_message,
+                    resume_session_id=config.resume_session_id,
+                    model=config.model,
+                    thinking_enabled=bool(getattr(config, "thinking_enabled", False)),
                 )
-                async with asyncio.timeout(config.request_timeout_s):
-                    async for message in query(prompt=wrapped_prompt, options=build_options(config)):
-                        _record_message(trace, message)
-            except TimeoutError:
-                trace.record_runtime_error(f"Donna Agent SDK query timed out after {config.request_timeout_s:.1f}s")
-            except Exception as exc:
-                trace.record_runtime_error(str(exc))
-                if not trace.session_id and not trace.result_text:
-                    raise
+            with trace_hook_context(
+                trace,
+                user_id=config.user_id,
+                chat_already_persisted=config.chat_already_persisted,
+            ):
+                try:
+                    wrapped_prompt = wrap_user_message_with_context(
+                        user_message, config.system_context
+                    )
+                    async with asyncio.timeout(config.request_timeout_s):
+                        async for message in query(prompt=wrapped_prompt, options=build_options(config)):
+                            _record_message(trace, message)
+                except TimeoutError:
+                    trace.record_runtime_error(f"Donna Agent SDK query timed out after {config.request_timeout_s:.1f}s")
+                    emit_error(where="runner._donna_turn_core", error="sdk_query_timeout", timeout_s=config.request_timeout_s)
+                except Exception as exc:
+                    trace.record_runtime_error(str(exc))
+                    emit_error(where="runner._donna_turn_core", error=f"{type(exc).__name__}: {exc}")
+                    if not trace.session_id and not trace.result_text:
+                        raise
+            if owns_turn_span:
+                emit_turn_end(trace)
     finally:
         if token is not None:
             _OUTBOUND_BUFFER.reset(token)
@@ -80,6 +109,24 @@ async def _donna_turn_core(user_message: str, config: DonnaAgentConfig) -> TurnT
         await _deliver_to_whatsapp(config.target_phone, buffer)
 
     return trace
+
+
+@contextmanager
+def _nullspan():
+    yield
+
+
+def _emit_tool_call_event(block: ToolUseBlock) -> None:
+    name = str(block.name or "")
+    short = name.split("__")[-1] if name else ""
+    inputs = block.input if isinstance(block.input, dict) else {}
+    emit(
+        "tool.call",
+        tool=name,
+        tool_short=short,
+        call_id=str(block.id),
+        input_keys=list(inputs.keys())[:20],
+    )
 
 
 async def _deliver_to_whatsapp(phone: str, messages: list) -> None:
@@ -168,6 +215,7 @@ def _record_message(trace: TurnTrace, message: Any) -> None:
                     inputs=block.input,
                     call_id=block.id,
                 )
+                _emit_tool_call_event(block)
     elif isinstance(message, ResultMessage):
         trace.record_result(
             subtype=getattr(message, "subtype", None),

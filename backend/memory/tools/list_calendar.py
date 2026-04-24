@@ -5,6 +5,7 @@ from datetime import timedelta
 
 from backend.memory.time import format_local, timezone_label, utcnow_naive
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "List upcoming calendar entries for this user. "
@@ -21,6 +22,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("postgres.calendar")
 async def list_calendar(
     user_id: str, within_days: int = 7, limit: int = 20
 ) -> ToolResult:

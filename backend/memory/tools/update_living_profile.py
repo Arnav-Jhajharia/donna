@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "Patch the user's Living Profile with a targeted key/value between nightly syntheses. "
@@ -17,6 +18,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("living_profile")
 async def update_living_profile(user_id: str, patch: dict) -> ToolResult:
     try:
         from sqlalchemy import select

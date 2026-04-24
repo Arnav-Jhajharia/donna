@@ -24,7 +24,6 @@ from donna_runtime.tool_logic import (
     render_burst_items_text,
     render_outbound_text,
     send_burst_text,
-    stay_silent_text,
 )
 from donna_runtime.tracing import TurnTrace
 from donna_runtime.runner import _is_missing_resume_error, _should_retry_without_resume
@@ -33,7 +32,7 @@ from donna_runtime.runner import _is_missing_resume_error, _should_retry_without
 class DonnaRuntimeTests(unittest.TestCase):
     def test_prompt_keeps_terminal_contract(self) -> None:
         prompt = build_system_prompt(runtime_context="## Runtime Context\nUser id: test-user")
-        self.assertIn("Every turn MUST end with send_burst or stay_silent", prompt)
+        self.assertIn("send_burst", prompt)
         self.assertIn("Do not fabricate", prompt)
         # runtime_context is intentionally ignored now — prefix must stay
         # byte-stable across turns for SDK prefix caching. Volatile context
@@ -42,7 +41,6 @@ class DonnaRuntimeTests(unittest.TestCase):
 
     def test_tool_logic_is_sdk_free(self) -> None:
         self.assertEqual("Sent 2 messages.", send_burst_text(("a", "b")))
-        self.assertEqual("Silence logged.", stay_silent_text())
 
     def test_memory_tool_result_text_is_readable(self) -> None:
         from donna_runtime import tools as runtime_tools
@@ -81,24 +79,13 @@ class DonnaRuntimeTests(unittest.TestCase):
         rendered = context.render_system_context()
         self.assertIn("User id: user-1", rendered)
 
-    def test_render_turn_context_includes_compact_signals(self) -> None:
-        async def fake_user_model(user_id):
-            return "USER MODEL\n  name: Arnav"
-
-        async def fake_recent(user_id):
-            return ["- user: last thing", "- assistant: noted"]
-
-        async def fake_loops(user_id):
-            return ["- loop-1: text luca"]
-
-        async def fake_tracker(user_id):
-            return ['- expense: 2026-04-22T10:00:00: {"amount": 6}']
-
+    def test_render_turn_context_is_volatile_only(self) -> None:
         state = {
             "user_id": "user-1",
             "_user_name": "Arnav",
             "_user_timezone": "Asia/Singapore",
             "_is_first_message": False,
+            "_resume_session_id": "session-xyz",
             "reply_to_role": "assistant",
             "reply_to_content": "old answer",
             "url_contents": [
@@ -110,20 +97,59 @@ class DonnaRuntimeTests(unittest.TestCase):
                 }
             ],
         }
-        with patch.object(context_builder, "_safe_user_model", fake_user_model), \
-            patch.object(context_builder, "_safe_recent_chat", fake_recent), \
-            patch.object(context_builder, "_safe_open_loops", fake_loops), \
-            patch.object(context_builder, "_safe_tracker_snapshot", fake_tracker):
-            rendered = asyncio.run(context_builder.render_turn_context(state))
+        rendered = asyncio.run(context_builder.render_turn_context(state))
 
-        self.assertIn("USER MODEL", rendered)
+        self.assertIn("user_id: user-1", rendered)
+        self.assertIn("name: Arnav", rendered)
+        self.assertIn("timezone: Asia/Singapore", rendered)
         self.assertIn("REPLY CONTEXT", rendered)
-        self.assertIn("old answer", rendered)
         self.assertIn("URL CONTEXT", rendered)
-        self.assertIn("RECENT CHAT", rendered)
-        self.assertIn("OPEN LOOPS", rendered)
-        self.assertIn("7-DAY TRACKER SNAPSHOT", rendered)
-        self.assertLessEqual(len(rendered), 5000)
+        self.assertNotIn("USER MODEL", rendered)
+        self.assertNotIn("RECENT CHAT", rendered)
+        self.assertNotIn("OPEN LOOPS", rendered)
+        self.assertNotIn("7-DAY TRACKER SNAPSHOT", rendered)
+        self.assertLessEqual(len(rendered), 1200)
+
+    def test_render_turn_context_hydrates_on_cold_start(self) -> None:
+        async def fake_recent(user_id):
+            return ["- user: last thing", "- assistant: noted"]
+
+        state = {
+            "user_id": "user-1",
+            "_user_timezone": "Asia/Singapore",
+            "_resume_session_id": None,
+        }
+        with patch.object(context_builder, "_safe_recent_chat", fake_recent):
+            rendered = asyncio.run(context_builder.render_turn_context(state))
+        # Cold start header still calls out session hydration; count is inline.
+        self.assertIn("RECENT CHAT (last 2 messages, session cold-start hydration)", rendered)
+        self.assertIn("last thing", rendered)
+
+    def test_render_turn_context_always_hydrates_when_resumed(self) -> None:
+        """Stateless/resumed alike should include recent chat — it's the only
+        durable conversation history the model sees in stateless mode."""
+        async def fake_recent(user_id):
+            return ["- user: earlier", "- assistant: ack"]
+
+        state = {
+            "user_id": "user-1",
+            "_user_timezone": "Asia/Singapore",
+            "_resume_session_id": "session-xyz",
+        }
+        with patch.object(context_builder, "_safe_recent_chat", fake_recent):
+            rendered = asyncio.run(context_builder.render_turn_context(state))
+        self.assertIn("RECENT CHAT (last 2 messages)", rendered)
+        self.assertNotIn("cold-start hydration", rendered)
+        self.assertIn("earlier", rendered)
+
+    def test_build_system_prompt_bakes_user_model(self) -> None:
+        prompt = build_system_prompt(
+            tool_mode="real",
+            user_model_block="USER MODEL\n  name: Arnav\n  timezone: Asia/Kolkata",
+        )
+        self.assertIn("# WHO YOU'RE TALKING TO", prompt)
+        self.assertIn("name: Arnav", prompt)
+        self.assertIn("timezone: Asia/Kolkata", prompt)
 
     def test_brain_passes_rendered_context_to_runner(self) -> None:
         from delivery.messages import TextMessage
@@ -333,8 +359,8 @@ class DonnaRuntimeTests(unittest.TestCase):
                         "turn_id": "turn_test",
                         "tool_calls": [
                             {
-                                "tool": "mcp__donna__stay_silent",
-                                "inputs": {"reason": "ack"},
+                                "tool": "mcp__donna__send_burst",
+                                "inputs": {"messages": ["k"], "tone": "crisp"},
                                 "call_id": "call_1",
                             }
                         ],

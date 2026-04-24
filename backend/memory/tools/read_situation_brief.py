@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "Read Donna's stored temporal situation brief for the user. This is the compact "
@@ -15,6 +16,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("living_profile")
 async def read_situation_brief(user_id: str) -> ToolResult:
     try:
         from sqlalchemy import select

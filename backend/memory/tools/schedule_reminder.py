@@ -11,6 +11,7 @@ from typing import Any
 
 from backend.memory.time import coerce_to_utc_naive, utcnow_naive
 from backend.memory.tools._shape import ToolResult, degraded, ok
+from donna_runtime.observability import instrument_memory_op
 
 logger = logging.getLogger(__name__)
 
@@ -31,6 +32,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("postgres.reminders")
 async def schedule_reminder(
     user_id: str,
     *,
