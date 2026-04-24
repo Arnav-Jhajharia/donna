@@ -173,3 +173,53 @@ async def refresh_active_user_briefs(
         skipped=skipped,
         outcomes=list(outcomes),
     )
+
+
+async def run_forever(
+    *,
+    poll_interval_s: float = 7200.0,
+    active_within_days: int = 14,
+    limit: int | None = None,
+    include_sandbox: bool = False,
+    implementation: str = BriefImplementation.WINDOWED_TIMELINE.value,
+    use_claude: bool = False,
+    concurrency: int = 4,
+) -> None:
+    """Periodically refresh temporal briefs for active users.
+
+    Designed to be spawned from the API startup hook. Each tick calls
+    `refresh_active_user_briefs(...)` and logs a one-line summary. A failing
+    tick is logged but never breaks the loop.
+    """
+    from donna_runtime.observability import emit
+
+    while True:
+        try:
+            report = await refresh_active_user_briefs(
+                active_within_days=active_within_days,
+                limit=limit,
+                include_sandbox=include_sandbox,
+                implementation=implementation,
+                use_claude=use_claude,
+                concurrency=concurrency,
+            )
+            logger.info(
+                "brief_refresh tick: selected=%d refreshed=%d failed=%d skipped=%d",
+                report.selected, report.refreshed, report.failed, report.skipped,
+            )
+            try:
+                emit(
+                    "memory.brief_refresh.tick",
+                    selected=report.selected,
+                    refreshed=report.refreshed,
+                    failed=report.failed,
+                    skipped=report.skipped,
+                    implementation=implementation,
+                )
+            except Exception:
+                logger.exception("brief_refresh: emit failed")
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("brief_refresh tick failed")
+        await asyncio.sleep(poll_interval_s)

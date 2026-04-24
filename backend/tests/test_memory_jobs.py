@@ -22,6 +22,93 @@ def test_refresh_job_dry_run_uses_active_selection(monkeypatch):
     assert [outcome.user_id for outcome in report.outcomes] == ["u1", "u2"]
 
 
+def test_run_forever_ticks_and_emits(monkeypatch):
+    """run_forever should call refresh_active_user_briefs each tick and emit
+    a memory.brief_refresh.tick event summarizing the outcome."""
+    from donna_runtime import observability
+
+    ticks: list[dict] = []
+    emitted: list[tuple[str, dict]] = []
+
+    async def fake_refresh(**kwargs):
+        ticks.append(dict(kwargs))
+        return temporal_refresh.RefreshReport(
+            dry_run=False,
+            active_within_days=kwargs.get("active_within_days", 14),
+            selected=3,
+            refreshed=2,
+            failed=1,
+            skipped=0,
+            outcomes=[],
+        )
+
+    def fake_emit(event, **payload):
+        emitted.append((event, payload))
+
+    monkeypatch.setattr(temporal_refresh, "refresh_active_user_briefs", fake_refresh)
+    monkeypatch.setattr(observability, "emit", fake_emit)
+
+    async def _drive():
+        task = asyncio.create_task(
+            temporal_refresh.run_forever(poll_interval_s=0.01, active_within_days=7)
+        )
+        # let at least one tick complete
+        for _ in range(50):
+            await asyncio.sleep(0.005)
+            if ticks:
+                break
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(_drive())
+
+    assert len(ticks) >= 1
+    assert ticks[0]["active_within_days"] == 7
+    brief_events = [e for e in emitted if e[0] == "memory.brief_refresh.tick"]
+    assert brief_events, f"expected brief_refresh.tick, got {[e[0] for e in emitted]}"
+    payload = brief_events[0][1]
+    assert payload["selected"] == 3
+    assert payload["refreshed"] == 2
+    assert payload["failed"] == 1
+
+
+def test_run_forever_survives_tick_exception(monkeypatch):
+    """A failing tick must be logged but never break the loop."""
+    calls: list[int] = []
+
+    async def fake_refresh(**kwargs):
+        calls.append(1)
+        if len(calls) == 1:
+            raise RuntimeError("boom")
+        return temporal_refresh.RefreshReport(
+            dry_run=False,
+            active_within_days=14,
+            selected=0, refreshed=0, failed=0, skipped=0, outcomes=[],
+        )
+
+    monkeypatch.setattr(temporal_refresh, "refresh_active_user_briefs", fake_refresh)
+
+    async def _drive():
+        task = asyncio.create_task(
+            temporal_refresh.run_forever(poll_interval_s=0.01)
+        )
+        for _ in range(80):
+            await asyncio.sleep(0.005)
+            if len(calls) >= 2:
+                break
+        task.cancel()
+        try:
+            await task
+        except asyncio.CancelledError:
+            pass
+
+    asyncio.run(_drive())
+    assert len(calls) >= 2, f"run_forever stopped after exception, calls={len(calls)}"
+
+
 def test_anonymized_trace_export_redacts_obvious_pii():
     text = "email me at arnav@example.com or call +1 555 123 4567 https://example.com @arnav"
 

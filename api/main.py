@@ -51,6 +51,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Donna (Claw-Code)")
 _wa = WhatsAppChannel()
 _schedule_task: asyncio.Task | None = None
+_brief_refresh_task: asyncio.Task | None = None
 
 
 # ── Per-phone pipeline coordination ──────────────────────────────────────────
@@ -275,7 +276,7 @@ async def _replay_queued_inbox() -> None:
 
 @app.on_event("startup")
 async def _startup() -> None:
-    global _schedule_task
+    global _schedule_task, _brief_refresh_task
     try:
         await create_tables()
     except Exception:
@@ -292,12 +293,31 @@ async def _startup() -> None:
             logger.info("startup: schedule worker enabled")
         except Exception:
             logger.exception("startup: failed to start schedule worker")
+    if os.environ.get("DONNA_BRIEF_REFRESH") == "1":
+        try:
+            from backend.memory.jobs.temporal_refresh import run_forever as brief_run_forever
+
+            interval_s = float(os.environ.get("DONNA_BRIEF_REFRESH_INTERVAL_S") or 7200.0)
+            active_days = int(os.environ.get("DONNA_BRIEF_REFRESH_ACTIVE_DAYS") or 14)
+            _brief_refresh_task = asyncio.create_task(
+                brief_run_forever(
+                    poll_interval_s=interval_s,
+                    active_within_days=active_days,
+                ),
+                name="brief_refresh",
+            )
+            logger.info(
+                "startup: brief refresh enabled (interval=%.0fs, active_within_days=%d)",
+                interval_s, active_days,
+            )
+        except Exception:
+            logger.exception("startup: failed to start brief refresh")
     logger.info("donna (claw-code) started")
 
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
-    global _schedule_task
+    global _schedule_task, _brief_refresh_task
     if _schedule_task is not None:
         _schedule_task.cancel()
         try:
@@ -305,6 +325,13 @@ async def _shutdown() -> None:
         except Exception:
             pass
         _schedule_task = None
+    if _brief_refresh_task is not None:
+        _brief_refresh_task.cancel()
+        try:
+            await _brief_refresh_task
+        except Exception:
+            pass
+        _brief_refresh_task = None
 
 
 @app.get("/health")
