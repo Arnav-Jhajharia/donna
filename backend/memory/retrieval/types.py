@@ -4,7 +4,13 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Literal
 
-Source = Literal["supermemory", "graphiti"]
+Source = Literal[
+    "supermemory",
+    "graphiti",
+    "observations",
+    "open_loops",
+    "situation_brief",
+]
 
 
 @dataclass(frozen=True)

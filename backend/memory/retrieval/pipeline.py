@@ -52,6 +52,7 @@ async def run_retrieval(
     raw = await fanout(
         user_id=user_id,
         queries=queries,
+        original_message=message,
         per_query_limit=per_query_limit,
         use_supermemory=use_supermemory,
         use_graphiti=use_graphiti,
