@@ -25,12 +25,14 @@ from sqlalchemy import and_, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from db.models import Fact, generate_uuid
+from donna_runtime.observability import instrument_memory_op
 
 
 def _utcnow_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
 
 
+@instrument_memory_op("postgres.facts")
 async def record_fact(
     session: AsyncSession,
     *,
@@ -68,6 +70,7 @@ async def record_fact(
     return fact
 
 
+@instrument_memory_op("postgres.facts")
 async def update_fact(
     session: AsyncSession,
     *,
@@ -112,6 +115,7 @@ async def update_fact(
     return new
 
 
+@instrument_memory_op("postgres.facts")
 async def supersede_fact(
     session: AsyncSession,
     *,
@@ -156,6 +160,7 @@ async def supersede_fact(
     return new
 
 
+@instrument_memory_op("postgres.facts")
 async def get_current(
     session: AsyncSession,
     *,
@@ -180,6 +185,7 @@ async def get_current(
     return res.scalar_one_or_none()
 
 
+@instrument_memory_op("postgres.facts")
 async def get_as_of(
     session: AsyncSession,
     *,
@@ -213,6 +219,7 @@ async def get_as_of(
     return res.scalar_one_or_none()
 
 
+@instrument_memory_op("postgres.facts")
 async def list_history(
     session: AsyncSession,
     *,
