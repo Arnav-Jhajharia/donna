@@ -638,20 +638,21 @@ async def set_timezone(args):
 @tool(
     "connect_integration",
     "Generate a connect link for an external provider (currently: google, "
-    "covering calendar and gmail). Use when the [INTEGRATIONS] context block "
-    "shows the integration as not_connected and the user asks for something "
-    "requiring it, or asks to connect explicitly. Do NOT use when the "
-    "integration is already connected, when status is 'pending' (a link is "
-    "already in flight — do not nag), or when the user is mid-task and a "
+    "covering gmail, calendar, and drive). Use when the [INTEGRATIONS] context "
+    "block shows the integration as not_connected and the user asks for "
+    "something requiring it, or asks to connect explicitly. Do NOT use when "
+    "the integration is already connected, when status is 'pending' (a link "
+    "is already in flight — do not nag), or when the user is mid-task and a "
     "connect prompt would derail them. Returns a one-line consent message "
-    "containing the URL — forward it verbatim.",
+    "containing a single URL (the redirect chain covers every requested "
+    "product) — forward it verbatim.",
     {
         "type": "object",
         "properties": {
             "provider": {"type": "string", "enum": ["google"]},
             "products": {
                 "type": "array",
-                "items": {"type": "string", "enum": ["calendar", "gmail"]},
+                "items": {"type": "string", "enum": ["calendar", "gmail", "drive"]},
                 "minItems": 1,
             },
         },
