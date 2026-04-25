@@ -5,16 +5,45 @@ import logging
 import os
 import socket
 from datetime import datetime, timedelta, timezone
-from typing import Any
+from typing import Any, Sequence
 
 from sqlalchemy import select, update
 
-from backend.db.models import DonnaSchedule
+from backend.db.models import ChatMessage, DonnaSchedule
 from backend.db.session import async_session
 from backend.memory.time import utcnow_naive
 from delivery.whatsapp import WhatsAppChannel
 
 logger = logging.getLogger(__name__)
+
+
+def fired_reminder_chat_rows(
+    *, user_id: str, sent_messages: Sequence[Any]
+) -> list[ChatMessage]:
+    """Build ChatMessage rows for a reminder that just fired.
+
+    Mirrors how the BRAIN loop persists assistant turns: each renderable
+    OutboundMessage becomes one assistant-role row, marked ``is_proactive``
+    so the dashboard and context builder can distinguish reminder fires
+    from in-loop replies. Delays, voice markers, and unrenderable items
+    are skipped silently.
+    """
+    from donna_runtime.tool_logic import render_outbound_text
+
+    rows: list[ChatMessage] = []
+    for message in sent_messages:
+        text = render_outbound_text(message)
+        if not text:
+            continue
+        rows.append(
+            ChatMessage(
+                user_id=user_id,
+                role="assistant",
+                content=text,
+                is_proactive=True,
+            )
+        )
+    return rows
 
 
 def _worker_id() -> str:
@@ -93,7 +122,13 @@ async def run_once(*, batch_size: int = 25, lock_timeout_s: int = 60) -> int:
 
             await wa.send_many(fresh.phone, constructed)
 
+            chat_rows = fired_reminder_chat_rows(
+                user_id=fresh.user_id, sent_messages=constructed
+            )
+
             async with async_session() as session:
+                for chat_row in chat_rows:
+                    session.add(chat_row)
                 await session.execute(
                     update(DonnaSchedule)
                     .where(DonnaSchedule.id == fresh.id)

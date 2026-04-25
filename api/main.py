@@ -56,7 +56,6 @@ from api.composio_webhook import router as _composio_router  # noqa: E402
 app.include_router(_composio_router)
 
 _wa = WhatsAppChannel()
-_schedule_task: asyncio.Task | None = None
 _brief_refresh_task: asyncio.Task | None = None
 
 
@@ -282,7 +281,7 @@ async def _replay_queued_inbox() -> None:
 
 @app.on_event("startup")
 async def _startup() -> None:
-    global _schedule_task, _brief_refresh_task
+    global _brief_refresh_task
     try:
         await create_tables()
     except Exception:
@@ -291,14 +290,6 @@ async def _startup() -> None:
         await _replay_queued_inbox()
     except Exception:
         logger.exception("startup: inbox replay failed — continuing")
-    if os.environ.get("DONNA_SCHEDULE_WORKER") == "1":
-        try:
-            from backend.memory.jobs.schedule_worker import run_forever
-
-            _schedule_task = asyncio.create_task(run_forever(), name="schedule_worker")
-            logger.info("startup: schedule worker enabled")
-        except Exception:
-            logger.exception("startup: failed to start schedule worker")
     if os.environ.get("DONNA_BRIEF_REFRESH") == "1":
         try:
             from backend.memory.jobs.temporal_refresh import run_forever as brief_run_forever
@@ -323,14 +314,7 @@ async def _startup() -> None:
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
-    global _schedule_task, _brief_refresh_task
-    if _schedule_task is not None:
-        _schedule_task.cancel()
-        try:
-            await _schedule_task
-        except Exception:
-            pass
-        _schedule_task = None
+    global _brief_refresh_task
     if _brief_refresh_task is not None:
         _brief_refresh_task.cancel()
         try:
