@@ -156,3 +156,49 @@ async def initiate_oauth_chain(
         "first_url": chain_in_order[0]["redirect_url"],
         "chain": chain_in_order,
     }
+
+
+async def resolve_auth_configs(
+    *, toolkits: list[str], user_id: str
+) -> dict[str, str]:
+    """Map toolkit slug -> auth_config_id.
+
+    Looks up an existing auth config per toolkit via
+    ``composio.auth_configs.list()`` (most-recent wins for duplicates).
+    For toolkits with no existing auth config, falls back to
+    ``manage_connections`` to auto-create one (managed toolkits like
+    googledrive provision on first request) and reads the
+    ``auth_config_id`` from the response.
+
+    Returns a dict in the same order as ``toolkits``; toolkits that
+    cannot be resolved are omitted.
+    """
+    composio = _composio()
+    listing = composio.auth_configs.list()
+    items = listing.items if hasattr(listing, "items") else list(listing)
+
+    # last-write-wins -> most recently registered config per toolkit
+    by_toolkit: dict[str, str] = {}
+    for ac in items:
+        slug = getattr(getattr(ac, "toolkit", None), "slug", None)
+        if slug:
+            by_toolkit[slug] = ac.id
+
+    out: dict[str, str] = {}
+    missing: list[str] = []
+    for tk in toolkits:
+        if tk in by_toolkit:
+            out[tk] = by_toolkit[tk]
+        else:
+            missing.append(tk)
+
+    if missing:
+        res = await manage_connections(user_id=user_id, toolkits=missing)
+        for tk in missing:
+            payload = (res.get("results") or {}).get(tk) or {}
+            ac_id = payload.get("auth_config_id")
+            if ac_id:
+                out[tk] = ac_id
+
+    # Preserve original toolkit order
+    return {tk: out[tk] for tk in toolkits if tk in out}

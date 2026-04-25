@@ -301,3 +301,81 @@ async def test_initiate_oauth_chain_single_toolkit(fake_composio_full):
     assert len(result["chain"]) == 1
 
 
+@pytest.mark.asyncio
+async def test_resolve_auth_configs_picks_from_existing(fake_composio_full):
+    c = fake_composio_full(
+        auth_configs_items=[
+            _FakeAuthConfigItem(id="ac_gmail_old", toolkit_slug="gmail"),
+            _FakeAuthConfigItem(id="ac_gmail_new", toolkit_slug="gmail"),
+            _FakeAuthConfigItem(id="ac_cal", toolkit_slug="googlecalendar"),
+        ]
+    )
+
+    out = await composio_meta.resolve_auth_configs(
+        toolkits=["gmail", "googlecalendar"], user_id="u1"
+    )
+
+    assert c.auth_configs.calls == 1
+    # last-write-wins for duplicates -> most recent
+    assert out == {"gmail": "ac_gmail_new", "googlecalendar": "ac_cal"}
+    # input order preserved
+    assert list(out.keys()) == ["gmail", "googlecalendar"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_auth_configs_falls_back_to_manage_for_missing(
+    fake_composio_full, monkeypatch
+):
+    fake_composio_full(
+        auth_configs_items=[
+            _FakeAuthConfigItem(id="ac_gmail", toolkit_slug="gmail"),
+        ]
+    )
+
+    captured = {}
+
+    async def _fake_manage(*, user_id, toolkits):
+        captured["user_id"] = user_id
+        captured["toolkits"] = toolkits
+        return {
+            "results": {
+                "googledrive": {
+                    "status": "initiated",
+                    "redirect_url": "https://x",
+                    "auth_config_id": "ac_drive_new",
+                },
+            }
+        }
+
+    monkeypatch.setattr(
+        composio_meta, "manage_connections", _fake_manage
+    )
+
+    out = await composio_meta.resolve_auth_configs(
+        toolkits=["gmail", "googledrive"], user_id="u1"
+    )
+
+    assert captured["toolkits"] == ["googledrive"]
+    assert out == {"gmail": "ac_gmail", "googledrive": "ac_drive_new"}
+    # Original toolkit order preserved
+    assert list(out.keys()) == ["gmail", "googledrive"]
+
+
+@pytest.mark.asyncio
+async def test_resolve_auth_configs_omits_toolkit_when_manage_returns_no_id(
+    fake_composio_full, monkeypatch
+):
+    fake_composio_full(auth_configs_items=[])
+
+    async def _fake_manage(*, user_id, toolkits):
+        return {"results": {"googledrive": {"status": "failed"}}}
+
+    monkeypatch.setattr(composio_meta, "manage_connections", _fake_manage)
+
+    out = await composio_meta.resolve_auth_configs(
+        toolkits=["googledrive"], user_id="u1"
+    )
+
+    assert out == {}
+
+
