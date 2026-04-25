@@ -2,8 +2,11 @@
 
 Source-of-truth surface for connection lifecycle and live ingest. Verifies
 HMAC-SHA256 signature against COMPOSIO_WEBHOOK_SECRET, then dispatches by
-`event` field. Phase 1 handles connection.complete / revoke / expired only;
-gmail / calendar events are wired in Phase 2.
+`event` field. Handles connection lifecycle (complete/revoke/expired) and
+live ingest for gmail.new_message and calendar.event.{created,updated,deleted}.
+
+Calendar event payloads ride on the top-level `data` field rather than `event`
+to avoid colliding with the event-type discriminator.
 """
 from __future__ import annotations
 
@@ -13,7 +16,15 @@ import logging
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from backend.integrations import state
-from backend.integrations.composio_client import verify_webhook_signature
+from backend.integrations.calendar_ingest import (
+    delete_calendar_event,
+    ingest_calendar_event,
+)
+from backend.integrations.composio_client import (
+    ComposioClient,
+    verify_webhook_signature,
+)
+from backend.integrations.gmail_ingest import ingest_gmail_message
 from config import settings
 
 logger = logging.getLogger(__name__)
@@ -24,6 +35,8 @@ _APP_TO_PRODUCT = {
     "GMAIL": "gmail",
     "GOOGLECALENDAR": "calendar",
 }
+
+_CALENDAR_UPSERT_EVENTS = {"calendar.event.created", "calendar.event.updated"}
 
 
 @router.post("/webhooks/composio")
@@ -68,6 +81,34 @@ async def composio_webhook(
             await state.mark_revoked(user_id, "google", product)
         return {"ok": True}
 
-    # gmail / calendar events handled in P2; for now, ack and drop.
+    if event == "gmail.new_message":
+        message_id = payload.get("message_id")
+        if not message_id:
+            raise HTTPException(status_code=400, detail="missing message_id")
+        client = ComposioClient(api_key=settings.composio_api_key or "")
+        msg = await client.fetch_gmail_message(
+            user_id=user_id, message_id=message_id, include_body=True
+        )
+        await ingest_gmail_message(user_id, msg)
+        await state.touch_synced(user_id, "google", "gmail")
+        return {"ok": True}
+
+    if event in _CALENDAR_UPSERT_EVENTS:
+        ev = payload.get("data") or {}
+        if not ev.get("id"):
+            raise HTTPException(status_code=400, detail="missing event id")
+        await ingest_calendar_event(user_id, ev)
+        await state.touch_synced(user_id, "google", "calendar")
+        return {"ok": True}
+
+    if event == "calendar.event.deleted":
+        ev = payload.get("data") or {}
+        ev_id = ev.get("id") or payload.get("event_id")
+        if not ev_id:
+            raise HTTPException(status_code=400, detail="missing event id")
+        await delete_calendar_event(user_id, ev_id)
+        await state.touch_synced(user_id, "google", "calendar")
+        return {"ok": True}
+
     logger.info("composio_webhook: unhandled event=%r", event)
     return {"ok": True, "unhandled": event}
