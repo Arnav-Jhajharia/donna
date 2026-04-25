@@ -29,6 +29,8 @@ if str(ROOT) not in sys.path:
 
 from scripts._seed_corpus.profile import SEED_USER_ID
 from scripts._stress_matrix.cases import StressCase, all_cases
+from scripts._stress_matrix.haiku_judge import build_judge_from_env
+from scripts._stress_matrix.judge import JudgeClient
 from scripts._stress_matrix.runner import TurnResult, TurnRunner, run_matrix
 from scripts._stress_matrix.trace import StressTrace, summarize, write_jsonl
 
@@ -58,6 +60,11 @@ def main() -> None:
         default=None,
         help="JSONL path. Default: scripts/_out/memory_stress_<run_id>.jsonl",
     )
+    parser.add_argument(
+        "--no-judge",
+        action="store_true",
+        help="Skip the Haiku judge even on --live runs (dev/debug only).",
+    )
     args = parser.parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s")
 
@@ -69,7 +76,7 @@ def main() -> None:
         return
 
     runner: TurnRunner = _select_runner(args.live)
-    judge = None  # live judge wiring lands alongside real-turn integration
+    judge: JudgeClient | None = None if args.no_judge else _select_judge(args.live)
     rows = asyncio.run(
         run_matrix(
             cases,
@@ -111,6 +118,16 @@ def _select_runner(live: bool) -> TurnRunner:
     except Exception as exc:  # noqa: BLE001 — fall back loudly
         logger.warning("live runner unavailable (%s); falling back to stub", exc)
         return _StubRunner()
+
+
+def _select_judge(live: bool) -> JudgeClient | None:
+    """Build a judge for live runs. Stub runs never get a real judge."""
+    if not live:
+        return None
+    judge = build_judge_from_env()
+    if judge is None:
+        logger.warning("no judge available; verdicts will read 'judge skipped'")
+    return judge
 
 
 class _StubRunner:
