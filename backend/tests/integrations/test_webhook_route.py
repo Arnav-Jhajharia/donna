@@ -372,3 +372,48 @@ async def test_webhook_calendar_event_requires_id(client, db) -> None:
         headers={"x-composio-signature": _sign(body)},
     )
     assert r.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_webhook_connection_complete_enqueues_bootstrap(
+    client, db, monkeypatch
+) -> None:
+    import asyncio
+
+    captured: dict = {}
+
+    async def fake_run_bootstrap(user_id):
+        captured["bootstrap"] = user_id
+
+    async def _noop_subscribe(self, *args, **kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "api.composio_webhook.run_bootstrap_async",
+        fake_run_bootstrap,
+    )
+    monkeypatch.setattr(
+        "backend.integrations.composio_client.ComposioClient.subscribe_triggers",
+        _noop_subscribe,
+    )
+
+    body = json.dumps(
+        {
+            "event": "connection.complete",
+            "user_id": "u1",
+            "connection_id": "ca-1",
+            "app": "GMAIL",
+        }
+    ).encode()
+    r = await client.post(
+        "/webhooks/composio",
+        content=body,
+        headers={"x-composio-signature": _sign(body)},
+    )
+    assert r.status_code == 200
+
+    for _ in range(100):
+        if "bootstrap" in captured:
+            break
+        await asyncio.sleep(0.01)
+    assert captured.get("bootstrap") == "u1"

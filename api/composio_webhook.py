@@ -10,12 +10,20 @@ to avoid colliding with the event-type discriminator.
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 
 from fastapi import APIRouter, Header, HTTPException, Request
 
 from backend.integrations import state
+from backend.integrations.biography_synthesis import synthesize_biography
+from backend.integrations.bootstrap_calendar import bootstrap_calendar
+from backend.integrations.bootstrap_gmail import (
+    bootstrap_30d_important,
+    bootstrap_90d_aggregates,
+    bootstrap_today_dense,
+)
 from backend.integrations.calendar_ingest import (
     delete_calendar_event,
     ingest_calendar_event,
@@ -26,6 +34,7 @@ from backend.integrations.composio_client import (
     TRIGGER_CALENDAR_EVENT_UPDATED,
     TRIGGER_GMAIL_NEW_MESSAGE,
     ComposioClient,
+    NormalizedGmailMessage,
     verify_webhook_signature,
 )
 from backend.integrations.gmail_ingest import ingest_gmail_message
@@ -50,6 +59,52 @@ _PRODUCT_TRIGGERS = {
         TRIGGER_CALENDAR_EVENT_DELETED,
     ),
 }
+
+
+async def run_bootstrap_async(user_id: str) -> None:
+    """Run all bootstrap stages plus biography synthesis. Fire-and-forget."""
+    try:
+        await bootstrap_today_dense(user_id)
+        await bootstrap_30d_important(user_id)
+        await bootstrap_calendar(user_id)
+        aggregates = await bootstrap_90d_aggregates(user_id)
+
+        from sqlalchemy import select
+
+        from backend.db.session import async_session
+        from db.models import EmailMessage
+
+        async with async_session() as s:
+            rows = (
+                await s.execute(
+                    select(EmailMessage)
+                    .where(EmailMessage.user_id == user_id)
+                    .where(EmailMessage.ingest_depth == "full")
+                    .where(EmailMessage.body_stored.is_(True))
+                )
+            ).scalars().all()
+        msgs = [
+            NormalizedGmailMessage(
+                gmail_message_id=r.gmail_message_id,
+                thread_id=r.thread_id,
+                from_address=r.from_address,
+                from_name=r.from_name,
+                to_addresses=r.to_addresses,
+                cc_addresses=r.cc_addresses,
+                subject=r.subject,
+                snippet=r.snippet,
+                body_text=r.body_text,
+                labels=r.labels,
+                is_important=r.is_important,
+                is_starred=r.is_starred,
+                is_sent=r.is_sent,
+                internal_date=r.internal_date,
+            )
+            for r in rows
+        ]
+        await synthesize_biography(user_id, msgs, aggregates)
+    except Exception:
+        logger.exception("bootstrap failed user=%s", user_id)
 
 
 @router.post("/webhooks/composio")
@@ -93,7 +148,7 @@ async def composio_webhook(
                 connection_id=connection_id,
                 trigger_names=triggers,
             )
-        # Bootstrap enqueue happens in P3.
+        asyncio.create_task(run_bootstrap_async(user_id))
         return {"ok": True}
 
     if event in {"connection.revoked", "connection.expired"}:
