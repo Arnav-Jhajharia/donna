@@ -6,53 +6,71 @@ from backend.integrations import state
 from backend.memory.tools.connect_integration import connect_integration
 
 
-class FakeComposio:
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, str]] = []
+@pytest.fixture
+def stub_manage(monkeypatch):
+    captured: dict = {}
 
-    async def get_or_create_connection(self, user_id: str, app: str) -> tuple[str, str]:
-        self.calls.append((user_id, app))
-        return f"cid-{app}", f"https://composio/oauth/{app}/start"
+    async def _fake(**kwargs):
+        captured["kwargs"] = kwargs
+        return {
+            "results": {
+                "gmail": {
+                    "toolkit": "gmail",
+                    "status": "initiated",
+                    "redirect_url": "https://connect.composio.dev/link/g",
+                    "auth_config_id": "ac_g",
+                },
+                "googlecalendar": {
+                    "toolkit": "googlecalendar",
+                    "status": "initiated",
+                    "redirect_url": "https://connect.composio.dev/link/c",
+                    "auth_config_id": "ac_c",
+                },
+            },
+        }
 
-
-@pytest.mark.asyncio
-async def test_connect_integration_returns_url_and_marks_pending(monkeypatch, db) -> None:
-    fake = FakeComposio()
     monkeypatch.setattr(
-        "backend.memory.tools.connect_integration._client",
-        lambda: fake,
+        "backend.integrations.composio_meta.manage_connections", _fake
     )
-
-    result = await connect_integration(
-        user_id="u1", provider="google", products=["calendar", "gmail"]
-    )
-
-    assert result["status"] == "url_sent"
-    assert result["url"].startswith("https://composio/")
-    assert "tap" in result["message"].lower()
-
-    rows = await state.list_user_integrations("u1")
-    products = {r.product: r.status for r in rows}
-    assert products == {"calendar": "pending", "gmail": "pending"}
+    return captured
 
 
 @pytest.mark.asyncio
-async def test_connect_integration_already_connected(monkeypatch, db) -> None:
-    await state.upsert_pending("u1", "google", "calendar")
-    await state.mark_connected("u1", "google", "calendar", connection_id="c-old")
+async def test_connect_integration_returns_urls_and_marks_pending(
+    db, stub_manage
+) -> None:
+    res = await connect_integration(
+        user_id="u1", provider="google", products=["gmail", "calendar"]
+    )
+
+    assert res["status"] == "url_sent"
+    assert "https://connect.composio.dev/link/g" in res["message"]
+    assert "https://connect.composio.dev/link/c" in res["message"]
+    assert res["urls"] == {
+        "gmail": "https://connect.composio.dev/link/g",
+        "calendar": "https://connect.composio.dev/link/c",
+    }
+    assert stub_manage["kwargs"]["toolkits"] == ["gmail", "googlecalendar"]
+
+    gmail_row = await state.get_integration_status("u1", "google", "gmail")
+    cal_row = await state.get_integration_status("u1", "google", "calendar")
+    assert gmail_row.status == "pending"
+    assert cal_row.status == "pending"
+
+
+@pytest.mark.asyncio
+async def test_connect_integration_already_connected_short_circuits(
+    db, stub_manage
+) -> None:
     await state.upsert_pending("u1", "google", "gmail")
-    await state.mark_connected("u1", "google", "gmail", connection_id="c-old-2")
-
-    fake = FakeComposio()
-    monkeypatch.setattr(
-        "backend.memory.tools.connect_integration._client",
-        lambda: fake,
+    await state.mark_connected(
+        "u1", "google", "gmail", connection_id="ca_existing"
     )
 
-    result = await connect_integration(
-        user_id="u1", provider="google", products=["calendar", "gmail"]
+    res = await connect_integration(
+        user_id="u1", provider="google", products=["gmail"]
     )
 
-    assert result["status"] == "already_connected"
-    assert result["url"] is None
-    assert fake.calls == []
+    assert res["status"] == "already_connected"
+    assert res["url"] is None
+    assert "kwargs" not in stub_manage  # never called Composio
