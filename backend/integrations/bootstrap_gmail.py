@@ -36,3 +36,27 @@ async def bootstrap_today_dense(user_id: str) -> int:
         await ingest_gmail_message(user_id, msg)
         count += 1
     return count
+
+
+async def bootstrap_30d_important(user_id: str) -> int:
+    """Read IMPORTANT-labelled messages from the last ~30d, ingest. Returns count."""
+    client = _client()
+    ids, _ = await client.list_gmail_message_ids(
+        user_id=user_id,
+        query="is:important newer_than:30d",
+        max_results=300,
+    )
+    count = 0
+    for mid in ids:
+        try:
+            msg = await client.fetch_gmail_message(
+                user_id=user_id, message_id=mid, include_body=True
+            )
+        except Exception:
+            logger.exception(
+                "bootstrap_30d_important: fetch failed mid=%s", mid
+            )
+            continue
+        await ingest_gmail_message(user_id, msg)
+        count += 1
+    return count

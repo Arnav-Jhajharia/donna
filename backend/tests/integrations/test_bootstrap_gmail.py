@@ -131,3 +131,26 @@ async def test_bootstrap_today_dense_uses_newer_than_1d_query(db, fake_client):
     await bootstrap_today_dense("u1")
 
     assert fake_client.list_calls == [("u1", "newer_than:1d")]
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_30d_important(db, fake_client):
+    fake_client.messages = [
+        _msg("m_imp_1", hours_ago=72, labels=("INBOX", "IMPORTANT", "PRIMARY")),
+        _msg("m_imp_2", hours_ago=24 * 20, labels=("INBOX", "IMPORTANT")),
+    ]
+    fake_client.messages[0] = NormalizedGmailMessage(
+        **{**fake_client.messages[0].__dict__, "is_important": True}
+    )
+    fake_client.messages[1] = NormalizedGmailMessage(
+        **{**fake_client.messages[1].__dict__, "is_important": True}
+    )
+
+    from backend.integrations.bootstrap_gmail import bootstrap_30d_important
+
+    n = await bootstrap_30d_important("u1")
+    assert n == 2
+    assert any(
+        "is:important" in q or "label:important" in q
+        for _, q in fake_client.list_calls
+    )
