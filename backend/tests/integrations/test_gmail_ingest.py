@@ -10,6 +10,20 @@ from backend.integrations.gmail_ingest import ingest_gmail_message
 from db.models import EmailMessage
 
 
+@pytest.fixture(autouse=True)
+def _stub_proactive(monkeypatch):
+    """Default-stub the proactive trigger so ingest tests don't bleed into
+    the brain. Tests that want to verify the trigger override explicitly."""
+    async def _noop(*_a, **_kw):
+        return None
+
+    monkeypatch.setattr(
+        "backend.integrations.gmail_ingest.maybe_surface_email",
+        _noop,
+        raising=False,
+    )
+
+
 def _msg(**kwargs) -> NormalizedGmailMessage:
     base = dict(
         gmail_message_id="m1",
@@ -101,3 +115,31 @@ async def test_ingest_label_change_updates_existing(db) -> None:
         ).scalar_one()
     assert row.is_important is True
     assert "IMPORTANT" in row.labels
+
+
+@pytest.mark.asyncio
+async def test_ingest_fires_proactive_check(db, monkeypatch) -> None:
+    captured = {}
+
+    async def fake_maybe(user_id, msg):
+        captured["called"] = (user_id, msg.gmail_message_id)
+
+    monkeypatch.setattr(
+        "backend.integrations.gmail_ingest.maybe_surface_email", fake_maybe
+    )
+    await ingest_gmail_message("u1", _msg())
+    assert captured["called"] == ("u1", "m1")
+
+
+@pytest.mark.asyncio
+async def test_ingest_skips_proactive_for_ignored_message(db, monkeypatch) -> None:
+    captured = {"called": False}
+
+    async def fake_maybe(user_id, msg):
+        captured["called"] = True
+
+    monkeypatch.setattr(
+        "backend.integrations.gmail_ingest.maybe_surface_email", fake_maybe
+    )
+    await ingest_gmail_message("u1", _msg(labels=["SPAM"]))
+    assert captured["called"] is False

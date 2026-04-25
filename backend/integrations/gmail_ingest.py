@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from backend.integrations.composio_client import NormalizedGmailMessage
 from backend.integrations.label_router import classify_depth
+from backend.integrations.proactive_email_trigger import maybe_surface_email
 from db.models import EmailMessage
 
 logger = logging.getLogger(__name__)
@@ -79,3 +80,13 @@ async def ingest_gmail_message(
             existing.ingest_depth = depth
 
         await session.commit()
+
+    # Fan out to the proactive email trigger only for rows we actually
+    # stored. Failures here must not affect ingest durability.
+    try:
+        await maybe_surface_email(user_id, msg)
+    except Exception:
+        logger.exception(
+            "ingest_gmail_message: proactive trigger failed user=%s msg=%s",
+            user_id, msg.gmail_message_id,
+        )
