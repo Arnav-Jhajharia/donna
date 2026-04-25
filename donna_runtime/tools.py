@@ -317,6 +317,175 @@ async def read_gmail_thread(args):
 
 
 @tool(
+    "composio_search_tools",
+    "Discover the right Composio tool slug for an integration use-case "
+    "you don't already have a typed wrapper for. Use when the user asks "
+    "for an action against a connected SaaS provider (slack, notion, "
+    "linear, etc.) and you don't recognize the right tool name. Do NOT "
+    "use for gmail or calendar — those have typed tools "
+    "(list_gmail_recent, read_gmail_thread, list_calendar). Returns a "
+    "ranked list of tool slugs with descriptions; pass the chosen slug "
+    "to composio_execute_tool.",
+    {
+        "type": "object",
+        "properties": {
+            "use_case": {
+                "type": "string",
+                "description": "Plain-language description of what you want to do.",
+            },
+        },
+        "required": ["use_case"],
+    },
+)
+@traceable(name="donna.tool.composio_search_tools", run_type="tool")
+async def composio_search_tools(args):
+    from backend.integrations import composio_meta
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("Cannot search: no user_id in scope.")
+    use_case = str(args.get("use_case") or "").strip()
+    if not use_case:
+        return text_content("Cannot search: 'use_case' is required.")
+
+    res = await composio_meta.search_tools(user_id=user_id, use_case=use_case)
+    import json as _json
+    return text_content(_json.dumps(res, indent=2))
+
+
+@tool(
+    "composio_manage_connections",
+    "Initiate OAuth for one or more Composio toolkits. Returns a redirect "
+    "URL per toolkit that the user must tap to consent. Idempotent: "
+    "already-connected toolkits are skipped silently. Use when the user "
+    "asks to connect a SaaS provider, or you need a tool whose toolkit "
+    "is not yet active. Pair with composio_wait_for_connections in the "
+    "next turn (after the user has tapped the URLs) to confirm completion.",
+    {
+        "type": "object",
+        "properties": {
+            "toolkits": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+                "description": "Composio toolkit slugs (e.g. ['gmail', "
+                               "'googlecalendar', 'slack', 'notion']).",
+            },
+        },
+        "required": ["toolkits"],
+    },
+)
+@traceable(name="donna.tool.composio_manage_connections", run_type="tool")
+async def composio_manage_connections(args):
+    from backend.integrations import composio_meta
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("Cannot connect: no user_id in scope.")
+    raw = args.get("toolkits") or []
+    toolkits = [str(t).strip() for t in raw if str(t).strip()]
+    if not toolkits:
+        return text_content("Cannot connect: 'toolkits' is required.")
+
+    res = await composio_meta.manage_connections(
+        user_id=user_id, toolkits=toolkits
+    )
+    lines = []
+    for slug, payload in (res.get("results") or {}).items():
+        status = (payload or {}).get("status", "?")
+        url = (payload or {}).get("redirect_url")
+        if status == "ACTIVE":
+            lines.append(f"{slug}: already connected")
+        elif url:
+            lines.append(f"{slug}: tap to connect {url}")
+        else:
+            lines.append(f"{slug}: status={status}")
+    return text_content("\n".join(lines) or "no toolkits returned")
+
+
+@tool(
+    "composio_wait_for_connections",
+    "Block until specified Composio toolkits finish OAuth (or timeout). "
+    "Use after composio_manage_connections, on a follow-up turn, to "
+    "confirm the user completed the consent flow before executing tools "
+    "that depend on those toolkits. mode='all' waits for every toolkit; "
+    "mode='any' returns once one is ACTIVE. Default timeout 120s.",
+    {
+        "type": "object",
+        "properties": {
+            "toolkits": {
+                "type": "array",
+                "items": {"type": "string"},
+                "minItems": 1,
+            },
+            "mode": {"type": "string", "enum": ["all", "any"]},
+            "timeout_seconds": {"type": "integer", "minimum": 5, "maximum": 600},
+        },
+        "required": ["toolkits"],
+    },
+)
+@traceable(name="donna.tool.composio_wait_for_connections", run_type="tool")
+async def composio_wait_for_connections(args):
+    from backend.integrations import composio_meta
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("Cannot wait: no user_id in scope.")
+    raw = args.get("toolkits") or []
+    toolkits = [str(t).strip() for t in raw if str(t).strip()]
+    if not toolkits:
+        return text_content("Cannot wait: 'toolkits' is required.")
+    mode = args.get("mode") or "all"
+    timeout = int(args.get("timeout_seconds") or 120)
+
+    res = await composio_meta.wait_for_connections(
+        user_id=user_id, toolkits=toolkits, mode=mode, timeout_seconds=timeout
+    )
+    lines = [str(res.get("message") or "")]
+    for slug, payload in (res.get("results") or {}).items():
+        status = (payload or {}).get("status", "?")
+        ca = (payload or {}).get("connected_account_id", "")
+        lines.append(f"{slug}: {status} {ca}".rstrip())
+    return text_content("\n".join(line for line in lines if line))
+
+
+@tool(
+    "composio_execute_tool",
+    "Generic Composio tool invocation. Use for SaaS actions that lack a "
+    "typed Donna wrapper. Get the right tool_slug from composio_search_tools "
+    "first. Do NOT use for gmail/calendar reads — list_gmail_recent, "
+    "read_gmail_thread, list_calendar are faster and structured.",
+    {
+        "type": "object",
+        "properties": {
+            "tool_slug": {"type": "string"},
+            "arguments": {"type": "object"},
+        },
+        "required": ["tool_slug", "arguments"],
+    },
+)
+@traceable(name="donna.tool.composio_execute_tool", run_type="tool")
+async def composio_execute_tool(args):
+    from backend.integrations import composio_meta
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("Cannot execute: no user_id in scope.")
+    slug = str(args.get("tool_slug") or "").strip()
+    if not slug:
+        return text_content("Cannot execute: 'tool_slug' is required.")
+    raw_args = args.get("arguments") or {}
+    if not isinstance(raw_args, dict):
+        return text_content("Cannot execute: 'arguments' must be an object.")
+
+    res = await composio_meta.execute_tool(
+        user_id=user_id, tool_slug=slug, arguments=raw_args
+    )
+    import json as _json
+    return text_content(_json.dumps(res, indent=2)[:4000])
+
+
+@tool(
     "log_observation",
     "Record a countable user event. `type` is the category (expense, meal, mood, "
     "sleep, habit, exercise, symptom). `fields` is the numeric/structured payload "
@@ -1669,4 +1838,12 @@ DONNA_TOOLS = (
     agentic_web_search,
     research,
     send_burst,
+    connect_integration,
+    list_gmail_recent,
+    read_gmail_thread,
+    list_calendar,
+    composio_search_tools,
+    composio_manage_connections,
+    composio_wait_for_connections,
+    composio_execute_tool,
 )

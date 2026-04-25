@@ -16,21 +16,34 @@ TOOL_NAMESPACE = "donna"
 MCP_SERVER_NAME = "donna-tools"
 MCP_SERVER_VERSION = "0.1.0"
 
+# ── image tool ───────────────────────────────────────────────────────────────
+IMAGE_MODEL = "fal-ai/flux-pro/v1.1"
+IMAGE_SIZE = "square_hd"
+IMAGE_LOCKED_STYLE = (
+    "warm hand-drawn illustration, gentle muted palette, soft edges"
+)
+IMAGE_COOLDOWN_HOURS = 6
+IMAGE_WEEKLY_CAP = 3
+
 ALLOWED_TOOLS = (
-    "mcp__donna__recall_episodic",
-    "mcp__donna__recall_graph",
-    "mcp__donna__smart_recall",
-    "mcp__donna__read_tracker",
-    "mcp__donna__list_open_loops",
-    "mcp__donna__list_calendar",
-    "mcp__donna__log_observation",
-    "mcp__donna__track_open_loop",
-    "mcp__donna__close_open_loop",
-    "mcp__donna__set_timezone",
-    "mcp__donna__schedule_reminder",
-    "mcp__donna__resolve_time_expression",
-    "mcp__donna__read_situation_brief",
+    "mcp__donna__recall",
+    "mcp__donna__remember",
+    "mcp__donna__watch",
+    "mcp__donna__schedule",
+    "mcp__donna__check_calendar",
+    "mcp__donna__image",
+    "mcp__donna__web_search",
+    "mcp__donna__agentic_web_search",
+    "mcp__donna__research",
     "mcp__donna__send_burst",
+    "mcp__donna__connect_integration",
+    "mcp__donna__list_gmail_recent",
+    "mcp__donna__read_gmail_thread",
+    "mcp__donna__list_calendar",
+    "mcp__donna__composio_search_tools",
+    "mcp__donna__composio_manage_connections",
+    "mcp__donna__composio_wait_for_connections",
+    "mcp__donna__composio_execute_tool",
 )
 
 DISALLOWED_TOOLS = (
@@ -83,6 +96,17 @@ def _stateless_sessions_default() -> bool:
     return os.environ.get("DONNA_STATELESS_SESSIONS") == "1"
 
 
+def _cache_ttl_1h_default() -> bool:
+    """Honor DONNA_CACHE_TTL_1H env var.
+
+    When 1 (default), build_options sets ENABLE_PROMPT_CACHING_1H on the
+    spawned CLI subprocess so cache writes use a 1-hour TTL instead of the
+    5-minute default. Trades a higher write rate for fewer rewrites on
+    gap-after-5-min turns. Set to 0 to revert to 5-minute TTL.
+    """
+    return os.environ.get("DONNA_CACHE_TTL_1H", "1") == "1"
+
+
 @dataclass(frozen=True)
 class DonnaAgentConfig:
     model: str = MODEL_NAME
@@ -104,7 +128,14 @@ class DonnaAgentConfig:
     langsmith_project: str | None = None
     langsmith_tags: tuple[str, ...] = ("donna", "agent-sdk")
     target_phone: str | None = None
+    # Phone exposed to hooks for deterministic channel I/O (e.g., image ack).
+    # Distinct from target_phone — setting this does NOT make the runner
+    # deliver. api/main.py owns delivery in the WA pipeline; only the CLI
+    # sets target_phone.
+    user_phone: str | None = None
+    inbound_wa_message_id: str | None = None
     chat_already_persisted: bool = False
     mode: Literal["reactive", "proactive"] = "reactive"
     voice_filter_enabled: bool = True
     stateless_sessions: bool = False
+    cache_ttl_1h: bool = True
