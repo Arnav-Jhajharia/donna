@@ -49,6 +49,12 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 app = FastAPI(title="Donna (Claw-Code)")
+
+# Composio webhook ingest (OAuth completions, gmail/calendar events).
+from api.composio_webhook import router as _composio_router  # noqa: E402
+
+app.include_router(_composio_router)
+
 _wa = WhatsAppChannel()
 _schedule_task: asyncio.Task | None = None
 _brief_refresh_task: asyncio.Task | None = None

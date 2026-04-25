@@ -385,6 +385,16 @@ async def render_turn_context(state: dict[str, Any]) -> str:
     inbound_modality = state.get("_inbound_modality")
     if inbound_modality:
         lines.append(f"inbound_modality: {inbound_modality}")
+    if _detect_voice_request(state):
+        lines.extend(
+            [
+                "",
+                "VOICE REQUEST DETECTED",
+                "- the user explicitly asked for a voice message this turn.",
+                "- you MUST include {\"type\": \"voice_response\"} as the FIRST item in your send_burst messages array, followed by the text bodies you want spoken.",
+                "- emitting only text items is wrong this turn — the user will see another text bubble and ask again. the voice_response item is what flips the burst to audio.",
+            ]
+        )
     if state.get("_tz_done") is False:
         prefix = str(state.get("_tz_guess_prefix") or "").strip()
         source = str(state.get("_tz_source") or "").strip() or "unknown"
@@ -411,6 +421,19 @@ async def render_turn_context(state: dict[str, Any]) -> str:
     if today:
         lines.extend(["", today])
 
+    # [INTEGRATIONS] — connection state for external providers (Composio).
+    if user_id:
+        try:
+            from backend.integrations import state as _integrations_state
+            from backend.integrations.render import render_integrations_block
+
+            rows = await _integrations_state.list_user_integrations(user_id)
+            block = render_integrations_block(rows)
+            if block:
+                lines.extend(["", block])
+        except Exception:
+            logger.exception("render_turn_context: integrations block failed")
+
     # Recent chat window. In stateless mode the SDK session tape is
     # unused and this is the ONLY conversation history the model sees,
     # so it must always be present. In resume mode it was historically
@@ -427,6 +450,16 @@ async def render_turn_context(state: dict[str, Any]) -> str:
         lines.extend(["", header, *recent])
 
     return _cap("\n".join(lines).strip(), _MAX_CONTEXT_CHARS)
+
+
+def _detect_voice_request(state: dict[str, Any]) -> bool:
+    """Deterministic check: did the user explicitly ask for voice this turn?
+
+    Wraps `voice_intent.detect_voice_request` for state-shaped callers.
+    """
+    from .voice_intent import detect_voice_request
+
+    return detect_voice_request(state.get("raw_input"))
 
 
 def _local_time(tz_name: str | None, injected_now: str | None = None) -> str:

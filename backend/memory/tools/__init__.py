@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from backend.memory.tools import (
     close_open_loop,
+    connect_integration,
     list_calendar,
     list_observations,
     list_open_loops,
@@ -41,4 +42,5 @@ ALL_TOOLS = {
     "refresh_situation_brief": refresh_situation_brief,
     "resolve_time_expression": resolve_time_expression,
     "update_living_profile": update_living_profile,
+    "connect_integration": connect_integration,
 }

@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 
+import sqlalchemy as sa
 from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
@@ -361,3 +362,88 @@ class UserSession(Base):
     user_id: Mapped[str] = mapped_column(String, primary_key=True)
     session_id: Mapped[str] = mapped_column(String, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+
+
+class ImageToolEvent(Base):
+    """One row per image-tool invocation outcome — drives caps + observability.
+
+    status values: sent | denied_cooldown | denied_cap | failed_provider | failed_safety
+    """
+    __tablename__ = "image_tool_events"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False)
+    prompt_hash: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    __table_args__ = (
+        Index("idx_image_events_user_created", "user_id", "created_at"),
+    )
+
+
+class Integration(Base):
+    """Per-user, per-product integration state. Source of truth for the
+    [INTEGRATIONS] context block; populated by Composio webhook flow."""
+    __tablename__ = "integrations"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    provider: Mapped[str] = mapped_column(String, nullable=False)
+    product: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    composio_connection_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    connected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index(
+            "uq_integrations_user_provider_product",
+            "user_id", "provider", "product",
+            unique=True,
+        ),
+    )
+
+
+class EmailMessage(Base):
+    """Local mirror of Gmail messages. Body stored only when label-router
+    classified the message as 'full'. Bodies for 'metadata' rows are lazy-
+    fetched on demand via read_gmail_thread."""
+    __tablename__ = "email_messages"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    gmail_message_id: Mapped[str] = mapped_column(String, nullable=False)
+    thread_id: Mapped[str] = mapped_column(String, nullable=False)
+    from_address: Mapped[str] = mapped_column(String, nullable=False)
+    from_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    to_addresses: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    cc_addresses: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    subject: Mapped[str | None] = mapped_column(Text, nullable=True)
+    snippet: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    body_stored: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    labels: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    is_important: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_starred: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    is_sent: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    ingest_depth: Mapped[str] = mapped_column(String, nullable=False)
+    internal_date: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    ingested_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    __table_args__ = (
+        Index(
+            "uq_email_user_msg",
+            "user_id", "gmail_message_id",
+            unique=True,
+        ),
+        Index("idx_emails_user_date", "user_id", "internal_date"),
+        Index("idx_emails_user_thread", "user_id", "thread_id"),
+        Index(
+            "idx_emails_user_important",
+            "user_id", "is_important",
+            postgresql_where=sa.text("is_important"),
+        ),
+    )
