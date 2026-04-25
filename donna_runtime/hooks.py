@@ -6,6 +6,7 @@ import json
 import logging
 from contextlib import contextmanager
 from contextvars import ContextVar
+from collections.abc import Mapping
 from typing import Iterator
 
 from .langsmith_tracing import traceable
@@ -155,9 +156,81 @@ async def post_tool_hook(input_data, tool_use_id, context):
     hook_input = _hook_payload(input_data, tool_use_id)
     if trace is not None:
         trace.record_hook_post(hook_input, str(tool_use_id))
+
+    tool_name = str(hook_input.get("tool_name") or "")
+    if _tool_short_name(tool_name) == "connect_integration":
+        tool_response = (
+            input_data.get("tool_response") if isinstance(input_data, Mapping) else None
+        )
+        _maybe_spawn_oauth_watcher(tool_response)
+
     await trace_post_tool_hook(hook_input)
 
     return {}
+
+
+# Map our local product names back to Composio toolkit slugs so the
+# watcher can poll the right connections.
+_PRODUCT_TO_TOOLKIT_FOR_WATCHER = {
+    "gmail": "gmail",
+    "calendar": "googlecalendar",
+    "drive": "googledrive",
+}
+
+
+def _extract_connect_urls(tool_response: object) -> dict | None:
+    """Pull the structured ``urls`` map out of a connect_integration response.
+
+    The tool wraps its return value through claude-agent-sdk, so the structured
+    fields may live on the response Mapping directly. Returns None when no
+    parseable ``urls`` mapping is present.
+    """
+    if isinstance(tool_response, Mapping):
+        urls = tool_response.get("urls")
+        if isinstance(urls, Mapping):
+            return dict(urls)
+    return None
+
+
+def _maybe_spawn_oauth_watcher(tool_response: object) -> None:
+    """Fire-and-forget: launch the OAuth completion watcher when
+    connect_integration has just emitted redirect URLs."""
+    user_id = _CURRENT_USER_ID.get()
+    if not user_id:
+        return
+    urls = _extract_connect_urls(tool_response)
+    if not urls:
+        return
+    toolkits = [
+        _PRODUCT_TO_TOOLKIT_FOR_WATCHER[p]
+        for p in urls.keys()
+        if p in _PRODUCT_TO_TOOLKIT_FOR_WATCHER
+    ]
+    if not toolkits:
+        return
+
+    async def _do_watch() -> None:
+        try:
+            from backend.integrations.oauth_watcher import (
+                watch_google_oauth_and_bootstrap,
+            )
+        except Exception:
+            logger.exception("oauth watcher: import failed (non-fatal)")
+            return
+        try:
+            await watch_google_oauth_and_bootstrap(
+                user_id=user_id, toolkits=toolkits
+            )
+        except Exception:
+            logger.exception("oauth watcher: run failed (non-fatal)")
+
+    try:
+        task = asyncio.create_task(_do_watch())
+        _PENDING_HOOK_TASKS.add(task)
+        task.add_done_callback(_PENDING_HOOK_TASKS.discard)
+    except RuntimeError:
+        # No running loop (e.g., some unit tests) — drop silently.
+        pass
 
 
 def _fire_memory_hooks(trace: TurnTrace | None, send_burst_input: dict) -> None:
