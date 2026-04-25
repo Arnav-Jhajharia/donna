@@ -21,6 +21,10 @@ from backend.integrations.calendar_ingest import (
     ingest_calendar_event,
 )
 from backend.integrations.composio_client import (
+    TRIGGER_CALENDAR_EVENT_CREATED,
+    TRIGGER_CALENDAR_EVENT_DELETED,
+    TRIGGER_CALENDAR_EVENT_UPDATED,
+    TRIGGER_GMAIL_NEW_MESSAGE,
     ComposioClient,
     verify_webhook_signature,
 )
@@ -37,6 +41,15 @@ _APP_TO_PRODUCT = {
 }
 
 _CALENDAR_UPSERT_EVENTS = {"calendar.event.created", "calendar.event.updated"}
+
+_PRODUCT_TRIGGERS = {
+    "gmail": (TRIGGER_GMAIL_NEW_MESSAGE,),
+    "calendar": (
+        TRIGGER_CALENDAR_EVENT_CREATED,
+        TRIGGER_CALENDAR_EVENT_UPDATED,
+        TRIGGER_CALENDAR_EVENT_DELETED,
+    ),
+}
 
 
 @router.post("/webhooks/composio")
@@ -65,13 +78,22 @@ async def composio_webhook(
         if product is None:
             logger.warning("composio_webhook: unknown app=%r", app)
             return {"ok": True, "ignored": True}
+        connection_id = payload.get("connection_id") or ""
         await state.mark_connected(
             user_id,
             "google",
             product,
-            connection_id=payload.get("connection_id") or "",
+            connection_id=connection_id,
         )
-        # Live trigger subscription + bootstrap enqueue happen in P2/P3.
+        triggers = _PRODUCT_TRIGGERS.get(product, ())
+        if triggers and connection_id:
+            client = ComposioClient(api_key=settings.composio_api_key or "")
+            await client.subscribe_triggers(
+                user_id=user_id,
+                connection_id=connection_id,
+                trigger_names=triggers,
+            )
+        # Bootstrap enqueue happens in P3.
         return {"ok": True}
 
     if event in {"connection.revoked", "connection.expired"}:

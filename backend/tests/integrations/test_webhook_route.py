@@ -44,7 +44,15 @@ async def test_webhook_rejects_bad_signature(client) -> None:
 
 
 @pytest.mark.asyncio
-async def test_webhook_connection_complete_marks_connected(client) -> None:
+async def test_webhook_connection_complete_marks_connected(client, monkeypatch) -> None:
+    async def _noop(self, *args, **kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "backend.integrations.composio_client.ComposioClient.subscribe_triggers",
+        _noop,
+    )
+
     await state.upsert_pending("u1", "google", "calendar")
     await state.upsert_pending("u1", "google", "gmail")
 
@@ -280,6 +288,77 @@ async def test_webhook_calendar_event_deleted_removes(client, db) -> None:
             )
         ).scalars().all()
     assert rows == []
+
+
+@pytest.mark.asyncio
+async def test_webhook_connection_complete_subscribes_gmail_triggers(
+    client, db, monkeypatch
+) -> None:
+    captured: dict = {}
+
+    async def fake_subscribe(self, user_id, connection_id, trigger_names):
+        captured["subscribe"] = (user_id, connection_id, list(trigger_names))
+
+    monkeypatch.setattr(
+        "backend.integrations.composio_client.ComposioClient.subscribe_triggers",
+        fake_subscribe,
+    )
+
+    await state.upsert_pending("u1", "google", "gmail")
+
+    body = json.dumps(
+        {
+            "event": "connection.complete",
+            "user_id": "u1",
+            "connection_id": "ca-1",
+            "app": "GMAIL",
+        }
+    ).encode()
+    r = await client.post(
+        "/webhooks/composio",
+        content=body,
+        headers={"x-composio-signature": _sign(body)},
+    )
+    assert r.status_code == 200
+    assert captured["subscribe"][0] == "u1"
+    assert captured["subscribe"][1] == "ca-1"
+    assert "GMAIL_NEW_GMAIL_MESSAGE" in captured["subscribe"][2]
+
+
+@pytest.mark.asyncio
+async def test_webhook_connection_complete_subscribes_calendar_triggers(
+    client, db, monkeypatch
+) -> None:
+    captured: dict = {}
+
+    async def fake_subscribe(self, user_id, connection_id, trigger_names):
+        captured["subscribe"] = (user_id, connection_id, list(trigger_names))
+
+    monkeypatch.setattr(
+        "backend.integrations.composio_client.ComposioClient.subscribe_triggers",
+        fake_subscribe,
+    )
+
+    await state.upsert_pending("u1", "google", "calendar")
+
+    body = json.dumps(
+        {
+            "event": "connection.complete",
+            "user_id": "u1",
+            "connection_id": "ca-2",
+            "app": "GOOGLECALENDAR",
+        }
+    ).encode()
+    r = await client.post(
+        "/webhooks/composio",
+        content=body,
+        headers={"x-composio-signature": _sign(body)},
+    )
+    assert r.status_code == 200
+    triggers = captured["subscribe"][2]
+    assert "GOOGLECALENDAR_NEW_CALENDAR_EVENT" in triggers
+    assert "GOOGLECALENDAR_UPDATED_CALENDAR_EVENT" in triggers
+    assert "GOOGLECALENDAR_DELETED_CALENDAR_EVENT" in triggers
 
 
 @pytest.mark.asyncio
