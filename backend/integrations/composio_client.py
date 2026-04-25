@@ -9,10 +9,13 @@ bootstrap helpers are added in later phases.
 """
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 import logging
+import re
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Iterable
 
 logger = logging.getLogger(__name__)
@@ -28,6 +31,102 @@ TRIGGER_GMAIL_NEW_MESSAGE = "GMAIL_NEW_GMAIL_MESSAGE"
 TRIGGER_CALENDAR_EVENT_CREATED = "GOOGLECALENDAR_NEW_CALENDAR_EVENT"
 TRIGGER_CALENDAR_EVENT_UPDATED = "GOOGLECALENDAR_UPDATED_CALENDAR_EVENT"
 TRIGGER_CALENDAR_EVENT_DELETED = "GOOGLECALENDAR_DELETED_CALENDAR_EVENT"
+
+
+# ── Gmail message normalization ───────────────────────────────────────────
+
+
+@dataclass(frozen=True)
+class NormalizedGmailMessage:
+    """Vendor-agnostic shape consumed by ingest + bootstrap. Built from
+    Composio's wire format so changes upstream are absorbed here."""
+
+    gmail_message_id: str
+    thread_id: str
+    from_address: str
+    from_name: str | None
+    to_addresses: list[str]
+    cc_addresses: list[str]
+    subject: str | None
+    snippet: str | None
+    body_text: str | None
+    labels: list[str]
+    is_important: bool
+    is_starred: bool
+    is_sent: bool
+    internal_date: datetime
+
+
+_FROM_RE = re.compile(r"^(?:\"?(?P<name>[^\"<]*?)\"?\s*<)?(?P<addr>[^>]+)>?$")
+
+
+def _parse_address(raw: str) -> tuple[str | None, str]:
+    if not raw:
+        return None, ""
+    m = _FROM_RE.match(raw.strip())
+    if not m:
+        return None, raw.strip()
+    name = (m.group("name") or "").strip() or None
+    addr = m.group("addr").strip()
+    return name, addr
+
+
+def _split_addresses(raw: str) -> list[str]:
+    if not raw:
+        return []
+    return [_parse_address(part)[1] for part in raw.split(",") if part.strip()]
+
+
+def _decode_body(payload: dict | None) -> str | None:
+    """Walk MIME parts; prefer text/plain. Returns None if no plain text part."""
+    if not payload:
+        return None
+
+    def walk(part: dict) -> str | None:
+        mime = part.get("mimeType", "")
+        body = part.get("body") or {}
+        data = body.get("data")
+        if data and mime == "text/plain":
+            return base64.urlsafe_b64decode(data + "==").decode(
+                "utf-8", errors="replace"
+            )
+        for child in part.get("parts") or []:
+            found = walk(child)
+            if found:
+                return found
+        return None
+
+    return walk(payload)
+
+
+def _normalize_gmail(raw: dict) -> NormalizedGmailMessage:
+    headers = {
+        (h.get("name") or "").lower(): h.get("value") or ""
+        for h in (raw.get("payload") or {}).get("headers", [])
+    }
+    from_name, from_addr = _parse_address(headers.get("from", ""))
+    labels = list(raw.get("labelIds") or [])
+    internal_ms = int(raw.get("internalDate") or 0)
+    internal_dt = datetime.fromtimestamp(
+        internal_ms / 1000, tz=timezone.utc
+    ).replace(tzinfo=None)
+
+    return NormalizedGmailMessage(
+        gmail_message_id=raw["id"],
+        thread_id=raw["threadId"],
+        from_address=from_addr,
+        from_name=from_name,
+        to_addresses=_split_addresses(headers.get("to", "")),
+        cc_addresses=_split_addresses(headers.get("cc", "")),
+        subject=headers.get("subject") or None,
+        snippet=raw.get("snippet"),
+        body_text=_decode_body(raw.get("payload")),
+        labels=labels,
+        is_important="IMPORTANT" in labels,
+        is_starred="STARRED" in labels,
+        is_sent="SENT" in labels,
+        internal_date=internal_dt,
+    )
 
 
 def _composio():  # pragma: no cover - thin import site
@@ -92,3 +191,67 @@ class ComposioClient:
                     user_id,
                     name,
                 )
+
+    async def fetch_gmail_message(
+        self, user_id: str, message_id: str, include_body: bool = True
+    ) -> NormalizedGmailMessage:
+        """Fetch one Gmail message and normalize into a vendor-agnostic shape."""
+        composio = _composio()
+        result = composio.tools.execute(
+            "GMAIL_FETCH_MESSAGE_BY_ID",
+            user_id=user_id,
+            arguments={
+                "message_id": message_id,
+                "format": "full" if include_body else "metadata",
+            },
+        )
+        return _normalize_gmail(result["data"])
+
+    async def list_gmail_message_ids(
+        self,
+        user_id: str,
+        query: str = "",
+        max_results: int = 100,
+        page_token: str | None = None,
+    ) -> tuple[list[str], str | None]:
+        """Page through Gmail message IDs by query string.
+
+        Returns (ids, next_page_token). next_page_token=None means EOF.
+        """
+        composio = _composio()
+        result = composio.tools.execute(
+            "GMAIL_LIST_MESSAGES",
+            user_id=user_id,
+            arguments={
+                "q": query,
+                "max_results": max_results,
+                "page_token": page_token,
+            },
+        )
+        data = result.get("data") or {}
+        ids = [m["id"] for m in data.get("messages", [])]
+        next_token = data.get("nextPageToken")
+        return ids, next_token
+
+    async def list_calendar_events(
+        self,
+        user_id: str,
+        time_min: datetime,
+        time_max: datetime,
+        max_results: int = 250,
+    ) -> list[dict]:
+        """List primary-calendar events in [time_min, time_max). Single events,
+        i.e. recurring instances are expanded."""
+        composio = _composio()
+        result = composio.tools.execute(
+            "GOOGLECALENDAR_LIST_EVENTS",
+            user_id=user_id,
+            arguments={
+                "calendar_id": "primary",
+                "time_min": time_min.isoformat() + "Z",
+                "time_max": time_max.isoformat() + "Z",
+                "max_results": max_results,
+                "single_events": True,
+            },
+        )
+        return (result.get("data") or {}).get("items", [])
