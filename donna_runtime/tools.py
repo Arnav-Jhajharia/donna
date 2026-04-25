@@ -247,6 +247,76 @@ async def list_calendar(args):
 
 
 @tool(
+    "list_gmail_recent",
+    "List recent gmail messages from the user's mailbox (read from local "
+    "mirror; webhook-fed). Returns id, thread_id, from, subject, snippet, "
+    "is_important, internal_date. Optional `within_hours` (default 24), "
+    "`limit` (default 20), `important_only` (default false). Use when the "
+    "user asks 'any new mail?', 'what came in today?', or 'has X emailed?'. "
+    "Do NOT use for a specific thread by sender or subject (use "
+    "read_gmail_thread), or when the [INTEGRATIONS] block shows google_gmail "
+    "as not_connected.",
+    {
+        "type": "object",
+        "properties": {
+            "within_hours": {"type": "integer"},
+            "limit": {"type": "integer"},
+            "important_only": {"type": "boolean"},
+        },
+    },
+)
+@traceable(name="donna.tool.list_gmail_recent", run_type="tool")
+async def list_gmail_recent(args):
+    from backend.memory.tools.list_gmail_recent import (
+        list_gmail_recent as _list_gmail_recent,
+    )
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("No recent mail.")
+    res = await _list_gmail_recent(
+        user_id=user_id,
+        within_hours=int(args.get("within_hours") or 24),
+        limit=int(args.get("limit") or 20),
+        important_only=bool(args.get("important_only") or False),
+    )
+    return _tool_text(res, no_hits_text="No recent mail.", degraded_text="Gmail unavailable.")
+
+
+@tool(
+    "read_gmail_thread",
+    "Fetch all messages in one gmail thread with full bodies. If a body was "
+    "filtered at ingest (label policy stored metadata only), this tool "
+    "lazy-fetches it from Composio and persists it. Use when the user asks "
+    "about a specific thread you've already shown them, or when you need "
+    "full content to compose a reply or summarize a conversation. Do NOT "
+    "use for 'what's new in my inbox?' (use list_gmail_recent), or when "
+    "the [INTEGRATIONS] block shows google_gmail as not_connected.",
+    {
+        "type": "object",
+        "required": ["thread_id"],
+        "properties": {
+            "thread_id": {"type": "string"},
+        },
+    },
+)
+@traceable(name="donna.tool.read_gmail_thread", run_type="tool")
+async def read_gmail_thread(args):
+    from backend.memory.tools.read_gmail_thread import (
+        read_gmail_thread as _read_gmail_thread,
+    )
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("Cannot read thread: no user_id.")
+    thread_id = str(args.get("thread_id") or "").strip()
+    if not thread_id:
+        return text_content("Cannot read thread: thread_id is required.")
+    res = await _read_gmail_thread(user_id=user_id, thread_id=thread_id)
+    return _tool_text(res, no_hits_text="Thread not found.", degraded_text="Gmail unavailable.")
+
+
+@tool(
     "log_observation",
     "Record a countable user event. `type` is the category (expense, meal, mood, "
     "sleep, habit, exercise, symptom). `fields` is the numeric/structured payload "
