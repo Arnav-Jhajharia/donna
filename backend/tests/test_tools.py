@@ -12,16 +12,19 @@ from backend.memory.tools._shape import degraded, no_hits, ok
 
 
 def test_all_memory_tools_registered():
-    # Original memory surface + temporal situation-brief maintenance + bi-temporal time resolver.
-    assert len(ALL_TOOLS) == 18
+    # Original memory surface + temporal situation-brief maintenance +
+    # bi-temporal time resolver + composio integrations (connect, gmail
+    # list/thread).
+    assert len(ALL_TOOLS) == 21
 
 
 @pytest.mark.parametrize("name", list({
     "recall_episodic", "recall_graph", "recall_document_chunks", "recall_chat_thread",
     "list_observations", "list_open_loops", "list_rules", "list_calendar",
+    "list_gmail_recent", "read_gmail_thread",
     "read_situation_brief", "smart_recall", "refresh_situation_brief",
     "log_observation", "track_open_loop", "close_open_loop", "set_timezone", "schedule_reminder",
-    "resolve_time_expression", "update_living_profile",
+    "resolve_time_expression", "update_living_profile", "connect_integration",
 }))
 def test_tool_module_surface(name):
     mod = ALL_TOOLS[name]
