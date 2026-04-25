@@ -21,7 +21,7 @@ def _sqlite_jsonb(type_, compiler, **kw):  # type: ignore[no-untyped-def]
     return "JSON"
 
 
-from db.models import Base, EmailMessage, Integration, User  # noqa: E402
+from db.models import Base, EmailMessage, Integration, ProactivePing, User  # noqa: E402
 
 
 @pytest_asyncio.fixture
@@ -67,3 +67,15 @@ async def test_email_message_model_defaults(session: AsyncSession) -> None:
     assert msg.body_stored is False
     assert msg.is_important is False
     assert msg.labels == []
+
+
+@pytest.mark.asyncio
+async def test_proactive_ping_model_defaults(session: AsyncSession) -> None:
+    session.add(ProactivePing(user_id="u1", source="email", message_ref="m1"))
+    await session.commit()
+
+    ping = (await session.execute(select(ProactivePing))).scalar_one()
+    assert ping.source == "email"
+    assert ping.message_ref == "m1"
+    assert ping.suppressed_reason is None
+    assert ping.fired_at is not None

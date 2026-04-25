@@ -447,3 +447,23 @@ class EmailMessage(Base):
             postgresql_where=sa.text("is_important"),
         ),
     )
+
+
+class ProactivePing(Base):
+    """One row per proactive ping fired. Drives rate limiting + cooldowns.
+
+    source values: 'email' | (future) 'open_loop_age' | 'world_delta' | ...
+    suppressed_reason is null when actually fired; set when this row recorded
+    a suppression decision instead.
+    """
+    __tablename__ = "proactive_pings"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    message_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    fired_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    suppressed_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    __table_args__ = (
+        Index("idx_pings_user_fired", "user_id", "fired_at"),
+    )
