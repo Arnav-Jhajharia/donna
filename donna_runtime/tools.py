@@ -360,7 +360,11 @@ async def composio_search_tools(args):
     "already-connected toolkits are skipped silently. Use when the user "
     "asks to connect a SaaS provider, or you need a tool whose toolkit "
     "is not yet active. Pair with composio_wait_for_connections in the "
-    "next turn (after the user has tapped the URLs) to confirm completion.",
+    "next turn (after the user has tapped the URLs) to confirm completion. "
+    "Do NOT use for google (gmail/calendar) — connect_integration handles "
+    "those with cleaner consent copy. Do NOT call this and "
+    "composio_wait_for_connections in the same turn — the user has not "
+    "tapped the URL yet.",
     {
         "type": "object",
         "properties": {
@@ -392,14 +396,14 @@ async def composio_manage_connections(args):
     )
     lines = []
     for slug, payload in (res.get("results") or {}).items():
-        status = (payload or {}).get("status", "?")
+        status = ((payload or {}).get("status") or "").lower()
         url = (payload or {}).get("redirect_url")
-        if status == "ACTIVE":
+        if status == "active":
             lines.append(f"{slug}: already connected")
         elif url:
             lines.append(f"{slug}: tap to connect {url}")
         else:
-            lines.append(f"{slug}: status={status}")
+            lines.append(f"{slug}: status={status or '?'}")
     return text_content("\n".join(lines) or "no toolkits returned")
 
 
@@ -409,7 +413,10 @@ async def composio_manage_connections(args):
     "Use after composio_manage_connections, on a follow-up turn, to "
     "confirm the user completed the consent flow before executing tools "
     "that depend on those toolkits. mode='all' waits for every toolkit; "
-    "mode='any' returns once one is ACTIVE. Default timeout 120s.",
+    "mode='any' returns once one is active. Default timeout 120s. "
+    "Do NOT call in the same turn as composio_manage_connections — the "
+    "user has not had time to tap the URLs. Do NOT use for google — "
+    "the [INTEGRATIONS] block already shows google connection state.",
     {
         "type": "object",
         "properties": {
@@ -1837,7 +1844,6 @@ DONNA_TOOLS = (
     web_search,
     agentic_web_search,
     research,
-    send_burst,
     connect_integration,
     list_gmail_recent,
     read_gmail_thread,
@@ -1846,4 +1852,5 @@ DONNA_TOOLS = (
     composio_manage_connections,
     composio_wait_for_connections,
     composio_execute_tool,
+    send_burst,  # terminator — must remain last
 )
