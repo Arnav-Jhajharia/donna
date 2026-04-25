@@ -37,6 +37,31 @@ class UserContext:
     user_id: str
     living_profile: str = ""
     active_state: str = ""
+    user_tz: str = "Asia/Singapore"
+
+
+async def load_user_timezone(user_id: str) -> str | None:
+    """Best-effort DB lookup for the user's operational timezone.
+
+    Returns None if the DB is unreachable (CLI/test environments) or the user
+    has no timezone set. Callers should fall back to the UserContext default.
+    """
+    try:
+        from sqlalchemy import select
+
+        from backend.db.models import User
+        from backend.db.session import async_session
+    except Exception:
+        return None
+
+    try:
+        async with async_session() as session:
+            user = (
+                await session.execute(select(User).where(User.id == user_id))
+            ).scalar_one_or_none()
+            return str(user.timezone).strip() if user and user.timezone else None
+    except Exception:
+        return None
 
 
 class NormalizedSignals(BaseModel):

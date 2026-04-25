@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "List unresolved threads (open loops) for this user — what's still owed or pending. "
@@ -18,6 +19,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("postgres.open_loops")
 async def list_open_loops(
     user_id: str, status: str = "active", limit: int = 20
 ) -> ToolResult:

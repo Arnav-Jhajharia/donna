@@ -4,6 +4,7 @@ from __future__ import annotations
 import logging
 import time
 
+from backend.memory.retrieval.attention_boost import apply_attention_boost
 from backend.memory.retrieval.expansion import Intent, expand_query
 from backend.memory.retrieval.fanout import fanout
 from backend.memory.retrieval.rerank import merge_and_rerank
@@ -24,6 +25,7 @@ async def run_retrieval(
     per_query_limit: int = 6,
     use_supermemory: bool = True,
     use_graphiti: bool = True,
+    active_attentions: list[object] | None = None,
 ) -> tuple[list[RetrievalResult], RetrievalTrace]:
     timings: dict[str, int] = {}
     t0 = time.perf_counter()
@@ -50,6 +52,7 @@ async def run_retrieval(
     raw = await fanout(
         user_id=user_id,
         queries=queries,
+        original_message=message,
         per_query_limit=per_query_limit,
         use_supermemory=use_supermemory,
         use_graphiti=use_graphiti,
@@ -64,6 +67,8 @@ async def run_retrieval(
 
     t0 = time.perf_counter()
     final = merge_and_rerank(raw, top_k=top_k)
+    if active_attentions:
+        final = apply_attention_boost(final, active_attentions)
     timings["rerank_ms"] = round((time.perf_counter() - t0) * 1000)
 
     trace = RetrievalTrace(

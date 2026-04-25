@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from backend.memory.clients.graphiti import search_facts
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "Search the user's knowledge graph for facts about people, places, and entities. "
@@ -20,6 +21,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("graphiti")
 async def recall_graph(user_id: str, query: str, limit: int = 8) -> ToolResult:
     try:
         facts = await search_facts(user_id, query, limit=limit)

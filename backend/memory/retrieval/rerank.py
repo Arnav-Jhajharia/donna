@@ -23,7 +23,9 @@ def merge_and_rerank(hits: list[RetrievalResult], top_k: int = 12) -> list[Retri
     best: dict[str, RetrievalResult] = {}
     for group in by_group.values():
         for rank, hit in enumerate(group):
-            rrf[hit.id] += 1.0 / (_RRF_K + rank)
+            rrf[hit.id] += 1.0 / (_RRF_K + rank) + float(
+                hit.metadata.get("structured_priority") or 0.0
+            )
             prev = best.get(hit.id)
             if prev is None or hit.score > prev.score:
                 best[hit.id] = hit

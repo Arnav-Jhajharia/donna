@@ -1,0 +1,954 @@
+[
+  {
+    "raw_intent": "keep an eye on ICA for anything about EP renewal rules",
+    "timings_ms": {
+      "normalize": 2093.1,
+      "retrieve": 0.6,
+      "author": 8976.6,
+      "dry_run": 0.7
+    },
+    "total_ms": 11071.0,
+    "via": "llm",
+    "confidence": 0.82,
+    "retrieved_ids": [
+      "poke_watch",
+      "arxiv_rag",
+      "texts_loop"
+    ],
+    "normalized_signals": {
+      "subject_type": "entity",
+      "pattern": "watch",
+      "duration": "ongoing",
+      "surface_intent": "silent",
+      "domain": "competitive_intel",
+      "urgency": "medium",
+      "subject_name": "ICA"
+    },
+    "normalized_text": "ongoing monitoring of entity, watch, silent, competitive_intel",
+    "spec": {
+      "title": "ICA EP renewal rules",
+      "description": "Monitor ICA (Immigration & Checkpoints Authority) for updates on Employment Pass renewal policies and rules.",
+      "card": "event_stream",
+      "subject": {
+        "name": "ICA",
+        "type": "entity"
+      },
+      "domain_tags": [
+        "work",
+        "logistics"
+      ],
+      "sources": [
+        {
+          "type": "web_google_news",
+          "params": {
+            "query": "ICA Employment Pass renewal rules Singapore"
+          }
+        },
+        {
+          "type": "web_search_google",
+          "params": {
+            "query": "ICA EP renewal requirements policy",
+            "site": "ica.gov.sg",
+            "freshness_days": 30
+          }
+        },
+        {
+          "type": "web_exa",
+          "params": {
+            "query": "ICA Employment Pass renewal rules changes",
+            "num_results": 10
+          }
+        }
+      ],
+      "extractor": {
+        "prompt": "Extract material changes to ICA Employment Pass (EP) renewal rules, eligibility criteria, processing timelines, required documents, or policy announcements. Focus on regulatory updates that affect work visa renewals in Singapore."
+      },
+      "cadence": {
+        "type": "scheduled",
+        "params": {
+          "cron": "0 9 * * 1-5"
+        }
+      },
+      "surface_policy": {
+        "default": "digest",
+        "urgent_if": "change_type in ['eligibility_tightened','deadline_change','new_requirement'] or policy_impact == 'immediate'",
+        "resolve_if": null,
+        "escalations": [],
+        "nudge_policy": null,
+        "quiet_hours_respected": true
+      },
+      "relevance_threshold": 0.65,
+      "dedup": {
+        "key": "id",
+        "window_size": 100
+      },
+      "promotion_criteria": null,
+      "expires_at": null
+    },
+    "usage": {
+      "input_tokens": 718,
+      "output_tokens": 652,
+      "cache_read_tokens": 0,
+      "cache_creation_tokens": 11458,
+      "retries": 0
+    },
+    "cost_usd": 0.018301,
+    "preview_markdown": "## ICA EP renewal rules\n_Monitor ICA (Immigration & Checkpoints Authority) for updates on Employment Pass renewal policies and rules._\n\n**card:** `event_stream` \u00b7 **subject:** ICA (entity)\n\n**sources:**\n- `web_google_news` \u2014 2 item(s)\n- `web_search_google` \u2014 0 item(s)\n- `web_exa` \u2014 2 item(s)\n\n**events (preview):**\n- AI agent market heats up\n- Poke competitor launches beta\n- Poke AI launches new workflow agent\n- Poke raises $20M Series A",
+    "preview_warnings": [
+      "web_search_google: no items"
+    ]
+  },
+  {
+    "raw_intent": "watch RBI, ping me when they move rates",
+    "timings_ms": {
+      "normalize": 1375.9,
+      "retrieve": 0.2,
+      "author": 5996.2,
+      "dry_run": 0.2
+    },
+    "total_ms": 7372.5,
+    "via": "llm",
+    "confidence": 0.88,
+    "retrieved_ids": [
+      "mood_ping",
+      "call_mom_ping",
+      "poke_watch"
+    ],
+    "normalized_signals": {
+      "subject_type": "domain",
+      "pattern": "watch",
+      "duration": "ongoing",
+      "surface_intent": "interrupt",
+      "domain": "finance",
+      "urgency": "high",
+      "subject_name": "RBI"
+    },
+    "normalized_text": "ongoing tracking of domain, watch, interrupt, finance",
+    "spec": {
+      "title": "RBI rate moves",
+      "description": "Track Reserve Bank of India rate decisions and policy announcements.",
+      "card": "event_stream",
+      "subject": {
+        "name": "RBI",
+        "type": "entity"
+      },
+      "domain_tags": [
+        "finance",
+        "work"
+      ],
+      "sources": [
+        {
+          "type": "web_google_news",
+          "params": {
+            "query": "RBI Reserve Bank of India rate decision"
+          }
+        },
+        {
+          "type": "web_exa",
+          "params": {
+            "query": "RBI monetary policy interest rate decision",
+            "num_results": 10
+          }
+        },
+        {
+          "type": "web_search_google",
+          "params": {
+            "query": "RBI policy rate announcement",
+            "freshness_days": 1
+          }
+        }
+      ],
+      "extractor": {
+        "prompt": "Extract RBI rate decisions, policy announcements, and interest rate changes. Include decision date, new rate, direction (hike/cut), and rationale."
+      },
+      "cadence": {
+        "type": "scheduled",
+        "params": {
+          "cron": "0 9 * * 1-5"
+        }
+      },
+      "surface_policy": {
+        "default": "silent",
+        "urgent_if": "action in ['rate_cut','rate_hike','policy_change']",
+        "resolve_if": null,
+        "escalations": [
+          {
+            "condition": "action == 'rate_hike' or action == 'rate_cut'",
+            "level": "urgent"
+          }
+        ],
+        "nudge_policy": null,
+        "quiet_hours_respected": true
+      },
+      "relevance_threshold": 0.7,
+      "dedup": {
+        "key": "id",
+        "window_size": 50
+      },
+      "promotion_criteria": null,
+      "expires_at": null
+    },
+    "usage": {
+      "input_tokens": 710,
+      "output_tokens": 642,
+      "cache_read_tokens": 11458,
+      "cache_creation_tokens": 0,
+      "retries": 0
+    },
+    "cost_usd": 0.005066,
+    "preview_markdown": "## RBI rate moves\n_Track Reserve Bank of India rate decisions and policy announcements._\n\n**card:** `event_stream` \u00b7 **subject:** RBI (entity)\n\n**sources:**\n- `web_google_news` \u2014 2 item(s)\n- `web_exa` \u2014 2 item(s)\n- `web_search_google` \u2014 0 item(s)\n\n**events (preview):**\n- AI agent market heats up\n- Poke competitor launches beta\n- Poke AI launches new workflow agent\n- Poke raises $20M Series A",
+    "preview_warnings": [
+      "web_search_google: no items"
+    ]
+  },
+  {
+    "raw_intent": "track my grab spend this month, flag if i cross 400 sgd",
+    "timings_ms": {
+      "normalize": 1623.5,
+      "retrieve": 0.2,
+      "author": 5163.0,
+      "dry_run": 0.8
+    },
+    "total_ms": 6787.6,
+    "via": "llm",
+    "confidence": 0.92,
+    "retrieved_ids": [
+      "subscriptions_tally",
+      "sleep_tally",
+      "shipment_1z999"
+    ],
+    "normalized_signals": {
+      "subject_type": "entity",
+      "pattern": "loop",
+      "duration": "recurring",
+      "surface_intent": "interrupt",
+      "domain": "travel",
+      "urgency": "medium",
+      "subject_name": "grab spend"
+    },
+    "normalized_text": "recurring tracking of entity grab spend with alert threshold, loop pattern, interrupt surface intent, travel domain",
+    "spec": {
+      "title": "Grab spend",
+      "description": "Monthly tally of Grab charges with alert at 400 SGD threshold.",
+      "card": "tally",
+      "subject": {
+        "name": "Grab spend",
+        "type": "entity"
+      },
+      "domain_tags": [
+        "travel",
+        "finance"
+      ],
+      "sources": [
+        {
+          "type": "gmail_inbox",
+          "params": {
+            "sender_filter": "grab@",
+            "subject_pattern": "receipt|charge|invoice"
+          }
+        }
+      ],
+      "extractor": {
+        "prompt": "Extract each Grab charge amount in SGD from receipt emails. Sum total for the month and flag if cumulative spend exceeds 400 SGD."
+      },
+      "cadence": {
+        "type": "scheduled",
+        "params": {
+          "cron": "0 9 * * *"
+        }
+      },
+      "surface_policy": {
+        "default": "silent",
+        "urgent_if": "total_sgd >= 400",
+        "resolve_if": null,
+        "escalations": [
+          {
+            "condition": "total_sgd >= 400",
+            "level": "notify"
+          }
+        ],
+        "nudge_policy": null,
+        "quiet_hours_respected": true
+      },
+      "relevance_threshold": 0.7,
+      "dedup": {
+        "key": "id",
+        "window_size": 100
+      },
+      "promotion_criteria": null,
+      "expires_at": null
+    },
+    "usage": {
+      "input_tokens": 734,
+      "output_tokens": 529,
+      "cache_read_tokens": 11458,
+      "cache_creation_tokens": 0,
+      "retries": 0
+    },
+    "cost_usd": 0.004525,
+    "preview_markdown": "## Grab spend\n_Monthly tally of Grab charges with alert at 400 SGD threshold._\n\n**card:** `tally` \u00b7 **subject:** Grab spend (entity)\n\n**sources:**\n- `gmail_inbox` \u2014 3 item(s)\n\n**tally:** 3 item(s) across 1 source(s).",
+    "preview_warnings": []
+  },
+  {
+    "raw_intent": "every friday evening summarise how nifty and sgx moved this week",
+    "timings_ms": {
+      "normalize": 1395.1,
+      "retrieve": 0.2,
+      "author": 6870.5,
+      "dry_run": 1.2
+    },
+    "total_ms": 8267.0,
+    "via": "llm",
+    "confidence": 0.88,
+    "retrieved_ids": [
+      "weekly_brief",
+      "mood_ping",
+      "shipment_1z999"
+    ],
+    "normalized_signals": {
+      "subject_type": "domain",
+      "pattern": "track",
+      "duration": "recurring",
+      "surface_intent": "silent",
+      "domain": "finance",
+      "urgency": "medium",
+      "subject_name": ""
+    },
+    "normalized_text": "recurring digest of domain, track, silent, finance",
+    "spec": {
+      "title": "Weekly Nifty & SGX brief",
+      "description": "Friday evening digest of Nifty and SGX weekly price movements and trends.",
+      "card": "brief",
+      "subject": {
+        "name": "Nifty and SGX",
+        "type": "domain"
+      },
+      "domain_tags": [
+        "finance",
+        "work"
+      ],
+      "sources": [
+        {
+          "type": "web_google_news",
+          "params": {
+            "query": "Nifty 50 weekly movement",
+            "country": "IN"
+          }
+        },
+        {
+          "type": "web_google_news",
+          "params": {
+            "query": "SGX Straits Times Index weekly movement",
+            "country": "SG"
+          }
+        },
+        {
+          "type": "web_search_google",
+          "params": {
+            "query": "Nifty 50 weekly close performance",
+            "freshness_days": 7
+          }
+        },
+        {
+          "type": "web_search_google",
+          "params": {
+            "query": "SGX STI weekly close performance",
+            "freshness_days": 7
+          }
+        }
+      ],
+      "extractor": {
+        "prompt": "For the past week, extract: Nifty 50 opening price, closing price, weekly % change, key drivers, and sentiment. Also extract SGX STI opening, closing, weekly % change, key drivers. Highlight any major corporate actions or policy shifts affecting either index."
+      },
+      "cadence": {
+        "type": "scheduled",
+        "params": {
+          "cron": "0 18 * * 5"
+        }
+      },
+      "surface_policy": {
+        "default": "silent",
+        "urgent_if": "abs(nifty_weekly_change_pct) >= 5 or abs(sgx_weekly_change_pct) >= 5",
+        "resolve_if": null,
+        "escalations": [],
+        "nudge_policy": null,
+        "quiet_hours_respected": true
+      },
+      "relevance_threshold": 0.6,
+      "dedup": {
+        "key": "id",
+        "window_size": 100
+      },
+      "promotion_criteria": null,
+      "expires_at": null
+    },
+    "usage": {
+      "input_tokens": 717,
+      "output_tokens": 755,
+      "cache_read_tokens": 11458,
+      "cache_creation_tokens": 0,
+      "retries": 0
+    },
+    "cost_usd": 0.005638,
+    "preview_markdown": "## Weekly Nifty & SGX brief\n_Friday evening digest of Nifty and SGX weekly price movements and trends._\n\n**card:** `brief` \u00b7 **subject:** Nifty and SGX (domain)\n\n**sources:**\n- `web_google_news` \u2014 2 item(s)\n- `web_google_news` \u2014 2 item(s)\n- `web_search_google` \u2014 0 item(s)\n- `web_search_google` \u2014 0 item(s)\n\n**brief:** would synthesize 4 items from 4 source(s) via Haiku at cadence `scheduled`.",
+    "preview_warnings": [
+      "web_search_google: no items",
+      "web_search_google: no items"
+    ]
+  },
+  {
+    "raw_intent": "monday 8am digest of indian startup funding rounds over 5m",
+    "timings_ms": {
+      "normalize": 1689.2,
+      "retrieve": 0.1,
+      "author": 6602.2,
+      "dry_run": 0.5
+    },
+    "total_ms": 8292.1,
+    "via": "llm",
+    "confidence": 0.92,
+    "retrieved_ids": [
+      "podcast_brief",
+      "series_a_watch",
+      "sleep_tally"
+    ],
+    "normalized_signals": {
+      "subject_type": "domain",
+      "pattern": "brief",
+      "duration": "recurring",
+      "surface_intent": "silent",
+      "domain": "fundraising",
+      "urgency": "medium",
+      "subject_name": ""
+    },
+    "normalized_text": "recurring monitoring of domain, brief, silent, fundraising for monday 8am digest of indian startup funding rounds over 5m",
+    "spec": {
+      "title": "Indian startup funding >$5M",
+      "description": "Weekly digest of Indian startup funding rounds exceeding $5M, delivered Monday 8am.",
+      "card": "brief",
+      "subject": {
+        "name": "Indian startup funding",
+        "type": "domain"
+      },
+      "domain_tags": [
+        "fundraising",
+        "work"
+      ],
+      "sources": [
+        {
+          "type": "web_google_news",
+          "params": {
+            "query": "Indian startup funding round Series A Series B 5 million",
+            "country": "IN"
+          }
+        },
+        {
+          "type": "web_exa",
+          "params": {
+            "query": "India startup fundraising rounds above 5 million 2024",
+            "num_results": 15
+          }
+        },
+        {
+          "type": "web_search_google",
+          "params": {
+            "query": "Indian startups funding rounds $5M+ site:techcrunch.com OR site:thepitch.in OR site:yourstory.com",
+            "freshness_days": 7
+          }
+        }
+      ],
+      "extractor": {
+        "prompt": "Extract each funding round: startup name, amount (USD), round type (Series A/B/C/other), lead investor, use case, and founding team if notable. Summarize the funding landscape for the week."
+      },
+      "cadence": {
+        "type": "scheduled",
+        "params": {
+          "cron": "0 8 * * 1"
+        }
+      },
+      "surface_policy": {
+        "default": "digest",
+        "urgent_if": "amount_usd >= 50_000_000",
+        "resolve_if": null,
+        "escalations": [],
+        "nudge_policy": null,
+        "quiet_hours_respected": true
+      },
+      "relevance_threshold": 0.7,
+      "dedup": {
+        "key": "id",
+        "window_size": 100
+      },
+      "promotion_criteria": null,
+      "expires_at": null
+    },
+    "usage": {
+      "input_tokens": 732,
+      "output_tokens": 678,
+      "cache_read_tokens": 11458,
+      "cache_creation_tokens": 0,
+      "retries": 0
+    },
+    "cost_usd": 0.005268,
+    "preview_markdown": "## Indian startup funding >$5M\n_Weekly digest of Indian startup funding rounds exceeding $5M, delivered Monday 8am._\n\n**card:** `brief` \u00b7 **subject:** Indian startup funding (domain)\n\n**sources:**\n- `web_google_news` \u2014 2 item(s)\n- `web_exa` \u2014 2 item(s)\n- `web_search_google` \u2014 0 item(s)\n\n**brief:** would synthesize 4 items from 3 source(s) via Haiku at cadence `scheduled`.",
+    "preview_warnings": [
+      "web_search_google: no items"
+    ]
+  },
+  {
+    "raw_intent": "30 min before any call with a mumbai client pull their last 3 emails",
+    "timings_ms": {
+      "normalize": 1790.3,
+      "retrieve": 0.1,
+      "author": 5432.9,
+      "dry_run": 18.0
+    },
+    "total_ms": 7241.3,
+    "via": "llm",
+    "confidence": 0.85,
+    "retrieved_ids": [
+      "call_mom_ping",
+      "flight_prep",
+      "sarah_prep"
+    ],
+    "normalized_signals": {
+      "subject_type": "entity",
+      "pattern": "prep",
+      "duration": "recurring",
+      "surface_intent": "interrupt",
+      "domain": "work",
+      "urgency": "high",
+      "subject_name": "mumbai client"
+    },
+    "normalized_text": "recurring monitoring of entity, prep, interrupt, work",
+    "spec": {
+      "title": "Prep for Mumbai client call",
+      "description": "Pull last 3 emails from Mumbai client 30 minutes before any scheduled call.",
+      "card": "prep_doc",
+      "subject": {
+        "name": "Mumbai client",
+        "type": "entity"
+      },
+      "domain_tags": [
+        "work",
+        "meeting"
+      ],
+      "sources": [
+        {
+          "type": "calendar_events",
+          "params": {
+            "title_pattern": "call|meeting",
+            "attendee_filter": "mumbai"
+          }
+        },
+        {
+          "type": "gmail_inbox",
+          "params": {
+            "sender_filter": "mumbai"
+          }
+        }
+      ],
+      "extractor": {
+        "prompt": "For the upcoming call with the Mumbai client, retrieve the last 3 emails from that sender. Include subject, date, and key context (deal status, open items, previous commitments)."
+      },
+      "cadence": {
+        "type": "on_event",
+        "params": {
+          "event_source": "calendar_events",
+          "lead_minutes": 30
+        }
+      },
+      "surface_policy": {
+        "default": "notify",
+        "urgent_if": null,
+        "resolve_if": null,
+        "escalations": [],
+        "nudge_policy": null,
+        "quiet_hours_respected": true
+      },
+      "relevance_threshold": 0.65,
+      "dedup": {
+        "key": "id",
+        "window_size": 50
+      },
+      "promotion_criteria": null,
+      "expires_at": null
+    },
+    "usage": {
+      "input_tokens": 727,
+      "output_tokens": 549,
+      "cache_read_tokens": 11458,
+      "cache_creation_tokens": 0,
+      "retries": 0
+    },
+    "cost_usd": 0.004618,
+    "preview_markdown": "## Prep for Mumbai client call\n_Pull last 3 emails from Mumbai client 30 minutes before any scheduled call._\n\n**card:** `prep_doc` \u00b7 **subject:** Mumbai client (entity)\n\n**sources:**\n- `calendar_events` \u2014 6 item(s)\n- `gmail_inbox` \u2014 3 item(s)\n\n**prep_doc** for subject `Mumbai client`: would fuse 9 items into talking points.",
+    "preview_warnings": []
+  },
+  {
+    "raw_intent": "brief me before my 1:1 with the dbs rm next wed",
+    "timings_ms": {
+      "normalize": 1572.3,
+      "retrieve": 0.1,
+      "author": 5567.1,
+      "dry_run": 0.6
+    },
+    "total_ms": 7140.2,
+    "via": "llm",
+    "confidence": 0.88,
+    "retrieved_ids": [
+      "sarah_prep",
+      "weekly_brief",
+      "flight_prep"
+    ],
+    "normalized_signals": {
+      "subject_type": "entity",
+      "pattern": "prep",
+      "duration": "one_shot",
+      "surface_intent": "interrupt",
+      "domain": "finance",
+      "urgency": "high",
+      "subject_name": "dbs rm"
+    },
+    "normalized_text": "one_shot preparation for entity, prep pattern, interrupt surface intent, finance domain",
+    "spec": {
+      "title": "Prep for 1:1 with DBS RM",
+      "description": "Prep doc ahead of 1:1 meeting with DBS Relationship Manager next Wednesday.",
+      "card": "prep_doc",
+      "subject": {
+        "name": "DBS RM",
+        "type": "entity"
+      },
+      "domain_tags": [
+        "finance",
+        "meeting",
+        "work"
+      ],
+      "sources": [
+        {
+          "type": "calendar_events",
+          "params": {
+            "title_pattern": "1:1 with DBS RM",
+            "lookahead_days": 7
+          }
+        },
+        {
+          "type": "entity_memory",
+          "params": {
+            "entity_name": "DBS RM"
+          }
+        },
+        {
+          "type": "gmail_inbox",
+          "params": {
+            "sender_filter": "dbs"
+          }
+        }
+      ],
+      "extractor": {
+        "prompt": "For the upcoming 1:1 with DBS RM, extract: recent account activity, outstanding loan or credit requests, key financial metrics from seed round, and any pending approvals or next steps from previous conversations."
+      },
+      "cadence": {
+        "type": "on_event",
+        "params": {
+          "event_source": "calendar_events",
+          "lead_minutes": 60
+        }
+      },
+      "surface_policy": {
+        "default": "notify",
+        "urgent_if": null,
+        "resolve_if": null,
+        "escalations": [],
+        "nudge_policy": null,
+        "quiet_hours_respected": true
+      },
+      "relevance_threshold": 0.6,
+      "dedup": {
+        "key": "id",
+        "window_size": 100
+      },
+      "promotion_criteria": null,
+      "expires_at": null
+    },
+    "usage": {
+      "input_tokens": 728,
+      "output_tokens": 633,
+      "cache_read_tokens": 11458,
+      "cache_creation_tokens": 0,
+      "retries": 0
+    },
+    "cost_usd": 0.005039,
+    "preview_markdown": "## Prep for 1:1 with DBS RM\n_Prep doc ahead of 1:1 meeting with DBS Relationship Manager next Wednesday._\n\n**card:** `prep_doc` \u00b7 **subject:** DBS RM (entity)\n\n**sources:**\n- `calendar_events` \u2014 6 item(s)\n- `entity_memory` \u2014 0 item(s)\n- `gmail_inbox` \u2014 3 item(s)\n\n**prep_doc** for subject `DBS RM`: would fuse 9 items into talking points.",
+    "preview_warnings": [
+      "entity_memory: no items"
+    ]
+  },
+  {
+    "raw_intent": "chase the iras gst refund, nudge me if nothing in 10 days",
+    "timings_ms": {
+      "normalize": 2145.8,
+      "retrieve": 0.1,
+      "author": 6333.3,
+      "dry_run": 0.4
+    },
+    "total_ms": 8479.6,
+    "via": "llm",
+    "confidence": 0.75,
+    "retrieved_ids": [
+      "series_a_watch",
+      "mood_ping",
+      "water_habit"
+    ],
+    "normalized_signals": {
+      "subject_type": "entity",
+      "pattern": "track",
+      "duration": "recurring",
+      "surface_intent": "interrupt",
+      "domain": "finance",
+      "urgency": "medium",
+      "subject_name": "iras gst refund"
+    },
+    "normalized_text": "recurring tracking of entity, track, interrupt, finance",
+    "spec": {
+      "title": "IRAS GST refund chase",
+      "description": "Track IRAS GST refund status and nudge if no update within 10 days.",
+      "card": "open_loop",
+      "subject": {
+        "name": "IRAS GST refund",
+        "type": "entity"
+      },
+      "domain_tags": [
+        "finance",
+        "openloop"
+      ],
+      "sources": [
+        {
+          "type": "gmail_inbox",
+          "params": {
+            "subject_pattern": "GST|refund|IRAS"
+          }
+        },
+        {
+          "type": "internal_observations",
+          "params": {
+            "tag": "iras_gst_refund",
+            "schema_hint": "status:string, amount:float, date_applied:date"
+          }
+        }
+      ],
+      "extractor": {
+        "prompt": "Extract any status updates from IRAS about the GST refund; note amount, application date, and current status (pending, approved, rejected, disbursed)."
+      },
+      "cadence": {
+        "type": "scheduled",
+        "params": {
+          "cron": "0 10 * * 1-5"
+        }
+      },
+      "surface_policy": {
+        "default": "silent",
+        "urgent_if": "status == 'approved' or status == 'disbursed'",
+        "resolve_if": "status == 'disbursed'",
+        "escalations": [],
+        "nudge_policy": {
+          "if_silent_for_seconds": 864000,
+          "nudge_via": "whatsapp",
+          "nudge_text": "any update on the IRAS GST refund?"
+        },
+        "quiet_hours_respected": true
+      },
+      "relevance_threshold": 0.6,
+      "dedup": {
+        "key": "id",
+        "window_size": 50
+      },
+      "promotion_criteria": null,
+      "expires_at": null
+    },
+    "usage": {
+      "input_tokens": 731,
+      "output_tokens": 670,
+      "cache_read_tokens": 11458,
+      "cache_creation_tokens": 0,
+      "retries": 0
+    },
+    "cost_usd": 0.005227,
+    "preview_markdown": "## IRAS GST refund chase\n_Track IRAS GST refund status and nudge if no update within 10 days._\n\n**card:** `open_loop` \u00b7 **subject:** IRAS GST refund (entity)\n\n**sources:**\n- `gmail_inbox` \u2014 3 item(s)\n- `internal_observations` \u2014 2 item(s)\n\n**open_loop:** tracking `IRAS GST refund` \u2014 5 candidate thread(s).",
+    "preview_warnings": []
+  },
+  {
+    "raw_intent": "close the loop on the term sheet we sent accel last tuesday",
+    "timings_ms": {
+      "normalize": 2023.8,
+      "retrieve": 0.2,
+      "author": 7678.4,
+      "dry_run": 0.2
+    },
+    "total_ms": 9702.6,
+    "via": "llm",
+    "confidence": 0.85,
+    "retrieved_ids": [
+      "texts_loop",
+      "investor_loop",
+      "weekly_brief"
+    ],
+    "normalized_signals": {
+      "subject_type": "entity",
+      "pattern": "track",
+      "duration": "one_shot",
+      "surface_intent": "digest",
+      "domain": "fundraising",
+      "urgency": "high",
+      "subject_name": "accel term sheet"
+    },
+    "normalized_text": "one_shot tracking of entity, track, digest, fundraising",
+    "spec": {
+      "title": "Accel term sheet follow-up",
+      "description": "Track pending response on term sheet sent to Accel last Tuesday.",
+      "card": "open_loop",
+      "subject": {
+        "name": "Accel term sheet",
+        "type": "entity"
+      },
+      "domain_tags": [
+        "fundraising",
+        "openloop",
+        "work"
+      ],
+      "sources": [
+        {
+          "type": "gmail_inbox",
+          "params": {
+            "subject_pattern": "term sheet|accel",
+            "sender_filter": "accel"
+          }
+        },
+        {
+          "type": "entity_memory",
+          "params": {
+            "entity_name": "Accel"
+          }
+        }
+      ],
+      "extractor": {
+        "prompt": "Track the term sheet thread with Accel. Detect whether we are waiting on their response or they're waiting on us. Flag any new messages, counter-offers, or sign-off signals. Mark as resolved if term sheet is signed or deal is closed."
+      },
+      "cadence": {
+        "type": "on_event",
+        "params": {
+          "event_source": "gmail_inbox"
+        }
+      },
+      "surface_policy": {
+        "default": "digest",
+        "urgent_if": "waiting_on == 'accel' and days_since_sent >= 5",
+        "resolve_if": "is_signed == true or deal_status == 'closed'",
+        "escalations": [
+          {
+            "condition": "waiting_on == 'me' and days_stale >= 3",
+            "level": "urgent"
+          }
+        ],
+        "nudge_policy": {
+          "if_silent_for_seconds": 259200,
+          "nudge_via": "whatsapp",
+          "nudge_text": "any update on the accel term sheet?"
+        },
+        "quiet_hours_respected": true
+      },
+      "relevance_threshold": 0.7,
+      "dedup": {
+        "key": "id",
+        "window_size": 50
+      },
+      "promotion_criteria": null,
+      "expires_at": null
+    },
+    "usage": {
+      "input_tokens": 721,
+      "output_tokens": 711,
+      "cache_read_tokens": 11458,
+      "cache_creation_tokens": 0,
+      "retries": 0
+    },
+    "cost_usd": 0.005422,
+    "preview_markdown": "## Accel term sheet follow-up\n_Track pending response on term sheet sent to Accel last Tuesday._\n\n**card:** `open_loop` \u00b7 **subject:** Accel term sheet (entity)\n\n**sources:**\n- `gmail_inbox` \u2014 3 item(s)\n- `entity_memory` \u2014 0 item(s)\n\n**open_loop:** tracking `Accel term sheet` \u2014 3 candidate thread(s).",
+    "preview_warnings": [
+      "entity_memory: no items"
+    ]
+  },
+  {
+    "raw_intent": "remind me to pay mcst on the 5th every month",
+    "timings_ms": {
+      "normalize": 0.0,
+      "retrieve": 0.1,
+      "author": 0.1,
+      "dry_run": 0.0
+    },
+    "total_ms": 0.2,
+    "via": "ping_shortcircuit",
+    "confidence": 0.9,
+    "retrieved_ids": [],
+    "normalized_signals": {
+      "subject_type": "event",
+      "pattern": "prep",
+      "duration": "one_shot",
+      "surface_intent": "interrupt",
+      "domain": "work",
+      "urgency": "medium",
+      "subject_name": "remind me to pay mcst on the 5th every month"
+    },
+    "normalized_text": "remind me to pay mcst on the 5th every month",
+    "spec": {
+      "title": "remind me to pay mcst on the 5th every month",
+      "description": "One-shot reminder: remind me to pay mcst on the 5th every month",
+      "card": "ping",
+      "subject": {
+        "name": "remind me to pay mcst on the 5th every month",
+        "type": "event"
+      },
+      "domain_tags": [
+        "work",
+        "reminder"
+      ],
+      "sources": [
+        {
+          "type": "user_elicitation",
+          "params": {
+            "question": "remind me to pay mcst on the 5th every month",
+            "expected_shape": "confirmation"
+          }
+        }
+      ],
+      "extractor": {
+        "prompt": "Deliver the reminder message at trigger time."
+      },
+      "cadence": {
+        "type": "one_shot",
+        "params": {
+          "trigger_at": "2026-04-22T09:52:53.818426+00:00"
+        }
+      },
+      "surface_policy": {
+        "default": "notify",
+        "urgent_if": null,
+        "resolve_if": null,
+        "escalations": [],
+        "nudge_policy": null,
+        "quiet_hours_respected": true
+      },
+      "relevance_threshold": 0.5,
+      "dedup": {
+        "key": "id",
+        "window_size": 100
+      },
+      "promotion_criteria": null,
+      "expires_at": null
+    },
+    "usage": null,
+    "cost_usd": null,
+    "preview_markdown": "## remind me to pay mcst on the 5th every month\n_One-shot reminder: remind me to pay mcst on the 5th every month_\n\n**card:** `ping` \u00b7 **subject:** remind me to pay mcst on the 5th every month (event)\n\n**sources:**\n- `user_elicitation` \u2014 1 item(s)\n\n**ping:** `remind me to pay mcst on the 5th every month` \u2014 fire: `2026-04-22T09:52:53.818426+00:00`",
+    "preview_warnings": []
+  }
+]

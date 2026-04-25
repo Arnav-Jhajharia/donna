@@ -1,7 +1,12 @@
 """track_open_loop — capture an unresolved thread."""
 from __future__ import annotations
 
+import logging
+
 from backend.memory.tools._shape import ToolResult, degraded, ok
+from donna_runtime.observability import instrument_memory_op
+
+logger = logging.getLogger(__name__)
 
 DESCRIPTION = (
     "Record an unresolved thread (something the user said they'd follow up on, "
@@ -18,6 +23,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("postgres.open_loops")
 async def track_open_loop(
     user_id: str, content: str, source_message: str | None = None
 ) -> ToolResult:
@@ -32,6 +38,17 @@ async def track_open_loop(
             session.add(loop)
             await session.commit()
             await session.refresh(loop)
-            return ok({"id": loop.id})
+            refreshed = await _refresh_situation_brief(user_id)
+            return ok({"id": loop.id, "situation_brief_refreshed": refreshed})
     except Exception:
         return degraded("db error")
+
+
+async def _refresh_situation_brief(user_id: str) -> bool:
+    try:
+        from backend.memory.tools.refresh_situation_brief import refresh_situation_brief_best_effort
+
+        return await refresh_situation_brief_best_effort(user_id)
+    except Exception:
+        logger.exception("track_open_loop: situation brief refresh failed")
+        return False

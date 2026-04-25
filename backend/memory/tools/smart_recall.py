@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from backend.memory.retrieval.pipeline import run_retrieval
 from backend.memory.tools._shape import ToolResult, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "Fuzzy recall across episodes + knowledge graph when you don't know where to look. "
@@ -20,6 +21,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("pipeline")
 async def smart_recall(user_id: str, message: str, top_k: int = 8) -> ToolResult:
     results, trace = await run_retrieval(user_id=user_id, message=message, top_k=top_k)
     if not results:

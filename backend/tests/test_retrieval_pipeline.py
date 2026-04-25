@@ -49,3 +49,19 @@ def test_rerank_preserves_best_metadata():
     ]
     out = merge_and_rerank(hits, top_k=1)
     assert out[0].content == "high"
+
+
+def test_rerank_respects_structured_priority():
+    semantic = _hit("gt:a", "graphiti", 1.0, "q1")
+    structured = RetrievalResult(
+        id="obs:summary:a",
+        source="observations",
+        content="expense total 6 usd",
+        score=1.0,
+        retrieved_via="q1",
+        metadata={"structured_priority": 0.08},
+    )
+
+    out = merge_and_rerank([semantic, structured], top_k=2)
+
+    assert out[0].id == "obs:summary:a"

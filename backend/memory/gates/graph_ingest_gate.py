@@ -33,7 +33,7 @@ class GateInput:
     inbound: str
     outbound: Sequence[str]
     tool_names: Sequence[str]
-    terminator: str  # "send_burst" | "stay_silent"
+    terminator: str  # "send_burst"
 
 
 @dataclass(frozen=True)
@@ -53,8 +53,6 @@ def _fast_reject(g: GateInput) -> GateVerdict | None:
         return GateVerdict(False, "inbound too short", "fast_reject")
     if g.inbound.strip().lower() in AMBIENT_FILLER:
         return GateVerdict(False, "ambient filler", "fast_reject")
-    if g.terminator == "stay_silent" and len(g.tool_names) <= 1:
-        return GateVerdict(False, "stay_silent with no tool work", "fast_reject")
     return None
 
 

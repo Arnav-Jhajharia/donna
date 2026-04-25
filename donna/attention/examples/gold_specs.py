@@ -368,6 +368,227 @@ def _call_mom_ping() -> AttentionSpec:
     )
 
 
+def _rbi_rate_watch() -> AttentionSpec:
+    return AttentionSpec(
+        title="RBI rate decision watch",
+        description="Ambient monitoring of Reserve Bank of India for monetary policy and repo rate decisions.",
+        card=CardType.EVENT_STREAM,
+        subject=Subject(name="RBI", type=SubjectType.ENTITY),
+        domain_tags=[DomainTag.FINANCE, DomainTag.WORK],
+        sources=[
+            Source(
+                type=SourceType.WEB_GOOGLE_NEWS,
+                params={"query": "RBI repo rate monetary policy India", "country": "IN"},
+            ),
+            Source(
+                type=SourceType.WEB_RSS,
+                params={"feed_url": "https://www.rbi.org.in/Scripts/Rss.aspx"},
+            ),
+            Source(
+                type=SourceType.WEB_EXA,
+                params={"query": "Reserve Bank of India repo rate decision MPC", "num_results": 10},
+            ),
+        ],
+        extractor=Extractor(
+            prompt="Extract RBI MPC outcomes: rate change direction, basis points, stance, next meeting."
+        ),
+        cadence=Cadence(type=CadenceType.SCHEDULED, params={"cron": "0 10 * * 1-5"}),
+        surface_policy=SurfacePolicy(
+            default=SurfaceLevel.DIGEST,
+            urgent_if="event_type in ['rate_decision','policy_stance_change']",
+        ),
+        relevance_threshold=0.6,
+    )
+
+
+def _iras_gst_refund_loop() -> AttentionSpec:
+    return AttentionSpec(
+        title="IRAS GST refund chase",
+        description="Open loop tracking the IRAS GST refund until it lands.",
+        card=CardType.OPEN_LOOP,
+        subject=Subject(name="IRAS GST refund", type=SubjectType.THREAD),
+        domain_tags=[DomainTag.FINANCE, DomainTag.OPENLOOP],
+        sources=[
+            Source(
+                type=SourceType.GMAIL_INBOX,
+                params={"subject_pattern": "iras|gst|refund|tax"},
+            ),
+            Source(
+                type=SourceType.INTERNAL_OBSERVATIONS,
+                params={"tag": "iras_gst_refund", "schema_hint": "status:str, last_update:date"},
+            ),
+        ],
+        extractor=Extractor(
+            prompt="Detect IRAS refund status: filed, processing, approved, paid. Flag if stale >10 days."
+        ),
+        cadence=Cadence(type=CadenceType.SCHEDULED, params={"cron": "0 9 * * 1-5"}),
+        surface_policy=SurfacePolicy(
+            default=SurfaceLevel.DIGEST,
+            urgent_if="days_stale >= 10",
+            resolve_if="status == 'paid'",
+        ),
+        relevance_threshold=0.55,
+    )
+
+
+def _ica_ep_renewal_watch() -> AttentionSpec:
+    return AttentionSpec(
+        title="ICA EP renewal policy watch",
+        description="Ambient monitoring of ICA for Employment Pass renewal policy changes.",
+        card=CardType.EVENT_STREAM,
+        subject=Subject(name="ICA EP policy", type=SubjectType.DOMAIN),
+        domain_tags=[DomainTag.WORK, DomainTag.RESEARCH],
+        sources=[
+            Source(
+                type=SourceType.WEB_SEARCH_GOOGLE,
+                params={"query": "employment pass renewal rules site:ica.gov.sg", "site": "ica.gov.sg"},
+            ),
+            Source(
+                type=SourceType.WEB_GOOGLE_NEWS,
+                params={"query": "Singapore ICA Employment Pass renewal policy", "country": "SG"},
+            ),
+            Source(
+                type=SourceType.WEB_EXA,
+                params={"query": "Singapore ICA EP renewal rule change", "num_results": 10},
+            ),
+        ],
+        extractor=Extractor(
+            prompt="Extract EP renewal rule changes: eligibility, salary thresholds, processing time, deadlines."
+        ),
+        cadence=Cadence(type=CadenceType.SCHEDULED, params={"cron": "0 10 * * 1"}),
+        surface_policy=SurfacePolicy(
+            default=SurfaceLevel.DIGEST,
+            urgent_if="event_type == 'policy_change'",
+        ),
+        relevance_threshold=0.6,
+    )
+
+
+def _sgx_nifty_weekly_brief() -> AttentionSpec:
+    return AttentionSpec(
+        title="SGX and Nifty weekly brief",
+        description="Friday evening recap of SGX and Nifty market moves for the week.",
+        card=CardType.BRIEF,
+        subject=Subject(name="SGX and Nifty", type=SubjectType.DOMAIN),
+        domain_tags=[DomainTag.FINANCE, DomainTag.WORK],
+        sources=[
+            Source(
+                type=SourceType.WEB_GOOGLE_NEWS,
+                params={"query": "Nifty 50 weekly close sensex", "country": "IN"},
+            ),
+            Source(
+                type=SourceType.WEB_GOOGLE_NEWS,
+                params={"query": "SGX STI weekly close Singapore", "country": "SG"},
+            ),
+            Source(
+                type=SourceType.WEB_SEARCH_GOOGLE,
+                params={"query": "Nifty weekly performance sectors", "freshness_days": 7},
+            ),
+            Source(
+                type=SourceType.WEB_SEARCH_GOOGLE,
+                params={"query": "SGX STI weekly movers", "freshness_days": 7},
+            ),
+        ],
+        extractor=Extractor(
+            prompt="Summarise week-on-week index moves, top sector winners/losers, notable SG and IN stocks."
+        ),
+        cadence=Cadence(type=CadenceType.SCHEDULED, params={"cron": "0 18 * * 5"}),
+        surface_policy=SurfacePolicy(default=SurfaceLevel.NOTIFY),
+        relevance_threshold=0.55,
+    )
+
+
+def _mcst_monthly_ping() -> AttentionSpec:
+    return AttentionSpec(
+        title="MCST payment reminder",
+        description="Monthly ping on the 5th to pay MCST maintenance fees.",
+        card=CardType.PING,
+        subject=Subject(name="MCST payment", type=SubjectType.EVENT),
+        domain_tags=[DomainTag.REMINDER, DomainTag.FINANCE],
+        sources=[
+            Source(
+                type=SourceType.USER_ELICITATION,
+                params={"question": "pay mcst for this month?", "expected_shape": "confirmation"},
+            ),
+        ],
+        extractor=Extractor(prompt="Deliver the MCST payment reminder on the scheduled day."),
+        cadence=Cadence(type=CadenceType.SCHEDULED, params={"cron": "0 9 5 * *"}),
+        surface_policy=SurfacePolicy(default=SurfaceLevel.NOTIFY),
+        relevance_threshold=0.5,
+    )
+
+
+def _dbs_rm_prep() -> AttentionSpec:
+    return AttentionSpec(
+        title="Prep for DBS RM meeting",
+        description="Prep doc ahead of any calendar event with the DBS relationship manager.",
+        card=CardType.PREP_DOC,
+        subject=Subject(name="DBS RM", type=SubjectType.ENTITY),
+        domain_tags=[DomainTag.MEETING, DomainTag.FINANCE],
+        sources=[
+            Source(
+                type=SourceType.CALENDAR_EVENTS,
+                params={"title_pattern": "dbs|rm|relationship manager", "lookahead_days": 14},
+            ),
+            Source(type=SourceType.ENTITY_MEMORY, params={"entity_name": "DBS RM"}),
+            Source(type=SourceType.GMAIL_INBOX, params={"sender_filter": "dbs"}),
+        ],
+        extractor=Extractor(
+            prompt="For the DBS RM meeting, list account context, open items, questions to ask, docs to bring."
+        ),
+        cadence=Cadence(
+            type=CadenceType.ON_EVENT, params={"event_source": "calendar_events", "lead_minutes": 60}
+        ),
+        surface_policy=SurfacePolicy(default=SurfaceLevel.NOTIFY),
+        relevance_threshold=0.6,
+    )
+
+
+def _hdb_lease_ping() -> AttentionSpec:
+    return AttentionSpec(
+        title="HDB lease renewal reminder",
+        description="One-shot reminder to renew HDB lease in March 2027.",
+        card=CardType.PING,
+        subject=Subject(name="HDB lease renewal", type=SubjectType.EVENT),
+        domain_tags=[DomainTag.REMINDER, DomainTag.WORK],
+        sources=[
+            Source(
+                type=SourceType.USER_ELICITATION,
+                params={"question": "renew hdb lease now?", "expected_shape": "confirmation"},
+            ),
+        ],
+        extractor=Extractor(prompt="Deliver the HDB lease renewal reminder at the trigger time."),
+        cadence=Cadence(
+            type=CadenceType.ONE_SHOT, params={"trigger_at": "2027-03-01T09:00:00+08:00"}
+        ),
+        surface_policy=SurfacePolicy(default=SurfaceLevel.NOTIFY),
+        relevance_threshold=0.5,
+    )
+
+
+def _grab_spend_tally() -> AttentionSpec:
+    return AttentionSpec(
+        title="Grab spend tally",
+        description="Monthly tally of Grab charges from inbox receipts.",
+        card=CardType.TALLY,
+        subject=Subject(name="grab spend", type=SubjectType.DOMAIN),
+        domain_tags=[DomainTag.FINANCE, DomainTag.SUBSCRIPTION],
+        sources=[
+            Source(
+                type=SourceType.GMAIL_INBOX,
+                params={"sender_filter": "grab", "subject_pattern": "receipt|charge"},
+            ),
+        ],
+        extractor=Extractor(prompt="Extract amount and ride/food category from each Grab receipt."),
+        cadence=Cadence(type=CadenceType.SCHEDULED, params={"cron": "0 21 * * *"}),
+        surface_policy=SurfacePolicy(
+            default=SurfaceLevel.SILENT,
+            urgent_if="month_to_date_sgd > 400",
+        ),
+        relevance_threshold=0.6,
+    )
+
+
 def _mood_ping() -> AttentionSpec:
     return AttentionSpec(
         title="Mood check-in",
@@ -552,6 +773,123 @@ GOLD_EXAMPLES: tuple[GoldExample, ...] = (
         context_signals=("ping", "one-shot time"),
         spec=_call_mom_ping(),
         rationale={"card": "Bare reminder → card=Ping short-circuit."},
+    ),
+    GoldExample(
+        example_id="rbi_rate_watch",
+        intent_examples=(
+            "watch rbi for rate decisions",
+            "ping me when rbi moves rates",
+            "keep an eye on indian monetary policy",
+            "let me know when repo rate changes",
+        ),
+        context_signals=("rbi", "repo rate", "mpc", "india monetary policy", "rate decision"),
+        spec=_rbi_rate_watch(),
+        rationale={
+            "card": "Event stream on an indian regulator entity.",
+            "sources": "News + official RSS + exa catches RBI MPC calls and policy stance shifts.",
+        },
+    ),
+    GoldExample(
+        example_id="iras_gst_refund_loop",
+        intent_examples=(
+            "chase the iras gst refund",
+            "track my iras gst refund, nudge me if nothing in 10 days",
+            "follow up on the singapore gst refund",
+            "keep tabs on my iras tax refund",
+        ),
+        context_signals=("iras", "gst", "refund", "singapore tax", "stale follow up"),
+        spec=_iras_gst_refund_loop(),
+        rationale={
+            "card": "Open loop — the refund is pending and terminates when paid.",
+            "sources": "Inbox receipts from iras plus self-logged status observations.",
+        },
+    ),
+    GoldExample(
+        example_id="ica_ep_renewal_watch",
+        intent_examples=(
+            "watch ica for ep renewal policy changes",
+            "keep an eye on ica for anything about ep renewal rules",
+            "notify me if singapore employment pass rules shift",
+            "track ica ep renewal policy",
+        ),
+        context_signals=("ica", "employment pass", "ep renewal", "singapore immigration", "policy change"),
+        spec=_ica_ep_renewal_watch(),
+        rationale={
+            "card": "Event stream on a regulatory domain with infrequent but material changes.",
+            "sources": "Site search of ica.gov.sg plus general news plus exa.",
+        },
+    ),
+    GoldExample(
+        example_id="sgx_nifty_weekly_brief",
+        intent_examples=(
+            "every friday summarise sgx and nifty",
+            "give me a weekly sgx and nifty brief",
+            "recap how nifty and sgx moved this week",
+            "friday evening markets digest for india and singapore",
+        ),
+        context_signals=("sgx", "nifty", "sti", "weekly brief", "india singapore markets"),
+        spec=_sgx_nifty_weekly_brief(),
+        rationale={
+            "card": "Brief synthesises index moves across two geographies.",
+            "cadence": "Friday 6pm cron fits the weekly market close rhythm.",
+        },
+    ),
+    GoldExample(
+        example_id="mcst_monthly_ping",
+        intent_examples=(
+            "remind me to pay mcst on the 5th",
+            "ping me every month on the 5th to pay mcst",
+            "monthly mcst maintenance reminder",
+            "don't let me forget mcst payment each month",
+        ),
+        context_signals=("mcst", "condo maintenance", "monthly bill", "singapore", "payment reminder"),
+        spec=_mcst_monthly_ping(),
+        rationale={
+            "card": "Bare recurring reminder → ping with a user elicitation source.",
+            "cadence": "Scheduled cron on day 5 of each month.",
+        },
+    ),
+    GoldExample(
+        example_id="dbs_rm_prep",
+        intent_examples=(
+            "brief me before my dbs rm meeting",
+            "prep doc for the dbs relationship manager sync",
+            "context for next meeting with my dbs rm",
+            "get me ready for the dbs rm call",
+        ),
+        context_signals=("dbs", "relationship manager", "private bank", "meeting prep", "singapore"),
+        spec=_dbs_rm_prep(),
+        rationale={
+            "card": "Prep doc triggered by a calendar event with a known entity.",
+            "sources": "Calendar title match plus entity memory plus inbox from the bank domain.",
+        },
+    ),
+    GoldExample(
+        example_id="hdb_lease_ping",
+        intent_examples=(
+            "remind me to renew hdb lease in march 2027",
+            "one-shot reminder to sort my hdb lease next march",
+            "ping me march 2027 for hdb renewal",
+        ),
+        context_signals=("hdb", "lease renewal", "singapore housing", "one shot", "future reminder"),
+        spec=_hdb_lease_ping(),
+        rationale={
+            "card": "Ping with ONE_SHOT cadence at a specific future date.",
+        },
+    ),
+    GoldExample(
+        example_id="grab_spend_tally",
+        intent_examples=(
+            "track my grab spend monthly",
+            "tally my grab charges",
+            "how much am i spending on grab",
+            "flag if my grab bill crosses 400 sgd",
+        ),
+        context_signals=("grab", "ride hailing", "food delivery", "monthly spend", "singapore"),
+        spec=_grab_spend_tally(),
+        rationale={
+            "card": "Tally over gmail receipts; threshold alert on month-to-date total.",
+        },
     ),
     GoldExample(
         example_id="mood_ping",

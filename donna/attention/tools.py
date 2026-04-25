@@ -12,7 +12,7 @@ from uuid import UUID, uuid4
 
 from donna.attention.dry_run import DryRunResult, dry_run
 from donna.attention.harness import run_attention_pipeline
-from donna.attention.normalize import UserContext
+from donna.attention.normalize import UserContext, load_user_timezone
 from donna.attention.schema import Attention, AttentionOrigin, AttentionStatus
 from donna.attention.store import AttentionStore, AttentionTick, now_iso
 
@@ -34,7 +34,8 @@ async def create_attention(
 ) -> CreateResult:
     """Run the full pipeline and persist the resulting Attention."""
     store = store or AttentionStore()
-    ctx = UserContext(user_id=user_id)
+    tz = await load_user_timezone(user_id)
+    ctx = UserContext(user_id=user_id, user_tz=tz) if tz else UserContext(user_id=user_id)
     pipeline = await run_attention_pipeline(raw_intent, ctx)
 
     user_uuid = _coerce_uuid(user_id)

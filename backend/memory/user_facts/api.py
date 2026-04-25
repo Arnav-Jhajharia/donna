@@ -96,6 +96,20 @@ async def update_user_fact(
             await write_fact_observation(
                 user_id=user_id, key=key, value=value, source=source, confidence=confidence
             )
+            if key in ("current_timezone", "home_timezone"):
+                try:
+                    from backend.memory.tools.set_timezone import record_timezone_fact
+
+                    await record_timezone_fact(
+                        user_id,
+                        value,
+                        predicate=key,
+                        source=source.value,
+                    )
+                except Exception:
+                    logger.exception(
+                        "user_facts: bitemporal mirror failed for %s", key
+                    )
         return resolved
 
 

@@ -25,7 +25,10 @@ RUN pip install --upgrade pip && \
 
 COPY . .
 
+RUN chmod +x bin/start.sh
+
 ENV PORT=8000
+ENV DONNA_PROCESS_ROLE=api
 EXPOSE 8000
 
-CMD ["sh", "-c", "exec uvicorn api.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+CMD ["bin/start.sh"]

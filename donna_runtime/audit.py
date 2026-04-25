@@ -50,7 +50,7 @@ def audit_trace(trace: dict[str, Any]) -> list[TraceFinding]:
                 turn_id,
                 "error",
                 "missing_terminator",
-                f"final tool was {final_tool}, expected send_burst or stay_silent",
+                f"final tool was {final_tool}, expected send_burst",
             )
         )
     return findings
@@ -82,35 +82,88 @@ def render_audit_report(path: Path) -> str:
     return "\n".join(lines)
 
 
+_KNOWN_ITEM_TYPES = {"text", "cta", "cta_url", "list", "image", "delay"}
+
+
 def _audit_send_burst(turn_id: str, call: dict[str, Any]) -> list[TraceFinding]:
+    """Trace audit for the discriminated-union send_burst payload.
+
+    Structural validation (required fields, button counts, max lengths) is
+    enforced compose-time by the JSON Schema. This audit is the secondary
+    layer for content rules: voice (lowercase, no em dash), 1-3 non-delay
+    items, and false-write claims.
+    """
     findings: list[TraceFinding] = []
     inputs = call.get("inputs") or {}
     messages = inputs.get("messages") or []
     if not isinstance(messages, list):
         return [TraceFinding(turn_id, "error", "bad_send_burst_messages", "messages must be a list")]
-    if not 1 <= len(messages) <= 3:
-        findings.append(
-            TraceFinding(turn_id, "error", "bad_send_burst_count", f"expected 1-3 messages, got {len(messages)}")
-        )
+
+    real_indexed: list[tuple[int, str, Any]] = []
     for index, message in enumerate(messages, start=1):
-        if not isinstance(message, str):
-            findings.append(TraceFinding(turn_id, "error", "bad_send_burst_message", f"message {index} is not text"))
+        if isinstance(message, str):
+            real_indexed.append((index, "text", message))
             continue
-        if len(message) > 200:
+        if not isinstance(message, dict):
             findings.append(
-                TraceFinding(turn_id, "error", "send_burst_too_long", f"message {index} has {len(message)} chars")
+                TraceFinding(turn_id, "error", "bad_send_burst_message", f"message {index} is not a dict")
             )
-        if "\u2014" in message:
-            findings.append(TraceFinding(turn_id, "error", "send_burst_em_dash", f"message {index} contains em dash"))
-        if message != message.lower():
-            findings.append(TraceFinding(turn_id, "warn", "send_burst_not_lowercase", f"message {index} is not lowercase"))
-        if "logged" in message.lower() and "can't log" not in message.lower() and "cannot log" not in message.lower():
+            continue
+        item_type = str(message.get("type", "")).lower()
+        if item_type not in _KNOWN_ITEM_TYPES:
             findings.append(
-                TraceFinding(
-                    turn_id,
-                    "warn",
-                    "claims_write_without_tool",
-                    f"message {index} may imply a write happened without a write tool",
+                TraceFinding(turn_id, "warn", "send_burst_unknown_type", f"message {index} has unknown type {item_type!r}")
+            )
+            continue
+        if item_type == "delay":
+            continue
+        real_indexed.append((index, item_type, message))
+
+    if not 1 <= len(real_indexed) <= 3:
+        findings.append(
+            TraceFinding(
+                turn_id,
+                "error",
+                "bad_send_burst_count",
+                f"expected 1-3 non-delay messages, got {len(real_indexed)}",
+            )
+        )
+
+    for index, item_type, payload in real_indexed:
+        bodies: list[str] = []
+        if item_type == "text":
+            body = payload if isinstance(payload, str) else str(payload.get("body", ""))
+            bodies.append(body)
+            if len(body) > 200:
+                findings.append(
+                    TraceFinding(turn_id, "error", "send_burst_too_long", f"message {index} has {len(body)} chars")
                 )
-            )
+        elif item_type in ("cta", "cta_url", "list"):
+            bodies.append(str(payload.get("body", "")))
+        elif item_type == "image":
+            cap = payload.get("caption")
+            if cap:
+                bodies.append(str(cap))
+
+        for body in bodies:
+            if not body:
+                continue
+            if "—" in body:
+                findings.append(
+                    TraceFinding(turn_id, "error", "send_burst_em_dash", f"message {index} contains em dash")
+                )
+            if body != body.lower():
+                findings.append(
+                    TraceFinding(turn_id, "warn", "send_burst_not_lowercase", f"message {index} is not lowercase")
+                )
+            lower = body.lower()
+            if "logged" in lower and "can't log" not in lower and "cannot log" not in lower:
+                findings.append(
+                    TraceFinding(
+                        turn_id,
+                        "warn",
+                        "claims_write_without_tool",
+                        f"message {index} may imply a write happened without a write tool",
+                    )
+                )
     return findings

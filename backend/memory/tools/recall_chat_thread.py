@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
     "Load recent chat history for this user beyond the 5 messages already in context. "
@@ -18,6 +19,7 @@ INPUT_SCHEMA = {
 }
 
 
+@instrument_memory_op("postgres.chat_messages")
 async def recall_chat_thread(
     user_id: str, limit: int = 30, before_id: str | None = None
 ) -> ToolResult:

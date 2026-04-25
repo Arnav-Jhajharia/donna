@@ -9,7 +9,7 @@ Expected trace context shape:
         "inbound": str,                 # last user message
         "outbound": list[str],          # assistant messages delivered this turn
         "tool_names": list[str],        # tools invoked during the turn
-        "terminator": "send_burst" | "stay_silent",
+        "terminator": "send_burst",
         "user_facts": dict,             # optional; for fact-extraction context
     }
 """

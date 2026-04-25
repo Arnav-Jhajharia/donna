@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from backend.memory.user_facts.api import resolve_write
-from backend.memory.user_facts.rendering import render_user_model_block
+from backend.memory.user_facts.rendering import render_living_profile_block, render_user_model_block
 from backend.memory.user_facts.schema import (
     Confidence,
     DEFAULT_FACTS,
@@ -100,3 +100,21 @@ def test_render_with_signal_shows_block():
     block = render_user_model_block(facts)
     assert "USER MODEL" in block
     assert "Arnav" in block
+
+
+def test_render_living_profile_includes_situation_brief():
+    block = render_living_profile_block(
+        {
+            "situation_brief": {
+                "summary": "shipping memory work",
+                "current_status": ["2026-04-22 chat/user: working on Donna memory"],
+                "last_week": ["2026-04-16 chat/user: visa paperwork"],
+                "next_week": ["2026-04-28 calendar: investor call"],
+            }
+        }
+    )
+
+    assert "SITUATION BRIEF" in block
+    assert "shipping memory work" in block
+    assert "last week" in block
+    assert "investor call" in block

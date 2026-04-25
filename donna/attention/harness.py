@@ -15,6 +15,7 @@ from donna.attention.normalize import (
     NormalizedIntent,
     NormalizedSignals,
     UserContext,
+    _heuristic_normalize,
     normalize_intent,
 )
 from donna.attention.retrieve import Retrieved, retrieve_top_k
@@ -50,9 +51,9 @@ async def run_attention_pipeline(
 ) -> PipelineResult:
     timings: list[StageTiming] = []
 
-    t0 = time.perf_counter()
+    # E1: bare-reminder fast-path — skip retrieve AND normalize entirely.
     if _looks_like_bare_reminder(raw_intent):
-        # Skip the normalize LLM call; author will short-circuit to Ping.
+        t0 = time.perf_counter()
         normalized = NormalizedIntent(
             raw_text=raw_intent,
             normalized_text=raw_intent,
@@ -66,8 +67,31 @@ async def run_attention_pipeline(
                 subject_name=raw_intent[:60],
             ),
         )
-    else:
-        normalized = await normalize_intent(raw_intent, user_context)
+        timings.append(StageTiming("normalize", (time.perf_counter() - t0) * 1000))
+
+        retrieved: list[Retrieved] = []
+        timings.append(StageTiming("retrieve", 0.0))
+
+        t0 = time.perf_counter()
+        authored = await author_spec(normalized, user_context, retrieved=retrieved, k=k)
+        timings.append(StageTiming("author", (time.perf_counter() - t0) * 1000))
+
+        t0 = time.perf_counter()
+        preview = dry_run(authored.spec, user_id=user_context.user_id)
+        timings.append(StageTiming("dry_run", (time.perf_counter() - t0) * 1000))
+
+        return PipelineResult(
+            raw_intent=raw_intent,
+            normalized=normalized,
+            retrieved=tuple(retrieved),
+            authored=authored,
+            preview=preview,
+            timings=tuple(timings),
+        )
+
+    # E1: replace LLM normalize with deterministic heuristic.
+    t0 = time.perf_counter()
+    normalized = _heuristic_normalize(raw_intent)
     timings.append(StageTiming("normalize", (time.perf_counter() - t0) * 1000))
 
     t0 = time.perf_counter()

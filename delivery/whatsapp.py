@@ -40,60 +40,29 @@ _LIST_ROW_TITLE_MAX = 24
 # ── Channel capabilities (consumed by act/compose prompts) ───────────────────
 
 CAPABILITIES_PROMPT = """\
-You are delivering messages over WhatsApp. You can emit:
+# HOW YOU USE WHATSAPP
 
-- `text`: a plain message. Raw URLs in the body auto-linkify into clickable links.
-  Use this most of the time.
+Text is default. Every other widget is used only when it lands better than text would — less friction for the user to act, more legible, more calibrated. The best turn is usually one item. Max 3 non-delay items per turn.
 
-- `delay`: a pause before the next item, in seconds (0.5–4.0 typical).
-  Use sparingly — only when a beat genuinely helps pacing (greeting before
-  a question, ack before advice). Never the first or last item.
+- text: default. raw URLs auto-linkify.
 
-- `cta`: text + 1–3 reply buttons. User taps one → the button's title comes
-  back as a text reply to your next turn. Use ONLY for genuinely binary/trinary
-  choices that save typing (yes/no, confirm/cancel). Do NOT use for open-ended
-  questions. Button titles are auto-truncated to 20 characters.
+- cta: text + 1-3 reply buttons. only for closed binary/trinary choices that save the user typing (yes/no, confirm/cancel). never for open questions. ids stay short and machine-readable. titles auto-truncate at 20 chars.
 
-- `cta_url`: text + one button that opens a URL in the user's browser when
-  tapped. Use for OAuth links, external sites, forms, dashboards — anything
-  where the tap should navigate away, not return a reply. Button label
-  (`display_text`) is auto-truncated to 20 characters.
+- cta_url: text + one tap-to-open button. for OAuth, external links, forms, dashboards — anything where the tap navigates away rather than returning a reply. label auto-truncates at 20 chars.
 
-- `list`: text + a scrollable list of options (up to 10 rows, grouped into
-  sections). Use when there are more than 3 choices. Row titles are
-  auto-truncated to 24 characters. Rare.
+- list: text + scrollable options (up to 10 rows, grouped into sections). only when there are 4+ parallel choices the user will scan. rare. row titles auto-truncate at 24 chars.
 
-- `image`: send an image. Requires a publicly accessible `url` from the
-  "Available media" section. Use proactively whenever showing the image
-  adds value — e.g. the user asks about something they photographed, you're
-  referencing a receipt/screenshot they shared, or the visual makes your
-  answer clearer. Don't wait to be explicitly asked.
+- image: send a picture. requires a publicly accessible url from the provided "Available media" section — never invent one. use proactively when the answer is shape not words: a receipt the user shared, a chart of their week, a visual that makes the point faster than a paragraph would.
 
-- `document`: send a file (PDF, spreadsheet, etc.). Requires a publicly
-  accessible `url` and `filename`. Optional `caption`.
-  Use when the user asks for a document back, or to deliver a generated file.
+- document: file delivery (pdf, sheet, etc). requires url + filename. use when the user will save or forward it.
 
-- `voice_response`: signals that your text reply should be delivered as a
-  spoken audio message (Donna generates the audio automatically — you do NOT
-  provide a url). Add `{"type": "voice_response"}` as the FIRST item when:
-  - the user sent a voice message (match their modality)
-  - the content is personal, emotional, or conversational — audio feels warmer
-  - step-by-step instructions that are easier to follow by ear
-  Do NOT use for: factual lists, links, tables, anything that needs to be read.
-  Cannot be combined with cta / list / image / document items.
+- voice_response: marks your reply for audio delivery — you provide no url, donna generates it. add {"type": "voice_response"} as the first item when the user sent a voice message, when the content is personal/emotional/conversational, or for step-by-step instructions easier to follow by ear. never for factual lists, links, or tables. cannot combine with cta / list / image / document.
 
-Reply-to: any item can include `"reply_to_message_id": "<wa_message_id>"` to
-  quote-reply to a specific message. The incoming message ID is provided in the
-  prompt when available.
+- delay: a beat before the next item (0.5-4s). only when pacing genuinely helps — an ack before advice, a greeting before a question. never first or last.
 
-Rules:
-- Max 3 actual messages per turn (text/cta/cta_url/list/image/document/audio items, not counting delays).
-- Follow the delivery shape from the compose_directive — it decides one vs. many.
-- No emojis unless your personality section explicitly allows them.
-- For `cta` buttons, pick short machine-readable ids (e.g. "confirm_tz", "skip_watch").
-- If referencing observations you stored, keep it brief ("logged that") — don't over-explain.
-- For image/document/audio: ONLY use URLs provided in the "Available media" section or compose_directive. Never invent URLs.
-"""
+- reply-to: any item can include "reply_to_message_id" to quote-reply a specific prior message. use when the thread has moved on and you're pulling something earlier back into focus.
+
+widgets are not decoration. pick the one that makes the next user action cheapest. when in doubt, plain text wins."""
 
 
 class WhatsAppChannel:
@@ -113,20 +82,31 @@ class WhatsAppChannel:
 
     # ── Public interface ───────────────────────────────────────────────────────
 
-    async def send(self, phone: str, message: OutboundMessage) -> None:
+    async def send(self, phone: str, message: OutboundMessage) -> str | None:
         payload = self._render(phone, message)
-        await self._post(payload)
+        data = await self._post(payload)
+        try:
+            messages = data.get("messages") or []
+            if messages:
+                return messages[0].get("id")
+        except Exception:
+            return None
+        return None
 
-    async def send_many(self, phone: str, messages: list) -> None:
+    async def send_many(self, phone: str, messages: list) -> list[str]:
         """Send messages sequentially — WA doesn't guarantee order on concurrent sends.
 
         Supports Delay marker objects in the list to pause between messages.
         """
+        wamids: list[str] = []
         for message in messages:
             if isinstance(message, Delay):
                 await asyncio.sleep(message.seconds)
                 continue
-            await self.send(phone, message)
+            wamid = await self.send(phone, message)
+            if wamid:
+                wamids.append(wamid)
+        return wamids
 
     async def send_typing(self, phone: str, message_id: str | None = None) -> None:
         """Show typing indicator. Requires message_id to mark the incoming message as read.
@@ -249,7 +229,7 @@ class WhatsAppChannel:
 
     # ── HTTP ───────────────────────────────────────────────────────────────────
 
-    async def _post(self, payload: dict) -> None:
+    async def _post(self, payload: dict) -> dict:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(
                 self._messages_url, headers=self._headers, json=payload
@@ -259,3 +239,4 @@ class WhatsAppChannel:
                     "WhatsApp API error %s: %s", resp.status_code, resp.text[:200]
                 )
                 resp.raise_for_status()
+            return resp.json()

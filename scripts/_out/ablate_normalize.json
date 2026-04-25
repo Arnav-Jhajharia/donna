@@ -1,0 +1,850 @@
+[
+  {
+    "intent": "keep an eye on ICA for anything about EP renewal rules",
+    "real_normalize_signals": {
+      "subject_type": "entity",
+      "pattern": "watch",
+      "duration": "ongoing",
+      "surface_intent": "silent",
+      "domain": "work",
+      "urgency": "medium",
+      "subject_name": "ICA"
+    },
+    "A_with_normalize": {
+      "card": "event_stream",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 9 * * 1-5"
+      },
+      "subject_name": "ICA",
+      "subject_type": "entity",
+      "sources": [
+        "web_google_news",
+        "web_search_google",
+        "web_exa"
+      ],
+      "domain_tags": [
+        "work",
+        "logistics"
+      ],
+      "surface_default": "silent",
+      "urgent_if": "policy_change == true or announcement_type in ['new_requirement','deadline_change','eligibility_change']"
+    },
+    "B_blank_normalize": {
+      "card": "event_stream",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 9 * * 1-5"
+      },
+      "subject_name": "ICA EP renewal rules",
+      "subject_type": "domain",
+      "sources": [
+        "web_google_news",
+        "web_exa",
+        "web_domain"
+      ],
+      "domain_tags": [
+        "work",
+        "travel",
+        "logistics"
+      ],
+      "surface_default": "digest",
+      "urgent_if": "rule_change == true or renewal_deadline_days < 30"
+    },
+    "differences": {
+      "subject_name": [
+        "ICA",
+        "ICA EP renewal rules"
+      ],
+      "subject_type": [
+        "entity",
+        "domain"
+      ],
+      "sources": [
+        [
+          "web_google_news",
+          "web_search_google",
+          "web_exa"
+        ],
+        [
+          "web_google_news",
+          "web_exa",
+          "web_domain"
+        ]
+      ],
+      "domain_tags": [
+        [
+          "work",
+          "logistics"
+        ],
+        [
+          "work",
+          "travel",
+          "logistics"
+        ]
+      ],
+      "surface_default": [
+        "silent",
+        "digest"
+      ],
+      "urgent_if": [
+        "policy_change == true or announcement_type in ['new_requirement','deadline_change','eligibility_change']",
+        "rule_change == true or renewal_deadline_days < 30"
+      ]
+    },
+    "A_via": "llm",
+    "B_via": "llm",
+    "A_cost": 0.005026,
+    "B_cost": 0.00507
+  },
+  {
+    "intent": "watch RBI, ping me when they move rates",
+    "real_normalize_signals": {
+      "subject_type": "domain",
+      "pattern": "watch",
+      "duration": "ongoing",
+      "surface_intent": "interrupt",
+      "domain": "finance",
+      "urgency": "high",
+      "subject_name": "RBI"
+    },
+    "A_with_normalize": {
+      "card": "event_stream",
+      "cadence": "on_event",
+      "cadence_params": {
+        "event_source": "web_google_news",
+        "trigger_on": "rate_decision"
+      },
+      "subject_name": "RBI",
+      "subject_type": "domain",
+      "sources": [
+        "web_google_news",
+        "web_exa",
+        "web_rss"
+      ],
+      "domain_tags": [
+        "finance",
+        "work"
+      ],
+      "surface_default": "silent",
+      "urgent_if": "rate_change_bps != 0"
+    },
+    "B_blank_normalize": {
+      "card": "event_stream",
+      "cadence": "on_event",
+      "cadence_params": {
+        "event_source": "web_google_news",
+        "keywords": [
+          "RBI",
+          "policy rate",
+          "repo rate"
+        ]
+      },
+      "subject_name": "RBI",
+      "subject_type": "entity",
+      "sources": [
+        "web_google_news",
+        "web_exa",
+        "web_rss"
+      ],
+      "domain_tags": [
+        "finance",
+        "work"
+      ],
+      "surface_default": "silent",
+      "urgent_if": "rate_changed == true"
+    },
+    "differences": {
+      "cadence_params": [
+        {
+          "event_source": "web_google_news",
+          "trigger_on": "rate_decision"
+        },
+        {
+          "event_source": "web_google_news",
+          "keywords": [
+            "RBI",
+            "policy rate",
+            "repo rate"
+          ]
+        }
+      ],
+      "subject_type": [
+        "domain",
+        "entity"
+      ],
+      "urgent_if": [
+        "rate_change_bps != 0",
+        "rate_changed == true"
+      ]
+    },
+    "A_via": "llm",
+    "B_via": "llm",
+    "A_cost": 0.004973,
+    "B_cost": 0.005084
+  },
+  {
+    "intent": "track my grab spend this month, flag if i cross 400 sgd",
+    "real_normalize_signals": {
+      "subject_type": "entity",
+      "pattern": "track",
+      "duration": "recurring",
+      "surface_intent": "interrupt",
+      "domain": "finance",
+      "urgency": "medium",
+      "subject_name": "grab"
+    },
+    "A_with_normalize": {
+      "card": "tally",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 9 * * *"
+      },
+      "subject_name": "Grab",
+      "subject_type": "entity",
+      "sources": [
+        "gmail_inbox"
+      ],
+      "domain_tags": [
+        "finance",
+        "logistics"
+      ],
+      "surface_default": "silent",
+      "urgent_if": "month_total_sgd >= 400"
+    },
+    "B_blank_normalize": {
+      "card": "tally",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 9 * * *"
+      },
+      "subject_name": "Grab spend",
+      "subject_type": "domain",
+      "sources": [
+        "gmail_inbox"
+      ],
+      "domain_tags": [
+        "finance",
+        "logistics"
+      ],
+      "surface_default": "silent",
+      "urgent_if": "total_sgd >= 400"
+    },
+    "differences": {
+      "subject_name": [
+        "Grab",
+        "Grab spend"
+      ],
+      "subject_type": [
+        "entity",
+        "domain"
+      ],
+      "urgent_if": [
+        "month_total_sgd >= 400",
+        "total_sgd >= 400"
+      ]
+    },
+    "A_via": "llm",
+    "B_via": "llm",
+    "A_cost": 0.004601,
+    "B_cost": 0.00464
+  },
+  {
+    "intent": "every friday evening summarise how nifty and sgx moved this week",
+    "real_normalize_signals": {
+      "subject_type": "domain",
+      "pattern": "track",
+      "duration": "recurring",
+      "surface_intent": "silent",
+      "domain": "finance",
+      "urgency": "medium",
+      "subject_name": ""
+    },
+    "A_with_normalize": {
+      "card": "brief",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 18 * * 5"
+      },
+      "subject_name": "Nifty and SGX",
+      "subject_type": "domain",
+      "sources": [
+        "web_google_news",
+        "web_google_news",
+        "web_search_google",
+        "web_search_google"
+      ],
+      "domain_tags": [
+        "finance",
+        "work"
+      ],
+      "surface_default": "digest",
+      "urgent_if": null
+    },
+    "B_blank_normalize": {
+      "card": "brief",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 18 * * 5"
+      },
+      "subject_name": "Nifty and SGX",
+      "subject_type": "domain",
+      "sources": [
+        "web_search_google",
+        "web_search_google",
+        "web_google_news"
+      ],
+      "domain_tags": [
+        "finance",
+        "work"
+      ],
+      "surface_default": "notify",
+      "urgent_if": null
+    },
+    "differences": {
+      "sources": [
+        [
+          "web_google_news",
+          "web_google_news",
+          "web_search_google",
+          "web_search_google"
+        ],
+        [
+          "web_search_google",
+          "web_search_google",
+          "web_google_news"
+        ]
+      ],
+      "surface_default": [
+        "digest",
+        "notify"
+      ]
+    },
+    "A_via": "llm",
+    "B_via": "llm",
+    "A_cost": 0.005134,
+    "B_cost": 0.005059
+  },
+  {
+    "intent": "monday 8am digest of indian startup funding rounds over 5m",
+    "real_normalize_signals": {
+      "subject_type": "domain",
+      "pattern": "brief",
+      "duration": "recurring",
+      "surface_intent": "digest",
+      "domain": "fundraising",
+      "urgency": "medium",
+      "subject_name": "indian startup funding rounds over 5m"
+    },
+    "A_with_normalize": {
+      "card": "brief",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 8 * * 1"
+      },
+      "subject_name": "Indian startup funding rounds over 5M",
+      "subject_type": "domain",
+      "sources": [
+        "web_google_news",
+        "web_exa",
+        "web_x_twitter"
+      ],
+      "domain_tags": [
+        "fundraising",
+        "competitive_intel"
+      ],
+      "surface_default": "digest",
+      "urgent_if": "amount_usd >= 20_000_000"
+    },
+    "B_blank_normalize": {
+      "card": "brief",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 8 * * 1"
+      },
+      "subject_name": "Indian startups",
+      "subject_type": "domain",
+      "sources": [
+        "web_google_news",
+        "web_exa",
+        "web_search_google"
+      ],
+      "domain_tags": [
+        "fundraising",
+        "work",
+        "competitive_intel"
+      ],
+      "surface_default": "notify",
+      "urgent_if": null
+    },
+    "differences": {
+      "subject_name": [
+        "Indian startup funding rounds over 5M",
+        "Indian startups"
+      ],
+      "sources": [
+        [
+          "web_google_news",
+          "web_exa",
+          "web_x_twitter"
+        ],
+        [
+          "web_google_news",
+          "web_exa",
+          "web_search_google"
+        ]
+      ],
+      "domain_tags": [
+        [
+          "fundraising",
+          "competitive_intel"
+        ],
+        [
+          "fundraising",
+          "work",
+          "competitive_intel"
+        ]
+      ],
+      "surface_default": [
+        "digest",
+        "notify"
+      ],
+      "urgent_if": [
+        "amount_usd >= 20_000_000",
+        null
+      ]
+    },
+    "A_via": "retry",
+    "B_via": "llm",
+    "A_cost": 0.010534,
+    "B_cost": 0.005131
+  },
+  {
+    "intent": "30 min before any call with a mumbai client pull their last 3 emails",
+    "real_normalize_signals": {
+      "subject_type": "entity",
+      "pattern": "prep",
+      "duration": "recurring",
+      "surface_intent": "interrupt",
+      "domain": "work",
+      "urgency": "medium",
+      "subject_name": "mumbai client"
+    },
+    "A_with_normalize": {
+      "card": "prep_doc",
+      "cadence": "on_event",
+      "cadence_params": {
+        "event_source": "calendar_events",
+        "lead_minutes": 30
+      },
+      "subject_name": "mumbai client",
+      "subject_type": "entity",
+      "sources": [
+        "calendar_events",
+        "gmail_inbox",
+        "entity_memory"
+      ],
+      "domain_tags": [
+        "work",
+        "meeting"
+      ],
+      "surface_default": "notify",
+      "urgent_if": null
+    },
+    "B_blank_normalize": {
+      "card": "prep_doc",
+      "cadence": "on_event",
+      "cadence_params": {
+        "event_source": "calendar_events",
+        "lead_minutes": 30
+      },
+      "subject_name": "Mumbai clients",
+      "subject_type": "domain",
+      "sources": [
+        "calendar_events",
+        "gmail_inbox"
+      ],
+      "domain_tags": [
+        "work",
+        "meeting"
+      ],
+      "surface_default": "notify",
+      "urgent_if": null
+    },
+    "differences": {
+      "subject_name": [
+        "mumbai client",
+        "Mumbai clients"
+      ],
+      "subject_type": [
+        "entity",
+        "domain"
+      ],
+      "sources": [
+        [
+          "calendar_events",
+          "gmail_inbox",
+          "entity_memory"
+        ],
+        [
+          "calendar_events",
+          "gmail_inbox"
+        ]
+      ]
+    },
+    "A_via": "llm",
+    "B_via": "llm",
+    "A_cost": 0.004874,
+    "B_cost": 0.004603
+  },
+  {
+    "intent": "brief me before my 1:1 with the dbs rm next wed",
+    "real_normalize_signals": {
+      "subject_type": "event",
+      "pattern": "prep",
+      "duration": "one_shot",
+      "surface_intent": "interrupt",
+      "domain": "finance",
+      "urgency": "high",
+      "subject_name": "1:1 with dbs rm"
+    },
+    "A_with_normalize": {
+      "card": "prep_doc",
+      "cadence": "on_event",
+      "cadence_params": {
+        "event_source": "calendar_events",
+        "lead_minutes": 60
+      },
+      "subject_name": "Sarah",
+      "subject_type": "entity",
+      "sources": [
+        "calendar_events",
+        "entity_memory",
+        "gmail_inbox"
+      ],
+      "domain_tags": [
+        "meeting",
+        "work"
+      ],
+      "surface_default": "notify",
+      "urgent_if": null
+    },
+    "B_blank_normalize": {
+      "card": "prep_doc",
+      "cadence": "on_event",
+      "cadence_params": {
+        "event_source": "calendar_events",
+        "lead_minutes": 120
+      },
+      "subject_name": "DBS RM",
+      "subject_type": "entity",
+      "sources": [
+        "calendar_events",
+        "entity_memory",
+        "gmail_inbox"
+      ],
+      "domain_tags": [
+        "meeting",
+        "work",
+        "fundraising"
+      ],
+      "surface_default": "notify",
+      "urgent_if": null
+    },
+    "differences": {
+      "cadence_params": [
+        {
+          "event_source": "calendar_events",
+          "lead_minutes": 60
+        },
+        {
+          "event_source": "calendar_events",
+          "lead_minutes": 120
+        }
+      ],
+      "subject_name": [
+        "Sarah",
+        "DBS RM"
+      ],
+      "domain_tags": [
+        [
+          "meeting",
+          "work"
+        ],
+        [
+          "meeting",
+          "work",
+          "fundraising"
+        ]
+      ]
+    },
+    "A_via": "fallback",
+    "B_via": "llm",
+    "A_cost": null,
+    "B_cost": 0.005084
+  },
+  {
+    "intent": "chase the iras gst refund, nudge me if nothing in 10 days",
+    "real_normalize_signals": {
+      "subject_type": "entity",
+      "pattern": "track",
+      "duration": "ongoing",
+      "surface_intent": "interrupt",
+      "domain": "finance",
+      "urgency": "high",
+      "subject_name": "iras gst refund"
+    },
+    "A_with_normalize": {
+      "card": "open_loop",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 10 * * *"
+      },
+      "subject_name": "IRAS GST refund",
+      "subject_type": "entity",
+      "sources": [
+        "gmail_inbox",
+        "entity_memory"
+      ],
+      "domain_tags": [
+        "finance",
+        "openloop"
+      ],
+      "surface_default": "silent",
+      "urgent_if": "status_changed or action_required"
+    },
+    "B_blank_normalize": {
+      "card": "open_loop",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 10 * * 1-5"
+      },
+      "subject_name": "IRAS GST refund",
+      "subject_type": "entity",
+      "sources": [
+        "gmail_inbox",
+        "internal_observations"
+      ],
+      "domain_tags": [
+        "finance",
+        "work"
+      ],
+      "surface_default": "digest",
+      "urgent_if": "days_since_last_update >= 10 and status in ['pending','acknowledged']"
+    },
+    "differences": {
+      "cadence_params": [
+        {
+          "cron": "0 10 * * *"
+        },
+        {
+          "cron": "0 10 * * 1-5"
+        }
+      ],
+      "sources": [
+        [
+          "gmail_inbox",
+          "entity_memory"
+        ],
+        [
+          "gmail_inbox",
+          "internal_observations"
+        ]
+      ],
+      "domain_tags": [
+        [
+          "finance",
+          "openloop"
+        ],
+        [
+          "finance",
+          "work"
+        ]
+      ],
+      "surface_default": [
+        "silent",
+        "digest"
+      ],
+      "urgent_if": [
+        "status_changed or action_required",
+        "days_since_last_update >= 10 and status in ['pending','acknowledged']"
+      ]
+    },
+    "A_via": "llm",
+    "B_via": "llm",
+    "A_cost": 0.005204,
+    "B_cost": 0.005505
+  },
+  {
+    "intent": "close the loop on the term sheet we sent accel last tuesday",
+    "real_normalize_signals": {
+      "subject_type": "entity",
+      "pattern": "track",
+      "duration": "one_shot",
+      "surface_intent": "interrupt",
+      "domain": "fundraising",
+      "urgency": "high",
+      "subject_name": "accel term sheet"
+    },
+    "A_with_normalize": {
+      "card": "open_loop",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 10 * * 1-5"
+      },
+      "subject_name": "Accel term sheet",
+      "subject_type": "entity",
+      "sources": [
+        "gmail_inbox",
+        "gmail_thread",
+        "entity_memory"
+      ],
+      "domain_tags": [
+        "fundraising",
+        "openloop"
+      ],
+      "surface_default": "digest",
+      "urgent_if": "waiting_on == 'accel' and days_stale >= 7"
+    },
+    "B_blank_normalize": {
+      "card": "open_loop",
+      "cadence": "scheduled",
+      "cadence_params": {
+        "cron": "0 9 * * 1-5"
+      },
+      "subject_name": "Accel term sheet",
+      "subject_type": "thread",
+      "sources": [
+        "gmail_thread",
+        "entity_memory"
+      ],
+      "domain_tags": [
+        "fundraising",
+        "openloop",
+        "work"
+      ],
+      "surface_default": "digest",
+      "urgent_if": "waiting_on == 'accel' and days_elapsed >= 7"
+    },
+    "differences": {
+      "cadence_params": [
+        {
+          "cron": "0 10 * * 1-5"
+        },
+        {
+          "cron": "0 9 * * 1-5"
+        }
+      ],
+      "subject_type": [
+        "entity",
+        "thread"
+      ],
+      "sources": [
+        [
+          "gmail_inbox",
+          "gmail_thread",
+          "entity_memory"
+        ],
+        [
+          "gmail_thread",
+          "entity_memory"
+        ]
+      ],
+      "domain_tags": [
+        [
+          "fundraising",
+          "openloop"
+        ],
+        [
+          "fundraising",
+          "openloop",
+          "work"
+        ]
+      ],
+      "urgent_if": [
+        "waiting_on == 'accel' and days_stale >= 7",
+        "waiting_on == 'accel' and days_elapsed >= 7"
+      ]
+    },
+    "A_via": "llm",
+    "B_via": "llm",
+    "A_cost": 0.005178,
+    "B_cost": 0.00512
+  },
+  {
+    "intent": "remind me to pay mcst on the 5th every month",
+    "real_normalize_signals": {
+      "subject_type": "entity",
+      "pattern": "loop",
+      "duration": "recurring",
+      "surface_intent": "interrupt",
+      "domain": "finance",
+      "urgency": "high",
+      "subject_name": "mcst"
+    },
+    "A_with_normalize": {
+      "card": "ping",
+      "cadence": "one_shot",
+      "cadence_params": {
+        "trigger_at": "2026-04-22T09:56:36.030428+00:00"
+      },
+      "subject_name": "mcst",
+      "subject_type": "event",
+      "sources": [
+        "user_elicitation"
+      ],
+      "domain_tags": [
+        "finance",
+        "reminder"
+      ],
+      "surface_default": "notify",
+      "urgent_if": null
+    },
+    "B_blank_normalize": {
+      "card": "ping",
+      "cadence": "one_shot",
+      "cadence_params": {
+        "trigger_at": "2026-04-22T09:56:36.030500+00:00"
+      },
+      "subject_name": "remind me to pay mcst on the 5th every month",
+      "subject_type": "event",
+      "sources": [
+        "user_elicitation"
+      ],
+      "domain_tags": [
+        "work",
+        "reminder"
+      ],
+      "surface_default": "notify",
+      "urgent_if": null
+    },
+    "differences": {
+      "cadence_params": [
+        {
+          "trigger_at": "2026-04-22T09:56:36.030428+00:00"
+        },
+        {
+          "trigger_at": "2026-04-22T09:56:36.030500+00:00"
+        }
+      ],
+      "subject_name": [
+        "mcst",
+        "remind me to pay mcst on the 5th every month"
+      ],
+      "domain_tags": [
+        [
+          "finance",
+          "reminder"
+        ],
+        [
+          "work",
+          "reminder"
+        ]
+      ]
+    },
+    "A_via": "ping_shortcircuit",
+    "B_via": "ping_shortcircuit",
+    "A_cost": null,
+    "B_cost": null
+  }
+]
