@@ -154,3 +154,24 @@ async def test_bootstrap_30d_important(db, fake_client):
         "is:important" in q or "label:important" in q
         for _, q in fake_client.list_calls
     )
+
+
+@pytest.mark.asyncio
+async def test_bootstrap_90d_aggregates(db, fake_client):
+    fake_client.messages = [
+        _msg(f"m_{i}", hours_ago=24 * (i + 1)) for i in range(15)
+    ]
+    out_msgs = []
+    for i, m in enumerate(fake_client.messages):
+        sender = "sarah@x.com" if i < 10 else f"u{i}@y.com"
+        out_msgs.append(
+            NormalizedGmailMessage(**{**m.__dict__, "from_address": sender})
+        )
+    fake_client.messages = out_msgs
+
+    from backend.integrations.bootstrap_gmail import bootstrap_90d_aggregates
+
+    aggs = await bootstrap_90d_aggregates("u1", top_n=5)
+    assert isinstance(aggs, list)
+    assert aggs[0]["from_address"] == "sarah@x.com"
+    assert aggs[0]["count"] == 10
