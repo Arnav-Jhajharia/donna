@@ -107,3 +107,52 @@ async def execute_tool(
         arguments=arguments,
         dangerously_skip_version_check=True,
     ))
+
+
+_DEFAULT_FINAL_CALLBACK = "https://platform.composio.dev/dashboard"
+
+
+async def initiate_oauth_chain(
+    *,
+    user_id: str,
+    toolkit_to_auth_config: dict[str, str],
+    final_callback_url: str = _DEFAULT_FINAL_CALLBACK,
+) -> dict:
+    """Build a redirect chain so the user only taps ONE URL.
+
+    Each toolkit's ``callback_url`` points to the next toolkit's
+    ``redirect_url`` so the browser walks the chain after a single
+    OAuth approval. The very last toolkit in the chain falls through
+    to ``final_callback_url`` (default: Composio dashboard).
+
+    Returns ``{"first_url", "chain": [{toolkit, auth_config_id,
+    redirect_url, connected_account_id}]}`` where ``chain`` is in the
+    same order as ``toolkit_to_auth_config``.
+    """
+    composio = _composio()
+    items = list(toolkit_to_auth_config.items())  # ordered
+
+    # Build in REVERSE so each callback points to the next URL.
+    chain_url = final_callback_url
+    reversed_chain: list[dict] = []
+    for toolkit, ac_id in reversed(items):
+        req = composio.connected_accounts.initiate(
+            user_id=user_id,
+            auth_config_id=ac_id,
+            callback_url=chain_url,
+        )
+        chain_url = req.redirect_url
+        reversed_chain.append(
+            {
+                "toolkit": toolkit,
+                "auth_config_id": ac_id,
+                "redirect_url": req.redirect_url,
+                "connected_account_id": req.id,
+            }
+        )
+
+    chain_in_order = list(reversed(reversed_chain))
+    return {
+        "first_url": chain_in_order[0]["redirect_url"],
+        "chain": chain_in_order,
+    }

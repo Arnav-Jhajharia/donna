@@ -138,3 +138,166 @@ async def test_execute_tool_passes_args_through(fake_composio):
     assert slug == "GMAIL_LIST_MESSAGES"
     assert payload["arguments"] == {"q": "newer_than:1d", "max_results": 10}
     assert payload["kwargs"].get("dangerously_skip_version_check") is True
+
+
+# --- OAuth chain helpers ---
+
+
+class _FakeConnectionRequest:
+    def __init__(self, *, id: str, redirect_url: str, status: str = "INITIATED"):
+        self.id = id
+        self.redirect_url = redirect_url
+        self.status = status
+
+
+class _FakeConnectedAccounts:
+    """Records each initiate() call. Generates a unique redirect URL per call
+    so tests can verify the chain wiring."""
+
+    def __init__(self):
+        self.calls: list[dict] = []
+        self._counter = 0
+
+    def initiate(self, user_id, auth_config_id, *, callback_url=None):
+        self._counter += 1
+        idx = self._counter
+        req = _FakeConnectionRequest(
+            id=f"ca_{auth_config_id}",
+            redirect_url=f"https://composio.dev/redirect/{auth_config_id}/{idx}",
+        )
+        self.calls.append(
+            {
+                "user_id": user_id,
+                "auth_config_id": auth_config_id,
+                "callback_url": callback_url,
+                "returned_redirect_url": req.redirect_url,
+                "returned_id": req.id,
+            }
+        )
+        return req
+
+
+class _FakeAuthConfigItem:
+    def __init__(self, *, id: str, toolkit_slug: str | None):
+        self.id = id
+
+        class _T:
+            slug = toolkit_slug
+
+        self.toolkit = _T() if toolkit_slug is not None else None
+
+
+class _FakeAuthConfigs:
+    def __init__(self, items):
+        self._items = items
+        self.calls: int = 0
+
+    def list(self):
+        self.calls += 1
+
+        class _Listing:
+            pass
+
+        listing = _Listing()
+        listing.items = self._items
+        return listing
+
+
+class _FakeComposioFull:
+    def __init__(self, *, auth_configs_items=None):
+        self.connected_accounts = _FakeConnectedAccounts()
+        self.auth_configs = _FakeAuthConfigs(auth_configs_items or [])
+        self.tools = _FakeTools({"data": {}})
+
+
+@pytest.fixture
+def fake_composio_full(monkeypatch):
+    instances: list[_FakeComposioFull] = []
+
+    def _make(*, auth_configs_items=None):
+        c = _FakeComposioFull(auth_configs_items=auth_configs_items)
+        instances.append(c)
+        monkeypatch.setattr(
+            "backend.integrations.composio_meta._composio",
+            lambda: c,
+        )
+        return c
+
+    return _make
+
+
+@pytest.mark.asyncio
+async def test_initiate_oauth_chain_links_callbacks_in_reverse(fake_composio_full):
+    c = fake_composio_full()
+
+    toolkit_to_auth_config = {
+        "gmail": "ac_gmail",
+        "googlecalendar": "ac_cal",
+        "googledrive": "ac_drive",
+    }
+
+    result = await composio_meta.initiate_oauth_chain(
+        user_id="u1",
+        toolkit_to_auth_config=toolkit_to_auth_config,
+        final_callback_url="https://platform.composio.dev/dashboard",
+    )
+
+    # 3 toolkits -> 3 calls in REVERSE order (drive first, gmail last)
+    assert len(c.connected_accounts.calls) == 3
+    call_order = [c.connected_accounts.calls[i]["auth_config_id"] for i in range(3)]
+    assert call_order == ["ac_drive", "ac_cal", "ac_gmail"]
+
+    # Drive's callback is the final dashboard URL
+    drive_call = c.connected_accounts.calls[0]
+    cal_call = c.connected_accounts.calls[1]
+    gmail_call = c.connected_accounts.calls[2]
+    assert drive_call["callback_url"] == "https://platform.composio.dev/dashboard"
+
+    # Calendar's callback is drive's redirect_url
+    assert cal_call["callback_url"] == drive_call["returned_redirect_url"]
+
+    # Gmail's callback is calendar's redirect_url
+    assert gmail_call["callback_url"] == cal_call["returned_redirect_url"]
+
+    # Returned chain is in INPUT order: gmail, googlecalendar, googledrive
+    chain = result["chain"]
+    assert [entry["toolkit"] for entry in chain] == [
+        "gmail",
+        "googlecalendar",
+        "googledrive",
+    ]
+    assert [entry["auth_config_id"] for entry in chain] == [
+        "ac_gmail",
+        "ac_cal",
+        "ac_drive",
+    ]
+    # connected_account_id propagated
+    assert chain[0]["connected_account_id"] == "ca_ac_gmail"
+    assert chain[1]["connected_account_id"] == "ca_ac_cal"
+    assert chain[2]["connected_account_id"] == "ca_ac_drive"
+    # Each chain entry's redirect_url matches what initiate returned
+    assert chain[0]["redirect_url"] == gmail_call["returned_redirect_url"]
+    assert chain[1]["redirect_url"] == cal_call["returned_redirect_url"]
+    assert chain[2]["redirect_url"] == drive_call["returned_redirect_url"]
+
+    # first_url is the FIRST toolkit's redirect_url (gmail)
+    assert result["first_url"] == chain[0]["redirect_url"]
+
+
+@pytest.mark.asyncio
+async def test_initiate_oauth_chain_single_toolkit(fake_composio_full):
+    c = fake_composio_full()
+
+    result = await composio_meta.initiate_oauth_chain(
+        user_id="u1",
+        toolkit_to_auth_config={"gmail": "ac_gmail"},
+    )
+
+    assert len(c.connected_accounts.calls) == 1
+    call = c.connected_accounts.calls[0]
+    # Single toolkit's callback is the default dashboard URL
+    assert call["callback_url"] == "https://platform.composio.dev/dashboard"
+    assert result["first_url"] == call["returned_redirect_url"]
+    assert len(result["chain"]) == 1
+
+
