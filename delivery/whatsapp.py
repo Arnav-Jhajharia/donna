@@ -42,25 +42,25 @@ _LIST_ROW_TITLE_MAX = 24
 CAPABILITIES_PROMPT = """\
 # HOW YOU USE WHATSAPP
 
-Text is default. Every other widget is used only when it lands better than text would — less friction for the user to act, more legible, more calibrated. The best turn is usually one item. Max 3 non-delay items per turn.
+Text is default. Use another widget only when it makes the next action cheaper or the answer clearer. The best turn is usually one item. Max 3 non-delay items per turn.
 
-- text: default. raw URLs auto-linkify.
+- text: default. raw urls auto-linkify.
 
-- cta: text + 1-3 reply buttons. only for closed binary/trinary choices that save the user typing (yes/no, confirm/cancel). never for open questions. ids stay short and machine-readable. titles auto-truncate at 20 chars.
+- cta: text plus 1-3 reply buttons. only for closed choices like yes/no/confirm/cancel. never for open questions.
 
-- cta_url: text + one tap-to-open button. for OAuth, external links, forms, dashboards — anything where the tap navigates away rather than returning a reply. label auto-truncates at 20 chars.
+- cta_url: text plus one tap-to-open button. for oauth, external links, forms, dashboards, or anything that navigates away.
 
-- list: text + scrollable options (up to 10 rows, grouped into sections). only when there are 4+ parallel choices the user will scan. rare. row titles auto-truncate at 24 chars.
+- list: scrollable options. only when there are 4+ parallel choices the user will scan. rare.
 
-- image: send a picture. requires a publicly accessible url from the provided "Available media" section — never invent one. use proactively when the answer is shape not words: a receipt the user shared, a chart of their week, a visual that makes the point faster than a paragraph would.
+- image: use when the answer is visual. requires a publicly accessible url from available media. never invent one.
 
-- document: file delivery (pdf, sheet, etc). requires url + filename. use when the user will save or forward it.
+- document: file delivery. requires url and filename. use when the user will save or forward it.
 
-- voice_response: marks your reply for audio delivery — you provide no url, donna generates it. add {"type": "voice_response"} as the first item when the user sent a voice message, when the content is personal/emotional/conversational, or for step-by-step instructions easier to follow by ear. never for factual lists, links, or tables. cannot combine with cta / list / image / document.
+- voice_response: this is the ONLY way to deliver a voice note. include it as an item in the send_burst messages array (place it first), with one or more text items after it. the text bodies are concatenated and synthesized as a single whatsapp voice note. saying "here is a voice message" in text without the voice_response item sends a text bubble, not voice. use voice_response WHENEVER: the user explicitly asks for a voice message ("send me a voice", "voice me", "say it out loud"), the user sent a voice note (runtime context will show inbound_modality: voice), the turn is personal or conversational, or instructions are easier by ear. do not use for factual lists, links, tables, or anything the user will scan visually. cannot combine with cta, cta_url, list, image, or document. on any synthesis failure the burst falls back to text automatically.
 
-- delay: a beat before the next item (0.5-4s). only when pacing genuinely helps — an ack before advice, a greeting before a question. never first or last.
+- delay: a 0.5-4s beat before the next item. only when pacing helps. never first or last.
 
-- reply-to: any item can include "reply_to_message_id" to quote-reply a specific prior message. use when the thread has moved on and you're pulling something earlier back into focus.
+- reply-to: use reply_to_message_id when pulling an earlier message back into focus.
 
 widgets are not decoration. pick the one that makes the next user action cheapest. when in doubt, plain text wins."""
 
@@ -80,7 +80,41 @@ class WhatsAppChannel:
     def _messages_url(self) -> str:
         return f"{_WA_BASE}/{self._phone_number_id}/messages"
 
+    @property
+    def _media_url(self) -> str:
+        return f"{_WA_BASE}/{self._phone_number_id}/media"
+
     # ── Public interface ───────────────────────────────────────────────────────
+
+    async def upload_media(
+        self, file_bytes: bytes, mime_type: str = "image/png"
+    ) -> str:
+        """Upload bytes to WA /media, return the media_id.
+
+        Use this before sending an ImageMessage/AudioMessage/DocumentMessage
+        with `media_id=...` set. Meta retains the media for 30 days.
+        """
+        files = {"file": ("upload.bin", file_bytes, mime_type)}
+        data = {"messaging_product": "whatsapp", "type": mime_type}
+        async with httpx.AsyncClient(timeout=20) as client:
+            resp = await client.post(
+                self._media_url, headers=self._headers, data=data, files=files
+            )
+            if resp.status_code >= 400:
+                logger.error(
+                    "WhatsApp /media upload error %s: %s",
+                    resp.status_code,
+                    resp.text[:200],
+                )
+                resp.raise_for_status()
+            body = resp.json()
+        media_id = body.get("id")
+        if not media_id:
+            raise RuntimeError(
+                f"WhatsApp /media response missing id: {body!r}"
+            )
+        return str(media_id)
+
 
     async def send(self, phone: str, message: OutboundMessage) -> str | None:
         payload = self._render(phone, message)
@@ -107,6 +141,28 @@ class WhatsAppChannel:
             if wamid:
                 wamids.append(wamid)
         return wamids
+
+    async def send_reaction(
+        self, phone: str, message_id: str | None, emoji: str
+    ) -> None:
+        """React to an inbound message with an emoji. Fail-soft.
+
+        Used as a lightweight ack on user-facing actions that take seconds
+        (image generation, etc.) so the user sees something happen on their
+        message immediately. No-op if message_id is missing.
+        """
+        if not message_id or not emoji:
+            return
+        payload = {
+            "messaging_product": "whatsapp",
+            "to": phone,
+            "type": "reaction",
+            "reaction": {"message_id": message_id, "emoji": emoji},
+        }
+        try:
+            await self._post(payload)
+        except Exception:
+            logger.warning("send_reaction failed for %s — non-fatal", phone[:6])
 
     async def send_typing(self, phone: str, message_id: str | None = None) -> None:
         """Show typing indicator. Requires message_id to mark the incoming message as read.
@@ -211,13 +267,18 @@ class WhatsAppChannel:
             }
 
         if isinstance(message, ImageMessage):
-            image: dict = {"link": message.url}
+            image: dict = {"id": message.media_id} if message.media_id else {"link": message.url}
             if message.caption:
                 image["caption"] = message.caption
             return {**base, "type": "image", "image": image}
 
         if isinstance(message, AudioMessage):
-            return {**base, "type": "audio", "audio": {"link": message.url}}
+            audio: dict = (
+                {"id": message.media_id} if message.media_id else {"link": message.url}
+            )
+            if message.voice:
+                audio["voice"] = True
+            return {**base, "type": "audio", "audio": audio}
 
         if isinstance(message, DocumentMessage):
             doc: dict = {"link": message.url, "filename": message.filename}

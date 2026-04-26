@@ -68,3 +68,60 @@ def test_ping_create_short_circuits_without_llm(store):
     r = asyncio.run(create_attention("remind me to call mom at 6pm", user_id="cli-user"))
     assert r.attention.spec.card.value == "ping"
     assert r.authored_via == "ping_shortcircuit"
+
+
+@pytest.mark.unit
+def test_ping_dedup_reuses_recent_match(store):
+    """Second sleep PING within the dedup window reuses the first."""
+    first = asyncio.run(
+        create_attention("remind me in 15 minutes to sleep", user_id="cli-user")
+    )
+    assert first.reused is False
+
+    second = asyncio.run(
+        create_attention("remind me in 30 minutes to sleep", user_id="cli-user")
+    )
+    assert second.reused is True
+    # Same row: same id.
+    assert second.attention.id == first.attention.id
+    # And the store still contains exactly one PING for sleep.
+    listed = list_attentions(status=AttentionStatus.LIVE)
+    sleep_pings = [
+        a
+        for a in listed
+        if a.spec.card.value == "ping"
+        and "sleep" in (a.spec.subject.name or "").lower()
+    ]
+    assert len(sleep_pings) == 1
+
+
+@pytest.mark.unit
+def test_ping_dedup_does_not_collapse_different_subjects(store):
+    """Different subjects (sleep vs water) must NOT dedup against each other."""
+    sleep = asyncio.run(
+        create_attention("remind me in 15 minutes to sleep", user_id="cli-user")
+    )
+    water = asyncio.run(
+        create_attention("remind me in 10 minutes to drink water", user_id="cli-user")
+    )
+    assert sleep.reused is False
+    assert water.reused is False
+    assert water.attention.id != sleep.attention.id
+
+
+@pytest.mark.unit
+def test_non_ping_create_is_not_deduped(store):
+    """Tally cards never trigger the PING dedup path even with same subject."""
+    # Both create_attention calls produce the same intent shape but the
+    # author returns the same TALLY card type; dedup is PING-only, so
+    # both rows should land.
+    first = asyncio.run(
+        create_attention("track my hydration daily", user_id="cli-user")
+    )
+    second = asyncio.run(
+        create_attention("track my hydration daily", user_id="cli-user")
+    )
+    assert first.reused is False
+    # If the author produced TALLY for both, they should NOT collapse.
+    if first.attention.spec.card.value != "ping":
+        assert second.reused is False

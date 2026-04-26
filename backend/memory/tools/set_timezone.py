@@ -12,7 +12,7 @@ current. The operational read path is unchanged.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import datetime, timezone as dt_timezone
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from backend.memory.time import timezone_label
@@ -130,7 +130,7 @@ async def set_timezone(
                 goals = dict(user.onboarding_goals or {})
                 goals["tz_done"] = True
                 goals["tz_source"] = str(source or "user_correction")
-                goals["tz_confirmed_at"] = datetime.now(timezone.utc).isoformat()
+                goals["tz_confirmed_at"] = datetime.now(dt_timezone.utc).isoformat()
                 user.onboarding_goals = goals
                 flag_modified(user, "onboarding_goals")
             except Exception:
@@ -143,7 +143,7 @@ async def set_timezone(
                     "value": tz,
                     "source": str(source or "user_correction"),
                     "confidence": "high",
-                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                    "updated_at": datetime.now(dt_timezone.utc).isoformat(),
                 }
                 user.facts = facts
                 flag_modified(user, "facts")

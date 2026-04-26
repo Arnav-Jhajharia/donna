@@ -17,6 +17,10 @@ from claude_agent_sdk import (
     query,
 )
 
+from donna_runtime.env import load_dotenv
+
+load_dotenv()
+
 from donna_runtime.config import DonnaAgentConfig
 from donna_runtime.options import build_options
 

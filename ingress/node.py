@@ -1,11 +1,12 @@
-"""Text-only ingress enrichment.
+"""Ingress enrichment.
 
 Takes a flat state dict (post-user_lookup) and augments it with:
+  - raw_input from voice notes via Deepgram STT (when state carries voice bytes)
+  - _inbound_modality flag so the brain knows the message arrived as voice
   - reply_to_content / reply_to_role (from prior ChatMessage row)
   - url_contents (up to 3 URL excerpts fetched via httpx + BeautifulSoup)
-
-Media-specific branches (voice transcription, image b64, document extraction)
-are deferred to a later phase — they're stubbed as no-ops for the text MVP.
+  - background document/image deep-ingest (PDF text + image caption/OCR)
+    fired as a fire-and-forget task so the brain turn isn't blocked
 """
 from __future__ import annotations
 
@@ -29,8 +30,13 @@ _EXCERPT_MAX = 2000
 
 
 async def enrich(state: dict) -> dict:
-    """Enrich state with reply context + URL excerpts. Mutates and returns state."""
+    """Enrich state with STT, reply context, and URL excerpts. Mutates and returns state."""
     updates: dict = {}
+
+    transcript = await _maybe_transcribe(state)
+    if transcript:
+        updates["raw_input"] = transcript
+        updates["_inbound_modality"] = "voice"
 
     if state.get("reply_to_id"):
         reply = await _resolve_reply(state["user_id"], state["reply_to_id"])
@@ -38,13 +44,131 @@ async def enrich(state: dict) -> dict:
             updates["reply_to_content"] = reply["content"]
             updates["reply_to_role"] = reply["role"]
 
-    raw = state.get("raw_input") or ""
+    raw = updates.get("raw_input") or state.get("raw_input") or ""
     urls = _URL_RE.findall(raw)[:_MAX_URLS]
     if urls:
         updates["url_contents"] = await _fetch_urls(urls)
 
+    _maybe_dispatch_attachment_ingest(state)
+
     state.update(updates)
     return state
+
+
+def _maybe_dispatch_attachment_ingest(state: dict) -> None:
+    """Fire deep-ingest for documents/images as a background task.
+
+    We do NOT await: chunking + Haiku vision can take many seconds, and
+    the brain turn must not stall on it. The orchestrator is fully
+    self-contained (own DB session, own logging, own error handling)
+    so a crash there can't cascade into the response path.
+
+    Voice notes are intentionally skipped: ``_maybe_transcribe`` already
+    converts them into ``raw_input`` so they enter as text.
+    """
+    payload = state.get("_ingress_payload")
+    if payload is None:
+        return
+    user_id = state.get("user_id")
+    if not user_id:
+        return
+
+    document = getattr(payload, "document", None)
+    image = getattr(payload, "image", None)
+    caption = state.get("raw_input") or ""
+    message_id = state.get("platform_message_id") or getattr(
+        payload, "platform_message_id", None
+    )
+
+    target = None
+    if document is not None and getattr(document, "file_bytes", None):
+        target = (
+            getattr(document, "file_bytes", b""),
+            getattr(document, "mime_type", "") or "application/octet-stream",
+            getattr(document, "filename", "") or "document",
+        )
+    elif image is not None and getattr(image, "file_bytes", None):
+        target = (
+            getattr(image, "file_bytes", b""),
+            getattr(image, "mime_type", "") or "image/jpeg",
+            "image",
+        )
+    if target is None:
+        return
+
+    file_bytes, mime, filename = target
+    asyncio.create_task(
+        _ingest_in_background(
+            user_id=user_id,
+            file_bytes=file_bytes,
+            mime_type=mime,
+            filename=filename,
+            caption=caption or None,
+            message_id=message_id,
+        ),
+        name="document_ingest",
+    )
+
+
+async def _ingest_in_background(
+    *,
+    user_id: str,
+    file_bytes: bytes,
+    mime_type: str,
+    filename: str,
+    caption: str | None,
+    message_id: str | None,
+) -> None:
+    try:
+        from backend.memory.ingest.documents import ingest_attachment
+
+        result = await ingest_attachment(
+            user_id,
+            file_bytes=file_bytes,
+            mime_type=mime_type,
+            filename=filename,
+            caption=caption,
+            message_id=message_id,
+        )
+    except Exception:
+        logger.exception(
+            "ingest: background dispatch failed user=%s file=%s",
+            user_id[:8], (filename or "")[:40],
+        )
+        return
+    if result is None:
+        logger.info(
+            "ingest: skipped user=%s file=%s mime=%s (no extractor)",
+            user_id[:8], (filename or "")[:40], mime_type,
+        )
+        return
+    logger.info(
+        "ingest: done user=%s sha=%s chunks=%d obs=%s deduped=%s",
+        user_id[:8],
+        result.sha256[:10],
+        result.chunk_count,
+        result.observation_id or "?",
+        result.deduped,
+    )
+
+
+async def _maybe_transcribe(state: dict) -> str:
+    """Run STT when the inbound payload carries voice bytes. Empty on miss/error."""
+    payload = state.get("_ingress_payload")
+    voice = getattr(payload, "voice", None) if payload is not None else None
+    if voice is None:
+        return ""
+    file_bytes = getattr(voice, "file_bytes", None)
+    if not file_bytes:
+        return ""
+    mime = getattr(voice, "mime_type", "audio/ogg") or "audio/ogg"
+    try:
+        from ingress.stt import transcribe_voice
+
+        return await transcribe_voice(file_bytes, mime_type=mime)
+    except Exception:
+        logger.exception("ingress: STT raised unexpectedly")
+        return ""
 
 
 async def _resolve_reply(user_id: str, platform_message_id: str) -> dict | None:

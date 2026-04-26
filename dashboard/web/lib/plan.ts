@@ -11,7 +11,29 @@
 
 export type IconName =
   | 'phone' | 'drop' | 'bowl' | 'flower' | 'flame' | 'rupee'
-  | 'moon' | 'sun' | 'heart' | 'leaf' | 'eye' | 'hourglass';
+  | 'moon' | 'sun' | 'heart' | 'leaf' | 'eye' | 'hourglass'
+  | 'bell' | 'plug' | 'sparkles' | 'pencil' | 'mic' | 'check' | 'x';
+
+// ── ActionVerb ────────────────────────────────────────────────────────────
+// Every interactive element on the dashboard carries an ActionVerb. Tap →
+// POST /api/dashboard/action → backend executes verb → brain notified →
+// WhatsApp ack. The dashboard never mutates state directly.
+export type ActionVerb =
+  | { v: 'start_tracker'; name: string }
+  | { v: 'log_value'; tracker: string; value: number; unit?: string }
+  | { v: 'complete_pick'; pickId: string }
+  | { v: 'snooze_reminder'; reminderId: string; until: string }
+  | { v: 'mark_reminder_done'; reminderId: string }
+  | { v: 'dismiss_attention'; attentionId: string }
+  | { v: 'accept_attention'; attentionId: string }
+  | { v: 'connect_integration'; provider: string }
+  | { v: 'accept_draft'; draftId: string }
+  | { v: 'decide_option'; decisionId: string; optionId: string }
+  | { v: 'quick_log'; kind: string; payload: unknown }
+  | { v: 'open_relationship'; personId: string }
+  | { v: 'open_news'; newsId: string }
+  | { v: 'open_tracker'; tracker: string }
+  | { v: 'reply_chip'; intent: string };
 
 export type SignalTone = 'ink' | 'rust' | 'moss' | 'amber' | 'oxblood';
 
@@ -135,6 +157,8 @@ export interface TodoItem {
   meta: string;
   source: string;
   done?: boolean;
+  /** Optional action fired when the user taps the checkbox. */
+  action?: ActionVerb;
 }
 export interface TodoListBlock {
   type: 'todo-list';
@@ -153,6 +177,8 @@ export interface TrackerItem {
   icon: IconName;
   tone: SignalTone;
   tint: 'amber' | 'moss' | 'rust' | 'paper';
+  /** Tap to drill in or quick-log. */
+  action?: ActionVerb;
 }
 export interface TrackerGridBlock {
   type: 'tracker-grid';
@@ -170,6 +196,8 @@ export interface NudgeItem {
   icon: IconName;
   variant: NudgeVariant;
   progress?: number;
+  /** Optional action fired when the user taps the nudge card. */
+  action?: ActionVerb;
 }
 export interface NudgeGridBlock {
   type: 'nudge-grid';
@@ -182,6 +210,77 @@ export interface PermissionBlock {
   type: 'permission';
   title: string;
   body: string;
+  /** Optional acknowledgement action. */
+  action?: ActionVerb;
+}
+
+// ── Block: reminders — time-anchored alerts for today ─────────────────────
+export interface ReminderItem {
+  id: string;
+  /** "9:00 am" · "in 2h" · "by 6 pm" */
+  at: string;
+  label: string;
+  /** optional one-line context */
+  meta?: string;
+  done?: boolean;
+  action?: ActionVerb;
+}
+export interface RemindersBlock {
+  type: 'reminders';
+  title: string;
+  items: ReminderItem[];
+}
+
+// ── Block: tracker-starter — Donna offers to start a new tracker ──────────
+export interface TrackerStarterBlock {
+  type: 'tracker-starter';
+  title: string;
+  /** Why she's offering this — quoted user signal. */
+  rationale: string;
+  /** What the tracker would track, in user-facing language. */
+  trackerName: string;
+  cta: string;
+  icon: IconName;
+  /** Tap to confirm starting the tracker — fires start_tracker verb. */
+  action: ActionVerb;
+}
+
+// ── Block: relationship — people Donna is tracking ────────────────────────
+export interface RelationshipItem {
+  id: string;
+  name: string;
+  /** "your dad" · "Luca" · "Priya, cofounder" */
+  role?: string;
+  /** "6 days since" · "you said this week" */
+  lastTouch: string;
+  /** Optional nudge — what Donna thinks should happen next. */
+  nudge?: string;
+  /** Optional avatar initial (fallback when no image). */
+  initial: string;
+  action?: ActionVerb;
+}
+export interface RelationshipBlock {
+  type: 'relationship';
+  title: string;
+  items: RelationshipItem[];
+}
+
+// ── Block: news-brief — proactive content cards ───────────────────────────
+export interface NewsBriefItem {
+  id: string;
+  /** A single sharp sentence — Donna's read on why this is worth surfacing. */
+  headline: string;
+  /** Source domain or feed name. */
+  source: string;
+  /** Optional "since yesterday" / "today" tag. */
+  tag?: string;
+  url?: string;
+  action?: ActionVerb;
+}
+export interface NewsBriefBlock {
+  type: 'news-brief';
+  title: string;
+  items: NewsBriefItem[];
 }
 
 // ── Block: footer ─────────────────────────────────────────────────────────
@@ -205,6 +304,10 @@ export type Block =
   | TrackerGridBlock
   | NudgeGridBlock
   | PermissionBlock
+  | RemindersBlock
+  | TrackerStarterBlock
+  | RelationshipBlock
+  | NewsBriefBlock
   | FooterBlock;
 
 export interface DashboardPlan {
@@ -216,6 +319,63 @@ export interface DashboardPlan {
   /** Moment tag that produced this plan. */
   moment: MomentTag;
   blocks: Block[];
+  /**
+   * Optional row-based composition. When present, the renderer uses this
+   * to lay out the plan via the visual contract grid (system.html §4).
+   * When absent, the renderer falls back to the legacy linear blocks[] flow.
+   *
+   * The brain is migrating from "ordered list of blocks" to "rows of cells",
+   * because the visual contract is row-based. Both shapes are honored during
+   * migration so existing fixtures keep working.
+   */
+  rows?: Row[];
+  /** Optional intro region (system.html §6). When absent, no intro renders. */
+  intro?: IntroSpec;
+}
+
+// ── Row-based composition (visual contract) ───────────────────────────────
+// A Row is a slice of the dashboard with up to four cells. Each cell holds
+// a single Block (the content) sized to a SlotSize (the layout). The
+// renderer walks rows → cells → blocks and wraps each cell's block in a
+// <Frame>.
+
+export type SlotSize =
+  | 'full'
+  | 'three-quarters'
+  | 'two-thirds'
+  | 'half'
+  | 'third'
+  | 'quarter';
+
+export interface Cell {
+  size: SlotSize;
+  block: Block;
+}
+
+export interface Row {
+  /** Optional row-level title rendered as a section title above the cells. */
+  title?: string;
+  /** Optional right-aligned meta count, e.g. "1 of 3 kept". */
+  meta?: string;
+  cols: Cell[];
+}
+
+/** Intro region — the fixed top region (system.html §6). */
+export interface IntroSpec {
+  /** "friday · 18 april" — uppercase tracking label. */
+  kicker: string;
+  /** Greeting prefix before the accent: "good morning, " */
+  greetingPrefix?: string;
+  /** Italic rust accent (usually the name). */
+  accent?: string;
+  /** Trailing punctuation after the accent: "." */
+  greetingSuffix?: string;
+  /** Full greeting (alternative to prefix/accent split). */
+  greeting?: string;
+  /** "mumbai · 29° · slight haze, cooler by the sea" */
+  place?: string;
+  /** Illustration ID — renderer maps to an SVG. */
+  illustrationId?: 'mumbai' | 'tea' | 'book' | 'moon' | 'glass' | 'walk' | 'none';
 }
 
 // ── Validation ────────────────────────────────────────────────────────────
@@ -243,6 +403,10 @@ const DENSITY_WEIGHTS: Record<Block['type'], number> = {
   'tracker-grid': 2,
   'nudge-grid': 3,
   permission: 1,
+  reminders: 2,
+  'tracker-starter': 2,
+  relationship: 2,
+  'news-brief': 2,
   footer: 0,
 };
 

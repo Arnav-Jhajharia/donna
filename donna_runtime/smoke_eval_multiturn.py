@@ -95,7 +95,7 @@ THREE_DAY_ARC = MultiTurnFixture(
             at="2026-04-20T08:42:00",
             message="morning. bad sleep again, like 4 hours",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             notes="First sleep log of the arc. event_time should be last night.",
         ),
         MultiTurn(
@@ -103,8 +103,8 @@ THREE_DAY_ARC = MultiTurnFixture(
             at="2026-04-20T11:20:00",
             message="coffee was 6 bucks",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
-            banned_tools=("mcp__donna__track_open_loop",),
+            expected_tools=("mcp__donna__remember",),
+            banned_tools=("mcp__donna__remember",),
             notes="Countable expense. Must not track as open loop.",
         ),
         MultiTurn(
@@ -112,7 +112,7 @@ THREE_DAY_ARC = MultiTurnFixture(
             at="2026-04-20T14:15:00",
             message="meeting sarah at 4 to talk the offer, need to remember to circle back tomorrow",
             category="memory_write",
-            expected_tools=("mcp__donna__track_open_loop",),
+            expected_tools=("mcp__donna__remember",),
             notes="Untimed follow-up → track_open_loop for sarah offer.",
         ),
         MultiTurn(
@@ -120,8 +120,8 @@ THREE_DAY_ARC = MultiTurnFixture(
             at="2026-04-20T18:40:00",
             message="remind me to send luca the deck tomorrow at 9am",
             category="memory_write",
-            expected_tools=("mcp__donna__schedule_reminder",),
-            banned_tools=("mcp__donna__track_open_loop",),
+            expected_tools=("mcp__donna__attend",),
+            banned_tools=("mcp__donna__remember",),
             notes="Explicit time → schedule_reminder, not track_open_loop.",
         ),
         MultiTurn(
@@ -129,7 +129,7 @@ THREE_DAY_ARC = MultiTurnFixture(
             at="2026-04-20T21:10:00",
             message="mood's a 3 today",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             notes="Numeric mood → log_observation.",
         ),
 
@@ -139,8 +139,8 @@ THREE_DAY_ARC = MultiTurnFixture(
             at="2026-04-21T11:45:00",
             message="how much did i spend yesterday",
             category="memory_recall",
-            expected_tools=("mcp__donna__read_tracker",),
-            banned_tools=("mcp__donna__recall_graph",),
+            expected_tools=("mcp__donna__recall",),
+            banned_tools=("mcp__donna__recall",),
             notes="Countable → tracker. Should find the $6 from day 1.",
         ),
         MultiTurn(
@@ -148,7 +148,7 @@ THREE_DAY_ARC = MultiTurnFixture(
             at="2026-04-21T15:30:00",
             message="what did sarah say about the offer",
             category="memory_recall",
-            expected_tools=("mcp__donna__recall_graph",),
+            expected_tools=("mcp__donna__recall",),
             notes="Person + prior conversation → graph recall.",
         ),
         MultiTurn(
@@ -156,7 +156,7 @@ THREE_DAY_ARC = MultiTurnFixture(
             at="2026-04-21T19:20:00",
             message="slept 5 hours last night",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             notes="Second sleep log — day-over-day tracker material.",
         ),
         MultiTurn(
@@ -178,7 +178,7 @@ THREE_DAY_ARC = MultiTurnFixture(
             at="2026-04-22T08:30:00",
             message="how's my sleep been the last 3 nights",
             category="memory_recall",
-            expected_tools=("mcp__donna__read_tracker",),
+            expected_tools=("mcp__donna__recall",),
             notes="Multi-day tracker read. Should see both 4h and 5h from day 1+2.",
         ),
         MultiTurn(
@@ -186,7 +186,7 @@ THREE_DAY_ARC = MultiTurnFixture(
             at="2026-04-22T10:15:00",
             message="what am i forgetting",
             category="memory_recall",
-            expected_tools=("mcp__donna__list_open_loops",),
+            expected_tools=("mcp__donna__recall",),
             notes="Generic 'what am i forgetting' → list_open_loops. Should see sarah.",
         ),
         MultiTurn(
@@ -195,8 +195,8 @@ THREE_DAY_ARC = MultiTurnFixture(
             message="what was my mood on monday",
             category="memory_recall",
             expected_tools=(
-                "mcp__donna__resolve_time_expression",
-                "mcp__donna__read_tracker",
+                "mcp__donna__recall",
+                "mcp__donna__recall",
             ),
             notes="Time + tracker composition. Resolve 'monday' then query tracker.",
         ),
@@ -206,8 +206,8 @@ THREE_DAY_ARC = MultiTurnFixture(
             message="moved the sarah follow-up to friday",
             category="memory_write",
             expected_tools=(
-                "mcp__donna__list_open_loops",
-                "mcp__donna__close_open_loop",
+                "mcp__donna__recall",
+                "mcp__donna__remember",
             ),
             notes="Resolves the day-1 loop. Find it first, then close.",
         ),
@@ -241,7 +241,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-20T08:15:00",
             message="morning coffee, 5 bucks",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             notes="1st expense of the week.",
         ),
         MultiTurn(
@@ -249,22 +249,22 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-20T08:20:00",
             message="slept 6 hours last night",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
         ),
         MultiTurn(
             turn_id="w_d1_lunch",
             at="2026-04-20T13:45:00",
             message="lunch was 180 rupees",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
         ),
         MultiTurn(
             turn_id="w_d1_open_loop_luca",
             at="2026-04-20T16:00:00",
             message="need to send luca the deck this week",
             category="memory_write",
-            expected_tools=("mcp__donna__track_open_loop",),
-            banned_tools=("mcp__donna__schedule_reminder",),
+            expected_tools=("mcp__donna__remember",),
+            banned_tools=("mcp__donna__attend",),
             notes="Untimed → open loop, not reminder.",
         ),
         MultiTurn(
@@ -272,7 +272,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-20T17:30:00",
             message="remind me about the antler call thursday 4pm",
             category="memory_write",
-            expected_tools=("mcp__donna__schedule_reminder",),
+            expected_tools=("mcp__donna__attend",),
             notes="Explicit time → schedule_reminder.",
         ),
         MultiTurn(
@@ -280,7 +280,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-20T19:00:00",
             message="another coffee, 6 bucks",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             notes="2nd coffee same day. Idempotency guard should NOT block (different amount).",
         ),
         MultiTurn(
@@ -288,7 +288,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-20T21:30:00",
             message="mood's a 2 tonight, drained",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
         ),
 
         # ──── Day 2 (Tue 2026-04-21) — write saturation part 2 ────
@@ -297,21 +297,21 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-21T08:10:00",
             message="only 4 hours sleep",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
         ),
         MultiTurn(
             turn_id="w_d2_coffee",
             at="2026-04-21T09:30:00",
             message="coffee 5 bucks",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
         ),
         MultiTurn(
             turn_id="w_d2_no_write_feelings",
             at="2026-04-21T11:00:00",
             message="feeling scattered today, brain fog",
             category="memory_write",
-            banned_tools=("mcp__donna__log_observation",),
+            banned_tools=("mcp__donna__remember",),
             notes="Vague feeling, no number → do NOT log.",
         ),
         MultiTurn(
@@ -319,7 +319,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-21T13:00:00",
             message="sarah wants an answer on the term sheet by friday",
             category="memory_write",
-            expected_tools=("mcp__donna__track_open_loop",),
+            expected_tools=("mcp__donna__remember",),
             notes="Deadline-bearing commitment → open loop.",
         ),
         MultiTurn(
@@ -327,14 +327,14 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-21T15:45:00",
             message="uber to the airport, 350 rupees",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
         ),
         MultiTurn(
             turn_id="w_d2_exercise",
             at="2026-04-21T18:00:00",
             message="ran 3k today",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             notes="Exercise observation with distance.",
         ),
         MultiTurn(
@@ -342,14 +342,14 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-21T22:15:00",
             message="mood 4, antler went okay",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
         ),
         MultiTurn(
             turn_id="w_d2_reminder_gym",
             at="2026-04-21T23:00:00",
             message="wake me at 6am tomorrow for the gym",
             category="memory_write",
-            expected_tools=("mcp__donna__schedule_reminder",),
+            expected_tools=("mcp__donna__attend",),
         ),
 
         # ──── Day 3 (Wed 2026-04-22) — read probe day ────
@@ -358,7 +358,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-22T08:00:00",
             message="what did i spend in total these last two days",
             category="memory_recall",
-            expected_tools=("mcp__donna__read_tracker",),
+            expected_tools=("mcp__donna__recall",),
             notes=(
                 "Direct aggregation across explicit period. Should read_tracker "
                 "with period spanning monday+tuesday. Expect sum near the written "
@@ -371,7 +371,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-22T09:10:00",
             message="am i spending more today than monday",
             category="memory_recall",
-            expected_tools=("mcp__donna__read_tracker",),
+            expected_tools=("mcp__donna__recall",),
             notes="Period comparison. She should pull both periods. No day-3 expenses yet → answer should reflect zero.",
         ),
         MultiTurn(
@@ -379,7 +379,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-22T10:00:00",
             message="what was my first coffee cost",
             category="memory_recall",
-            expected_tools=("mcp__donna__read_tracker",),
+            expected_tools=("mcp__donna__recall",),
             notes="Specific item recall. Expect $5 (first logged was monday 8:15).",
         ),
         MultiTurn(
@@ -387,7 +387,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-22T10:45:00",
             message="how's my sleep been this week",
             category="memory_recall",
-            expected_tools=("mcp__donna__read_tracker",),
+            expected_tools=("mcp__donna__recall",),
             notes="Pattern recall — should see 6h mon, 4h tue. Answer should name both.",
         ),
         MultiTurn(
@@ -395,7 +395,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-22T11:30:00",
             message="is my mood tracking with my sleep this week",
             category="memory_recall",
-            expected_tools=("mcp__donna__read_tracker",),
+            expected_tools=("mcp__donna__recall",),
             notes=(
                 "Type-mixing synthesis. Should correlate sleep (6h,4h) with mood "
                 "(2,4). Needs two tracker reads or one tracker read over all types. "
@@ -407,7 +407,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-22T12:00:00",
             message="what was sarah's ask again",
             category="memory_recall",
-            expected_tools=("mcp__donna__recall_graph",),
+            expected_tools=("mcp__donna__recall",),
             notes="Person-centric recall. Should find 'term sheet by friday' from day 2.",
         ),
         MultiTurn(
@@ -415,7 +415,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-22T13:30:00",
             message="what am i forgetting",
             category="memory_recall",
-            expected_tools=("mcp__donna__list_open_loops",),
+            expected_tools=("mcp__donna__recall",),
             notes="Should surface luca deck + sarah term sheet (both tracked).",
         ),
         MultiTurn(
@@ -424,8 +424,8 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             message="what did i log on monday",
             category="memory_recall",
             expected_tools=(
-                "mcp__donna__resolve_time_expression",
-                "mcp__donna__read_tracker",
+                "mcp__donna__recall",
+                "mcp__donna__recall",
             ),
             notes=(
                 "Time + tracker composition. 'Monday' must resolve to day 1 range, "
@@ -437,7 +437,7 @@ WRITE_HEAVY_READ_PROBE = MultiTurnFixture(
             at="2026-04-22T16:00:00",
             message="should i be worried about my spending",
             category="memory_recall",
-            expected_tools=("mcp__donna__read_tracker",),
+            expected_tools=("mcp__donna__recall",),
             notes=(
                 "Speculative/judgment. Needs tracker read + interpretation. Donna "
                 "should take a position, not hedge."
@@ -513,7 +513,7 @@ AWARENESS_ARC = MultiTurnFixture(
             message="ughhhhh",
             category="voice",
             max_reply_words=6,
-            banned_tools=("mcp__donna__log_observation", "mcp__donna__track_open_loop"),
+            banned_tools=("mcp__donna__remember", "mcp__donna__remember"),
             should_ignore=("pure ambient — no log, no track, just a minimal ack",),
             notes="Opening vibe. Any tool call is wrong.",
         ),
@@ -547,9 +547,9 @@ AWARENESS_ARC = MultiTurnFixture(
             message="which is better coconut water or electrolyte powder",
             category="voice",
             banned_tools=(
-                "mcp__donna__log_observation",
-                "mcp__donna__track_open_loop",
-                "mcp__donna__schedule_reminder",
+                "mcp__donna__remember",
+                "mcp__donna__remember",
+                "mcp__donna__attend",
             ),
             should_catch=("user values hydration / health (soft fact)",),
             should_ignore=("NOT a log. A tangent question.",),
@@ -560,7 +560,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-20T10:30:00",
             message="morning coffee happened. 6 bucks. killer barista tho she remembered my order",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=(
                 "expense=6, type=coffee",
                 "semantic: user is a regular at a specific cafe (barista knows order)",
@@ -586,7 +586,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-20T14:00:00",
             message="just spent 30 min doomscrolling. why am i like this",
             category="voice",
-            banned_tools=("mcp__donna__log_observation",),
+            banned_tools=("mcp__donna__remember",),
             should_catch=(
                 "self-perception: user sees themselves as a procrastinator",
                 "mood signal: frustrated at self",
@@ -615,7 +615,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-20T17:45:00",
             message="lunch was 220 rs, chole bhature, worth it",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=(
                 "expense=220 INR",
                 "food preference: chole bhature",
@@ -628,7 +628,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-20T19:00:00",
             message="sarah asked about the term sheet. said friday",
             category="memory_write",
-            expected_tools=("mcp__donna__track_open_loop",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=(
                 "commitment: sarah expects answer by friday",
                 "person: Sarah (business, likely investor/acquirer)",
@@ -640,7 +640,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-20T21:30:00",
             message="you know what's funny, a year ago i'd have said yes to anything. now i triage",
             category="voice",
-            banned_tools=("mcp__donna__log_observation",),
+            banned_tools=("mcp__donna__remember",),
             should_catch=(
                 "self-perception: user has evolved — more selective, boundaries",
                 "fits Living Profile: growth-oriented, self-observing",
@@ -655,7 +655,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-20T22:45:00",
             message="mood 3. bad brain. night",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=("mood=3, sign-off",),
             max_reply_words=8,
             notes="Sign-off. Log mood, don't lecture, match the register.",
@@ -667,7 +667,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-21T08:30:00",
             message="slept 7 hours what a luxury",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=("sleep=7h + user's voice: treats 7h as luxury (implies baseline low)",),
             notes="Log + should maybe call this out vs the 5h yesterday. Continuity win.",
         ),
@@ -677,9 +677,9 @@ AWARENESS_ARC = MultiTurnFixture(
             message="k gm",
             category="voice",
             banned_tools=(
-                "mcp__donna__log_observation",
-                "mcp__donna__smart_recall",
-                "mcp__donna__read_tracker",
+                "mcp__donna__remember",
+                "mcp__donna__recall",
+                "mcp__donna__recall",
             ),
             max_reply_words=3,
             should_ignore=("pure ambient greeting",),
@@ -718,7 +718,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-21T13:00:00",
             message="lunch same place, 220",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=(
                 "expense=220, same cafe as yesterday (pattern reinforcement)",
                 "voice: extremely terse — she's trusting Donna to infer",
@@ -742,7 +742,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-21T17:20:00",
             message="coffee no 3 dont judge",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=(
                 "expense: another coffee",
                 "voice: playful / self-aware habit",
@@ -772,8 +772,8 @@ AWARENESS_ARC = MultiTurnFixture(
             message="the uber driver literally did not move for 10 minutes what",
             category="voice",
             banned_tools=(
-                "mcp__donna__log_observation",
-                "mcp__donna__track_open_loop",
+                "mcp__donna__remember",
+                "mcp__donna__remember",
             ),
             should_ignore=("vent — no data, no action required",),
             max_reply_words=10,
@@ -784,7 +784,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-21T22:00:00",
             message="mood 4, shaky but okay",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=("mood=4 + 'shaky' qualitative note",),
             max_reply_words=8,
             notes="Sign-off log. Note 'shaky' doesn't go into the numeric fields but could go in raw.",
@@ -796,7 +796,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-22T08:00:00",
             message="so what's on my plate today",
             category="memory_recall",
-            expected_tools=("mcp__donna__list_open_loops",),
+            expected_tools=("mcp__donna__recall",),
             should_catch=(
                 "open loops: luca deck, sarah term sheet (both tracked)",
                 "calendar: antler thursday (already scheduled)",
@@ -811,7 +811,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-22T09:15:00",
             message="how's my coffee spending been",
             category="memory_recall",
-            expected_tools=("mcp__donna__read_tracker",),
+            expected_tools=("mcp__donna__recall",),
             should_catch=(
                 "should reference multiple coffee logs from mon+tue",
                 "pattern: 3+ coffees/day — worth noting or not (judgment)",
@@ -823,7 +823,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-22T10:30:00",
             message="remind me why sarah's offer felt weird",
             category="memory_recall",
-            expected_tools=("mcp__donna__recall_graph",),
+            expected_tools=("mcp__donna__recall",),
             should_catch=(
                 "should surface the 20% / 2yr / no-accel numbers from day 2",
                 "connect to user's own 'now i triage' framing if she's aware",
@@ -878,7 +878,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-22T17:30:00",
             message="wait did i log the uber yesterday",
             category="memory_recall",
-            expected_tools=("mcp__donna__read_tracker",),
+            expected_tools=("mcp__donna__recall",),
             should_catch=(
                 "truth: user did NOT log the uber — the 'uber driver did not move' "
                 "was a vent, not a log. She should say 'no, you just vented about "
@@ -895,7 +895,7 @@ AWARENESS_ARC = MultiTurnFixture(
             at="2026-04-22T20:00:00",
             message="sanj landed. going out. mood 5 finally",
             category="memory_write",
-            expected_tools=("mcp__donna__log_observation",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=(
                 "mood=5 (peak of the week)",
                 "continuity: sanj arrival was foreshadowed day 1",
@@ -937,7 +937,7 @@ TIMEZONE_PROPAGATION_ARC = MultiTurnFixture(
             at="2026-04-22T09:00:00",
             message="actually my timezone is America/New_York",
             category="memory_write",
-            expected_tools=("mcp__donna__set_timezone",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=(
                 "operational tz updated to NYC",
                 "bitemporal Fact(predicate=current_timezone, object=America/New_York) recorded",
@@ -950,8 +950,8 @@ TIMEZONE_PROPAGATION_ARC = MultiTurnFixture(
             message="what timezone do you have for me",
             category="memory_recall",
             banned_tools=(
-                "mcp__donna__recall_graph",
-                "mcp__donna__recall_episodic",
+                "mcp__donna__recall",
+                "mcp__donna__recall",
             ),
             should_catch=(
                 "reply mentions New York / Eastern / America/New_York",
@@ -968,7 +968,7 @@ TIMEZONE_PROPAGATION_ARC = MultiTurnFixture(
             at="2026-04-22T15:00:00",
             message="wait scratch that, back to Asia/Singapore",
             category="memory_write",
-            expected_tools=("mcp__donna__set_timezone",),
+            expected_tools=("mcp__donna__remember",),
             should_catch=(
                 "bitemporal update: NY row closed (t_valid_to set), SG row opened",
                 "list_history should now return 2 rows for predicate=current_timezone",

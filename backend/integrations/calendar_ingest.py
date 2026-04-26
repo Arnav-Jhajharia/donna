@@ -78,6 +78,19 @@ async def ingest_calendar_event(user_id: str, event: dict[str, Any]) -> None:
 
         await session.commit()
 
+    # Best-effort: hand the event to the calendar spawner. Never block
+    # the ingest path on a spawner failure — the row already committed.
+    try:
+        from proactive.spawners import calendar as calendar_spawner
+
+        await calendar_spawner.maybe_spawn(event, user_id)
+    except Exception:
+        logger.exception(
+            "ingest_calendar_event: spawner raised user=%s event=%s",
+            user_id[:8] if user_id else "?",
+            google_event_id,
+        )
+
 
 async def delete_calendar_event(user_id: str, google_event_id: str) -> None:
     async with _session_factory()() as session:

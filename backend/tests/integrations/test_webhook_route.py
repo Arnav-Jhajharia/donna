@@ -356,9 +356,10 @@ async def test_webhook_connection_complete_subscribes_calendar_triggers(
     )
     assert r.status_code == 200
     triggers = captured["subscribe"][2]
-    assert "GOOGLECALENDAR_NEW_CALENDAR_EVENT" in triggers
-    assert "GOOGLECALENDAR_UPDATED_CALENDAR_EVENT" in triggers
-    assert "GOOGLECALENDAR_DELETED_CALENDAR_EVENT" in triggers
+    # V3 calendar trigger slugs (renamed 2026-04 — see composio_client.py).
+    assert "GOOGLECALENDAR_GOOGLE_CALENDAR_EVENT_CREATED_TRIGGER" in triggers
+    assert "GOOGLECALENDAR_GOOGLE_CALENDAR_EVENT_UPDATED_TRIGGER" in triggers
+    assert "GOOGLECALENDAR_EVENT_CANCELED_DELETED_TRIGGER" in triggers
 
 
 @pytest.mark.asyncio

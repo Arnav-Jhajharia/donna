@@ -60,9 +60,351 @@ _PRODUCT_TRIGGERS = {
     ),
 }
 
+# ---------------------------------------------------------------------------
+# Composio V3 dispatch
+# ---------------------------------------------------------------------------
+#
+# V3 webhooks fire events under names like ``composio.connected_account.created``
+# and ``composio.trigger.message``. The payload envelope wraps the actual data
+# inside a ``data`` key. Toolkit identity rides on ``data.toolkit.slug`` (or,
+# for trigger envelopes, the ``trigger_slug`` field). We accept either ``type``
+# or ``event`` as the dispatch key — Composio docs/clients have used both.
 
-async def run_bootstrap_async(user_id: str) -> None:
-    """Run all bootstrap stages plus biography synthesis. Fire-and-forget."""
+_GOOGLE_TOOLKIT_TO_PRODUCT = {
+    "gmail": "gmail",
+    "googlecalendar": "calendar",
+    "googledrive": "drive",
+}
+
+
+def _v3_provider_product(toolkit_slug: str) -> tuple[str, str]:
+    """Map a Composio toolkit slug to our (provider, product) so the row in
+    the integrations table is consistent with what connect_integration writes."""
+    if toolkit_slug in _GOOGLE_TOOLKIT_TO_PRODUCT:
+        return "google", _GOOGLE_TOOLKIT_TO_PRODUCT[toolkit_slug]
+    return "composio", toolkit_slug
+
+
+def _extract_v3_toolkit_slug(data: dict) -> str | None:
+    """V3 payloads expose toolkit as ``{slug, ...}`` under ``data.toolkit``,
+    or sometimes flat as ``data.toolkit_slug``. Try both."""
+    if not isinstance(data, dict):
+        return None
+    toolkit = data.get("toolkit")
+    if isinstance(toolkit, dict) and toolkit.get("slug"):
+        return str(toolkit["slug"]).lower()
+    if isinstance(toolkit, str):
+        return toolkit.lower()
+    flat = data.get("toolkit_slug")
+    if isinstance(flat, str):
+        return flat.lower()
+    return None
+
+
+def _extract_v3_user_id(payload: dict, data: dict) -> str | None:
+    """user_id may sit at the envelope level or inside data — accept either."""
+    for src in (data, payload):
+        if isinstance(src, dict):
+            uid = src.get("user_id") or src.get("userId")
+            if uid:
+                return str(uid)
+    return None
+
+
+async def _handle_v3_connected_account_created(payload: dict, data: dict) -> dict:
+    user_id = _extract_v3_user_id(payload, data)
+    toolkit_slug = _extract_v3_toolkit_slug(data)
+    if not user_id or not toolkit_slug:
+        logger.warning(
+            "composio_webhook v3: connected_account.created missing user_id/toolkit"
+        )
+        return {"ok": True, "ignored": True, "reason": "missing_fields"}
+
+    connection_id = str(data.get("id") or data.get("connected_account_id") or "")
+    provider, product = _v3_provider_product(toolkit_slug)
+    await state.upsert_pending(user_id, provider, product)
+    await state.mark_connected(
+        user_id, provider, product, connection_id=connection_id
+    )
+
+    # Subscribe live triggers for the google products that have them so
+    # subsequent gmail.new_message / calendar.event.* events flow back here.
+    triggers = _PRODUCT_TRIGGERS.get(product, ())
+    if triggers and connection_id:
+        try:
+            client = ComposioClient(api_key=settings.composio_api_key or "")
+            await client.subscribe_triggers(
+                user_id=user_id,
+                connection_id=connection_id,
+                trigger_names=triggers,
+            )
+        except Exception:
+            logger.exception(
+                "composio_webhook v3: subscribe_triggers failed user=%s product=%s",
+                user_id, product,
+            )
+
+    # Immediate-confirm ping for ANY toolkit landing — google toolkits
+    # also get a post-bootstrap follow-up later but still need the
+    # immediate ack so the user knows the OAuth tap actually worked.
+    try:
+        from backend.integrations.notify import (
+            STAGE_CONNECTED,
+            notify_integration_complete,
+        )
+
+        asyncio.create_task(
+            notify_integration_complete(
+                user_id, [toolkit_slug], stage=STAGE_CONNECTED
+            )
+        )
+    except Exception:
+        logger.exception(
+            "composio_webhook v3: notify spawn failed user=%s", user_id
+        )
+
+    # Fire bootstrap only when google lands. Idempotent — duplicate
+    # webhooks within the dedupe window become no-ops. Bootstrap fires
+    # its own post-bootstrap "read through your inbox" ping.
+    if provider == "google":
+        asyncio.create_task(run_bootstrap_async(user_id))
+    return {"ok": True, "marked_connected": f"{provider}_{product}"}
+
+
+async def _handle_v3_connected_account_revoked(payload: dict, data: dict) -> dict:
+    user_id = _extract_v3_user_id(payload, data)
+    toolkit_slug = _extract_v3_toolkit_slug(data)
+    if not user_id or not toolkit_slug:
+        return {"ok": True, "ignored": True, "reason": "missing_fields"}
+    provider, product = _v3_provider_product(toolkit_slug)
+    await state.mark_revoked(user_id, provider, product)
+    return {"ok": True, "marked_revoked": f"{provider}_{product}"}
+
+
+_GMAIL_TRIGGER_SLUGS = {TRIGGER_GMAIL_NEW_MESSAGE, "GMAIL_NEW_MESSAGE"}
+_CALENDAR_UPSERT_TRIGGER_SLUGS = {
+    TRIGGER_CALENDAR_EVENT_CREATED,
+    TRIGGER_CALENDAR_EVENT_UPDATED,
+    "GOOGLECALENDAR_EVENT_CREATED",
+    "GOOGLECALENDAR_EVENT_UPDATED",
+}
+_CALENDAR_DELETE_TRIGGER_SLUGS = {
+    TRIGGER_CALENDAR_EVENT_DELETED,
+    "GOOGLECALENDAR_EVENT_DELETED",
+}
+
+
+async def _handle_v3_trigger_message(payload: dict, data: dict) -> dict:
+    """Unwrap a V3 trigger envelope and route to the right ingest handler.
+
+    Trigger envelopes carry the inner payload under ``data.trigger_data``
+    (Composio's convention) or ``data.payload`` (older naming). The slug
+    identifies which integration fired; we use it to dispatch."""
+    user_id = _extract_v3_user_id(payload, data)
+    if not user_id:
+        return {"ok": True, "ignored": True, "reason": "missing_user_id"}
+
+    trigger_slug = str(
+        data.get("trigger_slug")
+        or data.get("trigger_name")
+        or data.get("triggerName")
+        or ""
+    ).upper()
+    if not trigger_slug:
+        logger.warning("composio_webhook v3: trigger.message missing slug")
+        return {"ok": True, "ignored": True, "reason": "missing_trigger_slug"}
+
+    inner = (
+        data.get("trigger_data")
+        or data.get("payload")
+        or data.get("data")
+        or {}
+    )
+
+    if trigger_slug in _GMAIL_TRIGGER_SLUGS:
+        message_id = (
+            inner.get("message_id")
+            or inner.get("messageId")
+            or inner.get("id")
+        )
+        if not message_id:
+            logger.warning(
+                "composio_webhook v3: gmail trigger missing message_id"
+            )
+            return {"ok": True, "ignored": True, "reason": "missing_message_id"}
+        try:
+            client = ComposioClient(api_key=settings.composio_api_key or "")
+            msg = await client.fetch_gmail_message(
+                user_id=user_id, message_id=message_id, include_body=True
+            )
+            await ingest_gmail_message(user_id, msg)
+            await state.touch_synced(user_id, "google", "gmail")
+        except Exception:
+            logger.exception(
+                "composio_webhook v3: gmail ingest failed user=%s msg=%s",
+                user_id, message_id,
+            )
+        return {"ok": True, "ingested": "gmail.new_message"}
+
+    if trigger_slug in _CALENDAR_UPSERT_TRIGGER_SLUGS:
+        ev = inner if isinstance(inner, dict) else {}
+        if not ev.get("id"):
+            return {"ok": True, "ignored": True, "reason": "missing_event_id"}
+        try:
+            await ingest_calendar_event(user_id, ev)
+            await state.touch_synced(user_id, "google", "calendar")
+        except Exception:
+            logger.exception(
+                "composio_webhook v3: calendar upsert failed user=%s", user_id
+            )
+        return {"ok": True, "ingested": "calendar.event.upsert"}
+
+    if trigger_slug in _CALENDAR_DELETE_TRIGGER_SLUGS:
+        ev = inner if isinstance(inner, dict) else {}
+        ev_id = ev.get("id") or inner.get("event_id")
+        if not ev_id:
+            return {"ok": True, "ignored": True, "reason": "missing_event_id"}
+        try:
+            await delete_calendar_event(user_id, ev_id)
+            await state.touch_synced(user_id, "google", "calendar")
+        except Exception:
+            logger.exception(
+                "composio_webhook v3: calendar delete failed user=%s", user_id
+            )
+        return {"ok": True, "ingested": "calendar.event.deleted"}
+
+    logger.info(
+        "composio_webhook v3: unhandled trigger_slug=%r user=%s",
+        trigger_slug, user_id,
+    )
+    return {"ok": True, "unhandled_trigger": trigger_slug}
+
+
+async def _dispatch_v3(event_type: str, payload: dict) -> dict:
+    """Route a V3 envelope to the right handler by event type."""
+    data = payload.get("data") or {}
+    if event_type == "composio.connected_account.created":
+        return await _handle_v3_connected_account_created(payload, data)
+    if event_type in (
+        "composio.connected_account.expired",
+        "composio.connected_account.deleted",
+    ):
+        return await _handle_v3_connected_account_revoked(payload, data)
+    if event_type == "composio.trigger.message":
+        return await _handle_v3_trigger_message(payload, data)
+    if event_type == "composio.trigger.disabled":
+        # Trigger died (e.g. quota exhausted). Log so we can re-subscribe;
+        # nothing else to do without losing the user's data.
+        logger.warning("composio_webhook v3: trigger disabled payload=%r", data)
+        return {"ok": True, "noted": "trigger_disabled"}
+    logger.info("composio_webhook v3: unhandled type=%r", event_type)
+    return {"ok": True, "unhandled": event_type}
+
+
+# Skip a duplicate bootstrap run if the previous one completed successfully
+# within this window. Prevents thundering-herd on multi-toolkit OAuth chains
+# (gmail + calendar + drive each fire watcher.bootstrap when they go ACTIVE)
+# and on any transient re-trigger paths.
+_BOOTSTRAP_DUPLICATE_WINDOW_S = 60 * 60
+
+
+def _utcnow_naive():
+    from datetime import datetime, timezone
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+async def _read_bootstrap_runs(user_id: str) -> dict:
+    """Returns the bootstrap_runs sub-dict from users.living_profile,
+    or {} if the user / field is missing."""
+    from sqlalchemy import select
+
+    from backend.db.session import async_session
+    from db.models import User
+
+    async with async_session() as s:
+        user = (
+            await s.execute(select(User).where(User.id == user_id))
+        ).scalar_one_or_none()
+        if user is None:
+            return {}
+        profile = user.living_profile or {}
+        return dict(profile.get("bootstrap_runs") or {})
+
+
+async def _write_bootstrap_runs(user_id: str, patch: dict) -> None:
+    """Merge a patch into users.living_profile.bootstrap_runs."""
+    from sqlalchemy import select
+    from sqlalchemy.orm.attributes import flag_modified
+
+    from backend.db.session import async_session
+    from db.models import User
+
+    async with async_session() as s:
+        user = (
+            await s.execute(select(User).where(User.id == user_id))
+        ).scalar_one_or_none()
+        if user is None:
+            return
+        profile = dict(user.living_profile or {})
+        runs = dict(profile.get("bootstrap_runs") or {})
+        runs.update(patch)
+        profile["bootstrap_runs"] = runs
+        user.living_profile = profile
+        flag_modified(user, "living_profile")
+        await s.commit()
+
+
+def _is_recent_success(runs: dict) -> bool:
+    """True if a successful bootstrap completed within the duplicate-skip
+    window. Anything else (failed / running / never ran) -> False."""
+    if runs.get("last_status") != "completed":
+        return False
+    last_completed = runs.get("last_completed_at")
+    if not last_completed:
+        return False
+    try:
+        from datetime import datetime
+        when = datetime.fromisoformat(last_completed)
+    except ValueError:
+        return False
+    delta = (_utcnow_naive() - when).total_seconds()
+    return 0 <= delta < _BOOTSTRAP_DUPLICATE_WINDOW_S
+
+
+async def run_bootstrap_async(user_id: str) -> dict:
+    """Run all bootstrap stages plus biography synthesis. Fire-and-forget.
+
+    Idempotent: skips silently if a successful run completed within the
+    last hour, so multi-toolkit OAuth completions don't kick the gmail
+    pipeline three times. On failure, persists the error to
+    users.living_profile.bootstrap_runs so Donna can surface it.
+    Returns a small status dict for observability.
+    """
+    runs = await _read_bootstrap_runs(user_id)
+    if _is_recent_success(runs):
+        logger.info(
+            "run_bootstrap_async: skip user=%s — recent successful run %s",
+            user_id,
+            runs.get("last_completed_at"),
+        )
+        return {"status": "skipped", "reason": "recent_success"}
+    if runs.get("last_status") == "running":
+        # Concurrent watchers — let the first one win.
+        started = runs.get("last_started_at")
+        logger.info(
+            "run_bootstrap_async: skip user=%s — already running since %s",
+            user_id,
+            started,
+        )
+        return {"status": "skipped", "reason": "already_running"}
+
+    started_at = _utcnow_naive().isoformat()
+    await _write_bootstrap_runs(user_id, {
+        "last_started_at": started_at,
+        "last_status": "running",
+        "last_error": None,
+    })
+
     try:
         await bootstrap_today_dense(user_id)
         await bootstrap_30d_important(user_id)
@@ -103,11 +445,64 @@ async def run_bootstrap_async(user_id: str) -> None:
             for r in rows
         ]
         await synthesize_biography(user_id, msgs, aggregates)
-    except Exception:
+
+        completed_at = _utcnow_naive().isoformat()
+        await _write_bootstrap_runs(user_id, {
+            "last_completed_at": completed_at,
+            "last_status": "completed",
+            "last_error": None,
+        })
+        logger.info("run_bootstrap_async: completed user=%s", user_id)
+
+        # Tell the user the bootstrap is done. Reads which google toolkits
+        # are actually live so the message reflects reality (e.g. they
+        # might've connected gmail+calendar+drive but only gmail is the
+        # bootstrap-relevant one to mention).
+        try:
+            from backend.integrations import state as _state
+            from backend.integrations.notify import notify_integration_complete
+
+            rows = await _state.list_user_integrations(user_id)
+            google_toolkit_slugs = {
+                "gmail": "gmail",
+                "calendar": "googlecalendar",
+                "drive": "googledrive",
+            }
+            connected = [
+                google_toolkit_slugs[r.product]
+                for r in rows
+                if r.provider == "google"
+                and r.status == "connected"
+                and r.product in google_toolkit_slugs
+            ]
+            if connected:
+                from backend.integrations.notify import STAGE_BOOTSTRAPPED
+
+                await notify_integration_complete(
+                    user_id, connected, stage=STAGE_BOOTSTRAPPED
+                )
+        except Exception:
+            logger.exception(
+                "run_bootstrap_async: notify failed user=%s", user_id
+            )
+
+        return {"status": "completed", "completed_at": completed_at}
+    except Exception as exc:
         logger.exception("bootstrap failed user=%s", user_id)
+        await _write_bootstrap_runs(user_id, {
+            "last_status": "failed",
+            "last_error": f"{type(exc).__name__}: {exc}"[:500],
+            "last_failed_at": _utcnow_naive().isoformat(),
+        })
+        return {"status": "failed", "error": str(exc)[:500]}
 
 
+# Composio's webhook UI defaults vary between accounts — some users
+# configured the singular ``/webhook/composio`` and some the plural
+# ``/webhooks/composio``. Accept both so a misconfigured URL doesn't
+# silently 404 the event into the void.
 @router.post("/webhooks/composio")
+@router.post("/webhook/composio")
 async def composio_webhook(
     request: Request,
     x_composio_signature: str | None = Header(default=None),
@@ -121,6 +516,13 @@ async def composio_webhook(
         payload = json.loads(body)
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="bad json")
+
+    # V3 envelopes use "type" with a "composio.*" prefix; legacy v1/v2
+    # envelopes use "event" with bare names. Accept either; dispatch V3
+    # first because the prefix gives us an unambiguous signal.
+    event_type = str(payload.get("type") or payload.get("event") or "")
+    if event_type.startswith("composio."):
+        return await _dispatch_v3(event_type, payload)
 
     event = payload.get("event")
     user_id = payload.get("user_id")

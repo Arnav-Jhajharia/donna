@@ -1,0 +1,20 @@
+# Railway config for donna-voice.
+# Build via Dockerfile; healthcheck on /health.
+
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+startCommand = "python -m donna_voice.agent start"
+healthcheckPath = "/health"
+healthcheckTimeout = 30
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 5
+
+# Single instance is fine for v0 — LiveKit Cloud dispatches multiple
+# concurrent rooms to one worker. Scale horizontally later by raising
+# this and ensuring the worker is stateless (it already is).
+[deploy.envOverrides]
+HEALTH_PORT = "8080"
+LOG_LEVEL = "INFO"

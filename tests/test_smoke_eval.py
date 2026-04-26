@@ -53,7 +53,7 @@ class EvaluatorTests(unittest.TestCase):
     def test_fail_on_missing_terminal(self) -> None:
         f = SmokeFixture(id="x", message="hi", expected_terminal="send_burst")
         trace = _trace_with_burst(
-            "hi", [("mcp__donna__recall_graph", {"query": "x"})]
+            "hi", [("mcp__donna__recall", {"query": "x"})]
         )
         r = _evaluate(f, trace)
         self.assertFalse(r.passed)
@@ -76,7 +76,7 @@ class EvaluatorTests(unittest.TestCase):
             id="x",
             message="hi",
             expected_terminal="send_burst",
-            expected_tools=("mcp__donna__read_tracker",),
+            expected_tools=("mcp__donna__recall",),
         )
         trace = _trace_with_burst(
             "hi", [("mcp__donna__send_burst", {"messages": [{"type": "text", "body": "ok"}]})]

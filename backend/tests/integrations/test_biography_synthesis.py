@@ -73,3 +73,45 @@ async def test_synthesize_biography_writes_living_profile(db, monkeypatch):
             await s.execute(select(User).where(User.id == "u1"))
         ).scalar_one()
     assert user.living_profile["biography"]["overview"].startswith("founder")
+
+
+# --- fence-stripping ------------------------------------------------------
+
+
+def test_strip_json_fences_handles_markdown_block():
+    """Sonnet 4.6 sometimes wraps responses in ```json ... ```. The
+    parser must tolerate that — otherwise every biography pass returns
+    {} and synthesis never lands."""
+    from backend.integrations.biography_synthesis import _strip_json_fences
+
+    raw = '```json\n{"name": "Sarah"}\n```'
+    assert _strip_json_fences(raw) == '{"name": "Sarah"}'
+
+
+def test_strip_json_fences_handles_bare_fences():
+    from backend.integrations.biography_synthesis import _strip_json_fences
+
+    raw = '```\n[1, 2, 3]\n```'
+    assert _strip_json_fences(raw) == "[1, 2, 3]"
+
+
+def test_strip_json_fences_isolates_json_from_prose():
+    """Even when the model adds 'Here is the JSON:' before/after, the
+    stripper extracts the first balanced object."""
+    from backend.integrations.biography_synthesis import _strip_json_fences
+
+    raw = 'Sure! Here is the JSON:\n{"key": "value"}\nLet me know if you need more.'
+    assert _strip_json_fences(raw) == '{"key": "value"}'
+
+
+def test_strip_json_fences_passes_clean_json_through():
+    from backend.integrations.biography_synthesis import _strip_json_fences
+
+    raw = '{"clean": true}'
+    assert _strip_json_fences(raw) == '{"clean": true}'
+
+
+def test_strip_json_fences_handles_empty_string():
+    from backend.integrations.biography_synthesis import _strip_json_fences
+    assert _strip_json_fences("") == ""
+    assert _strip_json_fences("   \n  ") == ""

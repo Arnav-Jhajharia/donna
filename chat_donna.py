@@ -18,11 +18,27 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from donna_runtime.env import load_dotenv
+
+load_dotenv()
+
 from db.models import User
 from db.session import async_session
 from donna_runtime.config import DonnaAgentConfig
+from donna_runtime.context_builder import load_user_model_block, render_turn_context
+from donna_runtime.prompt import build_system_prompt
 from donna_runtime.runner import donna_turn
+from donna_runtime.session_store import resolve_session_id_db
+from donna_runtime.thinking_triage import should_think
 from donna_runtime.tracing import TurnTrace
+
+
+async def _load_user_tz(user_id: str) -> str:
+    async with async_session() as session:
+        row = (
+            await session.execute(select(User).where(User.id == user_id))
+        ).scalar_one_or_none()
+    return (row.timezone if row and row.timezone else "Asia/Singapore")
 
 
 async def _ensure_user(user_id: str, phone: str | None) -> None:
@@ -76,10 +92,6 @@ def _print_burst(trace: TurnTrace) -> None:
                         any_printed = True
                     elif t == "delay":
                         pass
-        elif tool.endswith("stay_silent"):
-            reason = call.get("inputs", {}).get("reason", "")
-            print(f"  donna │ (silent: {reason})")
-            any_printed = True
     if not any_printed:
         print("  donna │ (no terminator fired — possible loop bug)")
 
@@ -97,10 +109,13 @@ def _print_tool_trace(trace: TurnTrace) -> None:
 async def repl(user_id: str, phone: str | None, show_tools: bool) -> None:
     await _ensure_user(user_id, phone)
     print(f"donna chat · user_id={user_id}")
-    print("type /quit to exit, /trace for the last trace, /tools to toggle tool echo\n")
+    print(
+        "commands: /quit  /trace  /tools  /context  /prompt\n"
+    )
 
-    config = DonnaAgentConfig(user_id=user_id)
+    base_config = DonnaAgentConfig(user_id=user_id)
     last_trace: TurnTrace | None = None
+    user_tz = await _load_user_tz(user_id)
 
     while True:
         try:
@@ -122,6 +137,58 @@ async def repl(user_id: str, phone: str | None, show_tools: bool) -> None:
             show_tools = not show_tools
             print(f"  (tool echo {'on' if show_tools else 'off'})")
             continue
+        if line == "/context":
+            resume_id = await resolve_session_id_db(
+                explicit_session_id=None, user_id=user_id
+            )
+            preview_state = {
+                "user_id": user_id,
+                "_user_timezone": user_tz,
+                "_resume_session_id": resume_id,
+                "_is_first_message": last_trace is None,
+            }
+            turn_ctx = await render_turn_context(preview_state)
+            user_block = await load_user_model_block(user_id)
+            print("── PER-TURN CONTEXT (volatile, prepended to user msg) ──")
+            print(turn_ctx or "  (empty)")
+            print(f"  [{len(turn_ctx)} chars]")
+            print("── USER MODEL BLOCK (cached per-user in system prompt) ──")
+            print(user_block or "  (empty)")
+            print(f"  [{len(user_block)} chars]\n")
+            continue
+        if line == "/prompt":
+            user_block = await load_user_model_block(user_id)
+            prompt = build_system_prompt(
+                tool_mode=base_config.tool_mode,
+                user_model_block=user_block,
+            )
+            print("── SYSTEM PROMPT (what the SDK sees, cached) ──")
+            print(prompt)
+            print(f"  [{len(prompt)} chars / {prompt.count(chr(10)) + 1} lines]\n")
+            continue
+
+        resume_id = await resolve_session_id_db(
+            explicit_session_id=None, user_id=user_id
+        )
+        state = {
+            "user_id": user_id,
+            "_user_timezone": user_tz,
+            "_resume_session_id": resume_id,
+            "_is_first_message": last_trace is None,
+        }
+        turn_context = await render_turn_context(state)
+        user_model_block = await load_user_model_block(user_id)
+        think, think_reason = should_think(line, state)
+        from dataclasses import replace as _replace
+
+        config = _replace(
+            base_config,
+            resume_session_id=resume_id,
+            fork_session=False,
+            system_context=turn_context,
+            user_model_block=user_model_block,
+            thinking_enabled=think,
+        )
 
         t0 = time.perf_counter()
         last_trace = await donna_turn(line, config=config)
@@ -130,9 +197,10 @@ async def repl(user_id: str, phone: str | None, show_tools: bool) -> None:
         if show_tools:
             _print_tool_trace(last_trace)
         _print_burst(last_trace)
-        cost = last_trace.to_dict().get("cost") or 0.0
+        cost = last_trace.to_dict().get("total_cost_usd") or 0.0
         turns = last_trace.to_dict().get("num_turns") or 0
-        print(f"        · {elapsed:.1f}s · {turns} turns · ${cost:.4f}\n")
+        think_tag = f" · think:{think_reason}" if think else ""
+        print(f"        · {elapsed:.1f}s · {turns} turns · ${cost:.4f}{think_tag}\n")
 
 
 def main() -> None:

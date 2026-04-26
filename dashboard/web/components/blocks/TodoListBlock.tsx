@@ -1,8 +1,10 @@
 'use client';
 
 import { motion } from 'framer-motion';
+import { useState } from 'react';
 import { CheckIcon } from '../icons';
 import SectionHead from './SectionHead';
+import { useAction } from '@/lib/action-context';
 import type { TodoItem, TodoListBlock as TodoListSpec } from '@/lib/plan';
 
 export default function TodoListBlock({ spec }: { spec: TodoListSpec }) {
@@ -20,7 +22,17 @@ export default function TodoListBlock({ spec }: { spec: TodoListSpec }) {
 }
 
 function TodoRow({ todo }: { todo: TodoItem }) {
-  const { label, meta, source, done } = todo;
+  const fire = useAction();
+  const [optimisticDone, setOptimisticDone] = useState<boolean | null>(null);
+  const done = optimisticDone ?? Boolean(todo.done);
+  const { label, meta, source } = todo;
+
+  const onCheck = () => {
+    if (done || !todo.action) return;
+    setOptimisticDone(true);
+    void fire(todo.action);
+  };
+
   return (
     <div
       style={{
@@ -34,6 +46,17 @@ function TodoRow({ todo }: { todo: TodoItem }) {
     >
       <motion.div
         whileTap={{ scale: 0.92 }}
+        onClick={onCheck}
+        role="button"
+        aria-pressed={done}
+        aria-label={done ? `${label} kept` : `mark ${label} kept`}
+        tabIndex={todo.action ? 0 : -1}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onCheck();
+          }
+        }}
         style={{
           width: 18,
           height: 18,
@@ -44,7 +67,7 @@ function TodoRow({ todo }: { todo: TodoItem }) {
           alignItems: 'center',
           justifyContent: 'center',
           marginTop: 2,
-          cursor: 'pointer',
+          cursor: todo.action ? 'pointer' : 'default',
         }}
       >
         {done && <CheckIcon color="var(--paper-100)" />}

@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>donna — design system</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Red+Hat+Text:wght@400;500;600;700&display=swap"
+    rel="stylesheet"
+  />
+  <link rel="stylesheet" href="../tokens.css" />
+  <style>
+    /* ─────────────────────────────────────────────────────────────
+       showcase-only layout. no design tokens introduced here.
+       every color/type comes from ../tokens.css.
+       ───────────────────────────────────────────────────────────── */
+
+    html, body { margin: 0; padding: 0; }
+    body {
+      background: var(--color-paper);
+      color: var(--color-ink);
+      font-family: var(--font-sans);
+      -webkit-font-smoothing: antialiased;
+      font-feature-settings: "kern";
+    }
+
+    .shell {
+      max-width: 880px;
+      margin: 0 auto;
+      padding: var(--space-8) var(--space-5) var(--space-9);
+    }
+
+    section + section {
+      margin-top: var(--space-7);
+      padding-top: var(--space-7);
+      border-top: 1px solid var(--ink-300);
+    }
+
+    .stack-2 > * + * { margin-top: var(--space-2); }
+    .stack-3 > * + * { margin-top: var(--space-3); }
+    .stack-4 > * + * { margin-top: var(--space-4); }
+    .stack-5 > * + * { margin-top: var(--space-5); }
+
+    .swatch-row {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: var(--space-3);
+    }
+    @media (max-width: 680px) {
+      .swatch-row { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    .swatch {
+      border-radius: var(--radius-md);
+      height: 88px;
+      border: 1px solid var(--ink-300);
+      position: relative;
+      overflow: hidden;
+    }
+    .swatch__meta {
+      position: absolute;
+      bottom: var(--space-2);
+      left: var(--space-2);
+      right: var(--space-2);
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .swatch__name {
+      font-size: var(--type-caption-size);
+      line-height: var(--type-caption-line);
+      color: var(--color-paper);
+      mix-blend-mode: difference;
+      font-weight: 500;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .swatch__hex {
+      font-family: var(--font-mono);
+      font-size: var(--type-caption-size);
+      color: var(--color-paper);
+      mix-blend-mode: difference;
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* Blocks grid */
+    .blocks {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: var(--space-5);
+    }
+    @media (max-width: 760px) {
+      .blocks { grid-template-columns: 1fr; }
+    }
+
+    /* Gospel card treatments — inlined for showcase so people can copy */
+    .card-surface {
+      background: var(--color-surface);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+    }
+    .card-hairline {
+      background: var(--color-paper);
+      border: 1px solid var(--ink-300);
+      border-radius: var(--radius-md);
+      padding: var(--space-5);
+    }
+
+    .dot-rust {
+      display: inline-block;
+      width: 6px;
+      height: 6px;
+      border-radius: 9999px;
+      background: var(--color-rust);
+      animation: pulse 1.8s ease-in-out infinite;
+      margin-right: var(--space-2);
+      vertical-align: middle;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.35; }
+      50%      { opacity: 1; }
+    }
+
+    .chip {
+      display: inline-flex;
+      align-items: center;
+      padding: var(--space-1) var(--space-3);
+      border-radius: 9999px;
+      font-family: var(--font-sans);
+      font-size: var(--type-small-size);
+      line-height: var(--type-small-line);
+    }
+    .chip-listening { color: var(--color-rust); }
+    .chip-idle      { color: var(--color-muted); }
+    .chip-success   { color: var(--signal-success); background: var(--signal-success-tint); }
+    .chip-warning   { color: var(--signal-warning); background: var(--signal-warning-tint); }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      padding: 12px var(--space-5);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: var(--type-button-size);
+      line-height: 1;
+      font-weight: var(--weight-medium);
+      cursor: pointer;
+      transition: background-color var(--duration-fast) var(--ease-standard);
+      border: 1px solid transparent;
+    }
+    .btn-primary {
+      background: var(--color-rust);
+      color: var(--color-paper);
+    }
+    .btn-primary:hover { background: var(--rust-900); }
+    .btn-secondary {
+      background: var(--color-paper);
+      color: var(--color-ink);
+      border-color: var(--ink-300);
+    }
+    .btn-secondary:hover { background: var(--color-surface); }
+    .btn-ghost {
+      background: transparent;
+      color: var(--color-ink);
+    }
+    .btn-ghost:hover { background: var(--color-surface); }
+
+    .btn-row { display: flex; gap: var(--space-3); flex-wrap: wrap; }
+
+    /* Block demos */
+    .block-demo {
+      font-family: var(--font-sans);
+    }
+    .block-demo .num {
+      font-family: var(--font-serif);
+      font-size: 44px;
+      line-height: 1;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      font-variant-numeric: tabular-nums;
+      color: var(--color-ink);
+    }
+    .block-demo .num-unit {
+      font-size: var(--type-small-size);
+      color: var(--color-muted);
+      margin-top: var(--space-2);
+    }
+    .block-demo ul {
+      padding: 0;
+      margin: 0;
+      list-style: none;
+    }
+    .block-demo li + li { margin-top: var(--space-3); }
+    .row-event {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: var(--space-3);
+      align-items: baseline;
+    }
+    .row-event .time {
+      font-family: var(--font-mono);
+      font-size: var(--type-small-size);
+      color: var(--color-muted);
+      font-variant-numeric: tabular-nums;
+    }
+    .row-event .title-line {
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-line);
+      color: var(--color-ink);
+    }
+    .row-event .summary-line {
+      font-size: var(--type-small-size);
+      line-height: var(--type-small-line);
+      color: var(--color-muted);
+      margin-top: 2px;
+    }
+
+    .loop-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: var(--space-3);
+    }
+    .loop-waiting {
+      font-size: var(--type-small-size);
+      color: var(--color-muted);
+    }
+
+    .bullets { padding-left: var(--space-5); }
+    .bullets li {
+      list-style: disc;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-line);
+      color: var(--color-ink);
+    }
+    .bullets li::marker { color: var(--ink-300); }
+
+    .sources {
+      font-size: var(--type-caption-size);
+      color: var(--color-muted);
+      margin-top: var(--space-3);
+    }
+
+    .prep-list { counter-reset: prep; padding: 0; }
+    .prep-list li {
+      list-style: none;
+      display: grid;
+      grid-template-columns: 20px 1fr;
+      gap: var(--space-3);
+      align-items: baseline;
+    }
+    .prep-list li + li { margin-top: var(--space-3); }
+    .prep-list li::before {
+      counter-increment: prep;
+      content: counter(prep);
+      font-family: var(--font-mono);
+      font-variant-numeric: tabular-nums;
+      font-size: var(--type-small-size);
+      color: var(--color-rust);
+    }
+    .prep-q {
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-line);
+      color: var(--color-ink);
+    }
+    .prep-open {
+      margin-top: var(--space-4);
+      padding-top: var(--space-4);
+      border-top: 1px solid var(--ink-300);
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-line);
+      color: var(--color-ink);
+    }
+
+    .callout {
+      font-family: var(--font-sans);
+      color: var(--color-muted);
+      font-size: var(--type-small-size);
+      line-height: var(--type-small-line);
+      margin-top: var(--space-5);
+    }
+
+    .topbar {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      padding-bottom: var(--space-5);
+      border-bottom: 1px solid var(--ink-300);
+    }
+    .wordmark {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-weight: 500;
+      letter-spacing: -0.01em;
+      color: var(--color-ink);
+    }
+    .wordmark-nav { font-size: 22px; }
+    .crumb {
+      font-family: var(--font-sans);
+      font-size: var(--type-small-size);
+      color: var(--color-muted);
+    }
+
+    .intro {
+      font-family: var(--font-serif);
+      font-weight: 400;
+      font-size: 32px;
+      line-height: 36px;
+      letter-spacing: -0.015em;
+      color: var(--color-ink);
+      margin: var(--space-7) 0 var(--space-4);
+    }
+    .intro em {
+      font-style: italic;
+      color: var(--color-rust);
+    }
+    .intro-body {
+      font-family: var(--font-sans);
+      font-size: var(--type-lead-size);
+      line-height: var(--type-lead-line);
+      color: var(--color-muted);
+      max-width: 58ch;
+    }
+
+    h2.type-h2 {
+      font-family: var(--font-serif);
+      font-size: var(--type-h2-size);
+      line-height: var(--type-h2-line);
+      font-weight: 400;
+      letter-spacing: var(--type-h2-track);
+      color: var(--color-ink);
+      margin: 0;
+    }
+
+    h4.type-h4 {
+      font-family: var(--font-sans);
+      font-size: var(--type-h4-size);
+      line-height: var(--type-h4-line);
+      font-weight: 600;
+      color: var(--color-ink);
+      margin: 0;
+    }
+
+    /* A tiny link */
+    a.rust-link {
+      color: var(--color-rust);
+      text-decoration: none;
+      border-bottom: 1px solid rgba(123, 85, 68, 0.3);
+      transition: border-color var(--duration-fast) var(--ease-standard);
+    }
+    a.rust-link:hover { border-bottom-color: var(--color-rust); }
+
+    /* The "one rust per screen" annotator */
+    .only-one {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--color-rust);
+      text-transform: uppercase;
+      letter-spacing: 0.14em;
+      margin-top: var(--space-3);
+    }
+
+    .quote {
+      font-family: var(--font-serif);
+      font-style: italic;
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-line);
+      color: var(--color-ink);
+      margin: 0;
+      padding-left: var(--space-4);
+      border-left: 2px solid var(--ink-300);
+    }
+
+    /* ───────── expansion blocks ──────────
+       innovation from simplicity — each composed from existing primitives.
+       no new colors, no new fonts, no new effects. */
+
+    /* SparklineStatus — 7-day rhythm bars */
+    .sparkline {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 28px;
+      margin-top: var(--space-3);
+    }
+    .spark-bar {
+      width: 6px;
+      border-radius: 1px;
+    }
+    .spark-bar.hit   { background: var(--color-ink);  }
+    .spark-bar.half  { background: var(--color-muted); }
+    .spark-bar.miss  { background: var(--paper-500); }
+    .spark-meta {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      margin-top: var(--space-3);
+    }
+    .spark-label {
+      font-family: var(--font-sans);
+      font-size: var(--type-small-size);
+      color: var(--color-muted);
+    }
+    .spark-count {
+      font-family: var(--font-mono);
+      font-size: var(--type-small-size);
+      font-variant-numeric: tabular-nums;
+      color: var(--color-ink);
+    }
+
+    /* ProvenanceFactRow — label | value + source */
+    .prov-table {
+      width: 100%;
+      border-collapse: collapse;
+    }
+    .prov-row {
+      display: grid;
+      grid-template-columns: 96px 1fr;
+      gap: var(--space-5);
+      padding: var(--space-3) 0;
+      border-bottom: 1px solid var(--ink-300);
+      align-items: baseline;
+    }
+    .prov-row:last-child { border-bottom: none; }
+    .prov-key {
+      font-family: var(--font-sans);
+      font-size: var(--type-label-size);
+      letter-spacing: var(--type-label-track);
+      text-transform: uppercase;
+      color: var(--color-rust);
+      font-weight: 500;
+    }
+    .prov-value {
+      font-family: var(--font-serif);
+      font-size: var(--type-body-size);
+      line-height: var(--type-body-line);
+      color: var(--color-ink);
+    }
+    .prov-source {
+      font-family: var(--font-sans);
+      font-size: var(--type-caption-size);
+      color: var(--color-muted);
+      margin-top: 2px;
+    }
+    .prov-source .dot { opacity: 0.5; margin: 0 var(--space-1); }
+
+    /* DryRunOfferCard — the promotion ritual */
+    .dryrun-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: var(--space-3);
+    }
+    .dryrun-status {
+      font-family: var(--font-sans);
+      font-size: var(--type-label-size);
+      letter-spacing: var(--type-label-track);
+      text-transform: uppercase;
+      color: var(--color-rust);
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: var(--space-2);
+    }
+    .dryrun-dot {
+      display: inline-block;
+      width: 5px;
+      height: 5px;
+      border-radius: 9999px;
+      background: var(--color-muted);
+    }
+    .dryrun-kind {
+      font-family: var(--font-mono);
+      font-size: var(--type-caption-size);
+      color: var(--color-muted);
+      padding: 2px var(--space-2);
+      border: 1px solid var(--ink-300);
+      border-radius: var(--radius-sm);
+    }
+    .dryrun-actions {
+      display: flex;
+      gap: var(--space-2);
+      margin-top: var(--space-5);
+    }
+    .dryrun-actions .btn { padding: 8px 16px; font-size: var(--type-small-size); }
+
+    /* LifecycleBand — color-coded section headers */
+    .lifecycle-band {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      padding: var(--space-3) 0 var(--space-2);
+      border-top: 1px solid var(--ink-300);
+      border-bottom: 1px solid var(--ink-300);
+    }
+    .lifecycle-band .name {
+      font-family: var(--font-sans);
+      font-size: var(--type-label-size);
+      letter-spacing: var(--type-label-track);
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+    .lifecycle-band .count {
+      font-family: var(--font-mono);
+      font-size: var(--type-small-size);
+      font-variant-numeric: tabular-nums;
+      color: var(--color-muted);
+    }
+    .lifecycle-living   { border-left: 2px solid var(--color-rust);         padding-left: var(--space-3); }
+    .lifecycle-today    { border-left: 2px solid var(--color-ink);          padding-left: var(--space-3); }
+    .lifecycle-live     { border-left: 2px solid var(--signal-success);     padding-left: var(--space-3); }
+    .lifecycle-shadow   { border-left: 2px solid var(--color-muted);        padding-left: var(--space-3); }
+    .lifecycle-paused   { border-left: 2px solid var(--signal-warning);     padding-left: var(--space-3); }
+    .lifecycle-resolved { border-left: 2px solid var(--ink-300);            padding-left: var(--space-3); }
+    .lifecycle-living   .name { color: var(--color-rust); }
+    .lifecycle-today    .name { color: var(--color-ink); }
+    .lifecycle-live     .name { color: var(--signal-success); }
+    .lifecycle-shadow   .name { color: var(--color-muted); }
+    .lifecycle-paused   .name { color: var(--signal-warning); }
+    .lifecycle-resolved .name { color: var(--color-muted); }
+
+    /* InvitationPrompt — "ask me to X" */
+    .invitation-input {
+      margin-top: var(--space-4);
+      padding: var(--space-3) var(--space-4);
+      background: var(--color-paper);
+      border: 1px solid var(--ink-300);
+      border-radius: var(--radius-sm);
+      font-family: var(--font-sans);
+      font-size: var(--type-input-size);
+      color: var(--color-muted);
+    }
+    .invitation-cursor {
+      display: inline-block;
+      width: 1px;
+      height: 14px;
+      background: var(--color-ink);
+      vertical-align: middle;
+      animation: invitation-blink 1s steps(2, start) infinite;
+    }
+    @keyframes invitation-blink {
+      to { visibility: hidden; }
+    }
+    .invitation-hints {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      margin-top: var(--space-3);
+    }
+    .hint-chip {
+      font-family: var(--font-sans);
+      font-size: var(--type-small-size);
+      color: var(--color-muted);
+      padding: 2px var(--space-3);
+      border: 1px solid var(--ink-300);
+      border-radius: 9999px;
+      background: transparent;
+      cursor: pointer;
+    }
+
+    /* MiniStatGrid — 3-up glance stats */
+    .mini-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 0;
+      margin-top: var(--space-3);
+    }
+    .mini-cell {
+      padding: var(--space-3) var(--space-4);
+      border-right: 1px solid var(--ink-300);
+    }
+    .mini-cell:last-child { border-right: none; }
+    .mini-key {
+      font-family: var(--font-sans);
+      font-size: var(--type-label-size);
+      letter-spacing: var(--type-label-track);
+      text-transform: uppercase;
+      color: var(--color-rust);
+      font-weight: 500;
+    }
+    .mini-val {
+      font-family: var(--font-serif);
+      font-size: 26px;
+      line-height: 1;
+      font-variant-numeric: tabular-nums;
+      font-weight: 500;
+      letter-spacing: -0.02em;
+      margin-top: var(--space-2);
+      color: var(--color-ink);
+    }
+    .mini-sub {
+      font-family: var(--font-sans);
+      font-size: var(--type-caption-size);
+      color: var(--color-muted);
+      margin-top: 2px;
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+
+    <!-- ───────── Topbar ───────── -->
+    <div class="topbar">
+      <span class="wordmark wordmark-nav">donna</span>
+      <span class="crumb">design system · v1.0.0 · showcase</span>
+    </div>
+
+    <!-- ───────── Intro ───────── -->
+    <h1 class="intro">a closed grammar, <em>forever</em>.</h1>
+    <p class="intro-body">
+      six colors, three signals, two type families, one rust moment per screen.
+      every surface in donna is composed from these primitives. no new values,
+      ever. this page is the reference.
+    </p>
+
+    <!-- ───────── 1 · Colors ───────── -->
+    <section>
+      <span class="type-label">01 · color · the six roles</span>
+      <h2 class="type-h2" style="margin-top: var(--space-2);">core palette.</h2>
+      <p class="type-body" style="color: var(--color-muted); margin-top: var(--space-3); max-width: 58ch;">
+        these six hues are the entire visual vocabulary. no additions, no tints
+        outside the scale. if a new color feels needed, the design is wrong.
+      </p>
+
+      <div class="swatch-row" style="margin-top: var(--space-5);">
+        <div class="swatch" style="background: var(--color-paper);">
+          <div class="swatch__meta"><span class="swatch__name">paper</span><span class="swatch__hex">#FBF7F5</span></div>
+        </div>
+        <div class="swatch" style="background: var(--color-surface);">
+          <div class="swatch__meta"><span class="swatch__name">surface</span><span class="swatch__hex">#F0EAE4</span></div>
+        </div>
+        <div class="swatch" style="background: var(--color-surface-pressed);">
+          <div class="swatch__meta"><span class="swatch__name">pressed</span><span class="swatch__hex">#E7DFD7</span></div>
+        </div>
+        <div class="swatch" style="background: var(--color-ink);">
+          <div class="swatch__meta"><span class="swatch__name">ink</span><span class="swatch__hex">#1E1A18</span></div>
+        </div>
+        <div class="swatch" style="background: var(--color-rust);">
+          <div class="swatch__meta"><span class="swatch__name">rust</span><span class="swatch__hex">#7B5544</span></div>
+        </div>
+        <div class="swatch" style="background: var(--color-muted);">
+          <div class="swatch__meta"><span class="swatch__name">muted</span><span class="swatch__hex">#6B615C</span></div>
+        </div>
+      </div>
+
+      <h4 class="type-h4" style="margin-top: var(--space-6);">three signals.</h4>
+      <p class="type-caption" style="color: var(--color-muted); margin-top: var(--space-2); max-width: 58ch;">
+        semantic only. never decorative. each is always paired with a sentence.
+      </p>
+      <div class="swatch-row" style="margin-top: var(--space-4); grid-template-columns: repeat(3, 1fr);">
+        <div class="swatch" style="background: var(--signal-success);">
+          <div class="swatch__meta"><span class="swatch__name">moss · done</span><span class="swatch__hex">#5C6B4A</span></div>
+        </div>
+        <div class="swatch" style="background: var(--signal-warning);">
+          <div class="swatch__meta"><span class="swatch__name">amber · heads up</span><span class="swatch__hex">#A8804A</span></div>
+        </div>
+        <div class="swatch" style="background: var(--signal-danger);">
+          <div class="swatch__meta"><span class="swatch__name">oxblood · destroy</span><span class="swatch__hex">#8B3A2E</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────── 2 · Type ───────── -->
+    <section>
+      <span class="type-label">02 · type · one serif, one sans</span>
+      <h2 class="type-h2" style="margin-top: var(--space-2);">the scale is closed.</h2>
+
+      <div class="stack-4" style="margin-top: var(--space-5);">
+        <div>
+          <span class="type-label">type-h1 · serif 44 / 48</span>
+          <div class="type-h1" style="margin-top: var(--space-2);">
+            good morning, <em class="italic-accent-heading" style="color: var(--color-rust);">arnav</em>.
+          </div>
+        </div>
+
+        <div>
+          <span class="type-label">type-h2 · serif 32 / 36</span>
+          <div class="type-h2" style="margin-top: var(--space-2);">the week ahead.</div>
+        </div>
+
+        <div>
+          <span class="type-label">type-h3 · serif 22 / 28</span>
+          <div class="type-h3" style="margin-top: var(--space-2);">three open loops.</div>
+        </div>
+
+        <div>
+          <span class="type-label">type-h4 · sans 15 / 20 · 600</span>
+          <div class="type-h4" style="margin-top: var(--space-2);">This week with Maya</div>
+        </div>
+
+        <div>
+          <span class="type-label">type-lead · sans 18 / 29</span>
+          <div class="type-lead" style="margin-top: var(--space-2); max-width: 58ch; color: var(--color-muted);">
+            her voice is blunt and lowercase. no em dashes, no semicolons.
+            if she does not know, she says so.
+          </div>
+        </div>
+
+        <div>
+          <span class="type-label">type-body · sans 16 / 25</span>
+          <div class="type-body" style="margin-top: var(--space-2); max-width: 58ch;">
+            you said you'd pick up the frame from oscar's before thursday.
+            it's wednesday evening, they close at 7. we could add it to the
+            walk after dinner. <a class="rust-link" href="#">read the note</a>.
+          </div>
+        </div>
+
+        <div>
+          <span class="type-label">type-small · sans 14 / 22</span>
+          <div class="type-small" style="margin-top: var(--space-2); color: var(--color-muted);">
+            04:12 pm · tuesday's thread · re-engaged after six days
+          </div>
+        </div>
+
+        <div>
+          <span class="type-label">type-caption · sans 12 / 18</span>
+          <div class="type-caption" style="margin-top: var(--space-2); color: var(--color-muted);">
+            source: gmail · series-a thread
+          </div>
+        </div>
+
+        <div>
+          <span class="type-label">the three italic roles</span>
+          <div class="type-body" style="margin-top: var(--space-2);">
+            one word inside a heading, a proper noun like <em class="italic-accent-inline">middlemarch</em>,
+            or verbatim memory:
+          </div>
+          <blockquote class="italic-accent-memory quote" style="margin-top: var(--space-3);">
+            you said: peonies, not roses.
+          </blockquote>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────── 3 · Card treatments ───────── -->
+    <section>
+      <span class="type-label">03 · cards · three treatments</span>
+      <h2 class="type-h2" style="margin-top: var(--space-2);">never drop-shadow.</h2>
+
+      <div class="blocks" style="margin-top: var(--space-5);">
+        <div class="card-surface">
+          <span class="type-label">today · 8:14</span>
+          <h4 class="type-h4" style="margin-top: var(--space-2);">surface-filled card</h4>
+          <p class="type-body" style="margin-top: var(--space-2);">
+            default. use for most primary cards. rests on paper without a border.
+          </p>
+        </div>
+        <div class="card-hairline">
+          <span class="type-label">secondary</span>
+          <h4 class="type-h4" style="margin-top: var(--space-2);">hairline card</h4>
+          <p class="type-body" style="margin-top: var(--space-2);">
+            paper bg with a 1px ink-300 border. use for secondary groups.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────── 4 · Buttons / chips ───────── -->
+    <section>
+      <span class="type-label">04 · actions</span>
+      <h2 class="type-h2" style="margin-top: var(--space-2);">three button variants. max one primary per screen.</h2>
+
+      <div class="btn-row" style="margin-top: var(--space-5);">
+        <button class="btn btn-primary">Keep it for me</button>
+        <button class="btn btn-secondary">Not now</button>
+        <button class="btn btn-ghost">Skip</button>
+      </div>
+
+      <div class="only-one">↑ this is the screen's rust moment. nothing else is rust here.</div>
+
+      <div class="stack-3" style="margin-top: var(--space-6);">
+        <span class="type-label">chips &middot; state carries semantics</span>
+        <div class="btn-row">
+          <span class="chip chip-idle">Paused</span>
+          <span class="chip chip-success">Kept</span>
+          <span class="chip chip-warning">Re-check</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ───────── 5 · Lego blocks — one per attention CardType ───────── -->
+    <section>
+      <span class="type-label">05 · the lego · one block per attention card</span>
+      <h2 class="type-h2" style="margin-top: var(--space-2);">every affordance maps here.</h2>
+      <p class="type-body" style="margin-top: var(--space-3); max-width: 58ch; color: var(--color-muted);">
+        six attention card types × one block template each. hydration tracker,
+        fundraising brief, maya's flight, a shipment — they all come through
+        these shapes. new affordances add data, never layout.
+      </p>
+
+      <div class="blocks" style="margin-top: var(--space-5);">
+
+        <!-- TallyBlock · card=tally -->
+        <div class="card-surface block-demo">
+          <span class="type-label">attention · tally</span>
+          <h4 class="type-h4" style="margin-top: var(--space-2);">water</h4>
+          <div class="num num-tabular" style="margin-top: var(--space-4);">3</div>
+          <div class="num-unit">glasses · so far today</div>
+        </div>
+
+        <!-- EventStreamBlock · card=event_stream -->
+        <div class="card-surface block-demo">
+          <span class="type-label">attention · event stream</span>
+          <h4 class="type-h4" style="margin-top: var(--space-2);">fundraising thread</h4>
+          <ul style="margin-top: var(--space-3);">
+            <li class="row-event">
+              <span class="time">04:12</span>
+              <div>
+                <div class="title-line">sequoia replied on series-a</div>
+                <div class="summary-line">wants revenue slide by friday</div>
+              </div>
+            </li>
+            <li class="row-event">
+              <span class="time">02:48</span>
+              <div>
+                <div class="title-line">accel · re-engaged</div>
+                <div class="summary-line">six days since last reply</div>
+              </div>
+            </li>
+            <li class="row-event">
+              <span class="time">yesterday</span>
+              <div>
+                <div class="title-line">kleiner · opened deck three times</div>
+              </div>
+            </li>
+          </ul>
+        </div>
+
+        <!-- BriefBlock · card=brief -->
+        <div class="card-surface block-demo">
+          <span class="type-label">attention · brief</span>
+          <h4 class="type-h4" style="margin-top: var(--space-2);">three investors pinged while you were out</h4>
+          <ul class="bullets" style="margin-top: var(--space-3);">
+            <li>sequoia · wants a revenue slide by friday</li>
+            <li>accel · re-engaged on the thread after six days</li>
+            <li>kleiner · opened the deck three times yesterday</li>
+          </ul>
+          <div class="sources">source · gmail · series-a thread</div>
+        </div>
+
+        <!-- PrepDocBlock · card=prep_doc -->
+        <div class="card-surface block-demo">
+          <span class="type-label">attention · prep</span>
+          <h4 class="type-h4" style="margin-top: var(--space-2);">1:1 with priya · first week</h4>
+          <ol class="prep-list" style="margin-top: var(--space-3);">
+            <li><span class="prep-q">where she's stuck on the billing refactor</span></li>
+            <li><span class="prep-q">who she's met outside the team</span></li>
+            <li><span class="prep-q">what "good" looks like by week two</span></li>
+          </ol>
+          <div class="prep-open">still open: does she have everything she needs to own tuesday's deploy?</div>
+        </div>
+
+        <!-- OpenLoopBlock · card=open_loop -->
+        <div class="card-hairline block-demo">
+          <span class="type-label">attention · open loop</span>
+          <div class="loop-meta" style="margin-top: var(--space-2);">
+            <h4 class="type-h4">call dad</h4>
+            <span class="type-small" style="color: var(--color-rust); font-weight: 500; text-transform: uppercase; letter-spacing: 0.06em;">6 days</span>
+          </div>
+          <div class="loop-waiting" style="margin-top: var(--space-2);">waiting on you, to pick up the phone</div>
+        </div>
+
+        <!-- PingBlock · card=ping -->
+        <div class="card-hairline block-demo">
+          <span class="type-label">attention · ping</span>
+          <div class="type-body" style="margin-top: var(--space-2);">
+            maya's sister lands at <span class="num-tabular" style="font-weight: 500;">4:10</span>.
+            the peonies should leave by three.
+          </div>
+          <div class="type-small" style="margin-top: var(--space-2); color: var(--color-muted);">
+            fire at 02:40 pm · today
+          </div>
+        </div>
+      </div>
+
+      <p class="callout">
+        note the consistency: every block opens with a rust caps label. card
+        title is always h4 sans. body is type-body. timestamps are tabular.
+        the internal rhythm never varies by domain. swap the data — never the
+        shape.
+      </p>
+    </section>
+
+    <!-- ───────── 6 · Expansion lego ───────── -->
+    <section>
+      <span class="type-label">06 · expansion · innovation from simplicity</span>
+      <h2 class="type-h2" style="margin-top: var(--space-2);">six more blocks, zero new tokens.</h2>
+      <p class="type-body" style="margin-top: var(--space-3); max-width: 58ch; color: var(--color-muted);">
+        extracted from the 12 day-one surfaces. each unlocks a just-in-time
+        pattern the primary seven don't cover — provenance, rhythm, promotion,
+        lifecycle, bootstrap, compression. composed from the same closed
+        palette and type scale. no new colors. no new effects. simplicity
+        is the source, not the opposite, of the innovation.
+      </p>
+
+      <div class="blocks" style="margin-top: var(--space-5);">
+
+        <!-- 1 · SparklineStatus · temporal rhythm -->
+        <div class="card-surface block-demo">
+          <span class="type-label">sparkline status</span>
+          <h4 class="type-h4" style="margin-top: var(--space-2);">lunch · last 7 days</h4>
+          <div class="sparkline" aria-label="7-day lunch rhythm">
+            <div class="spark-bar miss" style="height: 4px;"></div>
+            <div class="spark-bar hit"  style="height: 22px;"></div>
+            <div class="spark-bar miss" style="height: 4px;"></div>
+            <div class="spark-bar miss" style="height: 4px;"></div>
+            <div class="spark-bar half" style="height: 12px;"></div>
+            <div class="spark-bar hit"  style="height: 22px;"></div>
+            <div class="spark-bar miss" style="height: 4px;"></div>
+          </div>
+          <div class="spark-meta">
+            <span class="spark-label">mon → sun</span>
+            <span class="spark-count">2 / 7 · 29%</span>
+          </div>
+        </div>
+
+        <!-- 2 · ProvenanceFactRow · auditable living profile -->
+        <div class="card-surface block-demo">
+          <span class="type-label">provenance · what i know</span>
+          <h4 class="type-h4" style="margin-top: var(--space-2);">aarav, partial</h4>
+          <div class="prov-table" style="margin-top: var(--space-3);">
+            <div class="prov-row">
+              <div class="prov-key">place</div>
+              <div>
+                <div class="prov-value">mumbai · bandra</div>
+                <div class="prov-source">told me<span class="dot">·</span>tuesday 9:14</div>
+              </div>
+            </div>
+            <div class="prov-row">
+              <div class="prov-key">season</div>
+              <div>
+                <div class="prov-value"><em class="italic-accent-inline">antler quarter</em></div>
+                <div class="prov-source">inferred<span class="dot">·</span>confidence 0.68</div>
+              </div>
+            </div>
+            <div class="prov-row">
+              <div class="prov-key">pattern</div>
+              <div>
+                <div class="prov-value">sleeps poorly when priya slips</div>
+                <div class="prov-source">observed<span class="dot">·</span>3 weeks of chat</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3 · DryRunOfferCard · the promotion ritual -->
+        <div class="card-hairline block-demo">
+          <div class="dryrun-head">
+            <span class="dryrun-status"><span class="dryrun-dot"></span> dry-run · awaiting you</span>
+            <span class="dryrun-kind">event_stream</span>
+          </div>
+          <h4 class="type-h4" style="margin-top: var(--space-3);">
+            keep an eye on <em class="italic-accent-inline" style="color: var(--color-rust);">luca</em>
+          </h4>
+          <p class="type-body" style="margin-top: var(--space-2);">
+            the antler deck thread, not email. daily 07:30 check-in. first
+            update tomorrow.
+          </p>
+          <div class="type-caption" style="margin-top: var(--space-2); color: var(--color-muted);">
+            sources · email · calendar · chat
+          </div>
+          <div class="dryrun-actions">
+            <button class="btn btn-primary">live</button>
+            <button class="btn btn-ghost">tweak</button>
+            <button class="btn btn-ghost">not yet</button>
+          </div>
+        </div>
+
+        <!-- 4 · InvitationPrompt · bootstrap / cold-start -->
+        <div class="card-surface block-demo">
+          <span class="type-label">ask me to</span>
+          <h4 class="type-h4" style="margin-top: var(--space-2); font-family: var(--font-serif); font-size: 22px; line-height: 28px; font-weight: 500;">
+            <em class="italic-accent-heading">watch</em> something.
+          </h4>
+          <div class="invitation-input">
+            keep an eye on <span class="invitation-cursor"></span>
+          </div>
+          <div class="invitation-hints">
+            <span class="hint-chip">priya</span>
+            <span class="hint-chip">luca — antler</span>
+            <span class="hint-chip">my cofounder</span>
+            <span class="hint-chip">the shipment from oscar's</span>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5 · LifecycleBand · unified state view (full-width) -->
+      <div style="margin-top: var(--space-6);">
+        <span class="type-label">lifecycle band · every attention, visible</span>
+        <div class="stack-2" style="margin-top: var(--space-4);">
+          <div class="lifecycle-band lifecycle-live">
+            <span class="name">live · running</span>
+            <span class="count">8</span>
+          </div>
+          <div class="lifecycle-band lifecycle-shadow">
+            <span class="name">shadow · watching quietly</span>
+            <span class="count">3</span>
+          </div>
+          <div class="lifecycle-band lifecycle-paused">
+            <span class="name">paused · you said not yet</span>
+            <span class="count">2</span>
+          </div>
+          <div class="lifecycle-band lifecycle-resolved">
+            <span class="name">resolved · harvested</span>
+            <span class="count">12</span>
+          </div>
+        </div>
+        <p class="type-caption" style="margin-top: var(--space-3); color: var(--color-muted);">
+          bands group attentions by lifecycle state. left border color encodes the
+          state. content below each band is filtered to that state. gardens never
+          empty — they show what's growing vs. paused vs. harvested.
+        </p>
+      </div>
+
+      <!-- 6 · MiniStatGrid · three tallies in one card -->
+      <div style="margin-top: var(--space-6);">
+        <span class="type-label">mini stat grid · three tallies, one glance</span>
+        <div class="card-surface" style="margin-top: var(--space-4); padding: var(--space-4) 0;">
+          <div class="mini-grid">
+            <div class="mini-cell">
+              <div class="mini-key">calories</div>
+              <div class="mini-val">820<span style="color: var(--color-muted); font-size: var(--type-small-size);">/2,200</span></div>
+              <div class="mini-sub">chicken bowl at 1:30</div>
+            </div>
+            <div class="mini-cell">
+              <div class="mini-key">water</div>
+              <div class="mini-val">3<span style="color: var(--color-muted); font-size: var(--type-small-size);">/8</span></div>
+              <div class="mini-sub">so far today</div>
+            </div>
+            <div class="mini-cell">
+              <div class="mini-key">loops</div>
+              <div class="mini-val">2</div>
+              <div class="mini-sub">open · dad, priya</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <p class="callout">
+        each block above inherits the same discipline. rust caps label. h4 card
+        titles. tabular numerals for anything with digits. hairlines for
+        containment. zero new tokens introduced to build these — proving the
+        palette can carry any shape the policy layer asks for, just in time.
+      </p>
+    </section>
+
+    <!-- ───────── 7 · The rule ───────── -->
+    <section>
+      <span class="type-label">07 · the rule</span>
+      <h2 class="type-h2" style="margin-top: var(--space-2);">
+        when in doubt, ink on paper, sans-serif,
+        <em class="italic-accent-heading" style="color: var(--color-rust);">no</em> shadow.
+      </h2>
+
+      <div class="card-hairline" style="margin-top: var(--space-5);">
+        <span class="type-label">the forbidden list</span>
+        <ul class="bullets" style="margin-top: var(--space-3);">
+          <li>a new hex color anywhere in code</li>
+          <li>two rust elements on one screen</li>
+          <li>italic outside the three approved roles</li>
+          <li>serif at weight 700</li>
+          <li>drop shadow on a card at rest</li>
+          <li>pure <code>#000</code> as text (use <code>ink</code> = <code>#1E1A18</code>)</li>
+          <li>underlines on links (use rust + bottom border)</li>
+          <li>gradients anywhere, ever</li>
+        </ul>
+      </div>
+
+      <p class="type-caption" style="margin-top: var(--space-6); color: var(--color-muted);">
+        locked · v1.0.0 · do not modify without system-wide review.
+      </p>
+    </section>
+
+  </div>
+</body>
+</html>

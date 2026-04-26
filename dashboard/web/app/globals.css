@@ -71,6 +71,143 @@
   --duration-normal: 280ms;
   --ease-out:       cubic-bezier(0.22, 1, 0.36, 1);
   --ease-editorial: cubic-bezier(0.2, 0.8, 0.2, 1);
+
+  /* ── Gospel aliases ─────────────────────────────────────────
+     Names from donna-design-system/tokens.css. Keep dashboard
+     variable names functioning, but anchor everything to the
+     gospel. New code should prefer these. Migration target. */
+  --color-paper:           var(--paper-100);
+  --color-surface:         var(--paper-300);
+  --color-surface-pressed: var(--paper-400);
+  --color-ink:             var(--ink-900);
+  --color-muted:           var(--ink-500);
+  --color-rust:            var(--rust-700);
+
+  --text-primary:   var(--color-ink);
+  --text-secondary: var(--color-muted);
+  --text-accent:    var(--color-rust);
+
+  --signal-success:      var(--moss-700);
+  --signal-success-tint: var(--moss-100);
+  --signal-warning:      var(--amber-700);
+  --signal-warning-tint: var(--amber-100);
+  --signal-danger:       var(--oxblood-700);
+  --signal-danger-tint:  var(--oxblood-100);
+
+  /* ── Type role tokens (gospel §2) ───────────────────────────
+     Every role has size/line/track/family/weight. Use the
+     utility class below, not these raw variables. */
+  --type-h1-size:    44px; --type-h1-line:    48px; --type-h1-track:  -0.02em;
+  --type-h2-size:    32px; --type-h2-line:    36px; --type-h2-track:  -0.015em;
+  --type-h3-size:    22px; --type-h3-line:    28px; --type-h3-track:  -0.01em;
+  --type-h4-size:    15px; --type-h4-line:    20px;
+  --type-lead-size:  18px; --type-lead-line:  29px;
+  --type-body-size:  16px; --type-body-line:  25px;
+  --type-small-size: 14px; --type-small-line: 22px;
+  --type-caption-size: 12px; --type-caption-line: 18px;
+  --type-label-size: 11px; --type-label-line: 16px; --type-label-track: 0.14em;
+  --type-button-size: 15px;
+  --type-input-size: 16px; --type-input-line: 25px;
+
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;
+
+  /* ── Focus ring (gospel) ────────────────────────────────── */
+  --focus-ring: 0 0 0 2px var(--color-paper),
+                0 0 0 4px var(--color-rust);
+}
+
+/* ── Type role utility classes (gospel §2) ────────────────────
+   Never inline font-size / line-height / family on an element.
+   Use these classes, or a component that wraps them. */
+
+.type-h1 {
+  font-family: var(--font-serif);
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-line);
+  letter-spacing: var(--type-h1-track);
+  font-weight: var(--weight-regular);
+  font-style: normal;
+}
+.type-h2 {
+  font-family: var(--font-serif);
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line);
+  letter-spacing: var(--type-h2-track);
+  font-weight: var(--weight-regular);
+  font-style: normal;
+}
+.type-h3 {
+  font-family: var(--font-serif);
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line);
+  letter-spacing: var(--type-h3-track);
+  font-weight: var(--weight-medium);
+  font-style: normal;
+}
+.type-h4 {
+  font-family: var(--font-sans);
+  font-size: var(--type-h4-size);
+  line-height: var(--type-h4-line);
+  font-weight: var(--weight-semibold);
+}
+.type-lead {
+  font-family: var(--font-sans);
+  font-size: var(--type-lead-size);
+  line-height: var(--type-lead-line);
+  font-weight: var(--weight-regular);
+}
+.type-body {
+  font-family: var(--font-sans);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  font-weight: var(--weight-regular);
+}
+.type-small {
+  font-family: var(--font-sans);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+  font-weight: var(--weight-regular);
+}
+.type-caption {
+  font-family: var(--font-sans);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  font-weight: var(--weight-regular);
+}
+.type-label {
+  font-family: var(--font-sans);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-track);
+  font-weight: var(--weight-medium);
+  text-transform: uppercase;
+  color: var(--color-rust);  /* labels are always rust — gospel §2 */
+}
+.type-button {
+  font-family: var(--font-sans);
+  font-size: var(--type-button-size);
+  line-height: 1;
+  font-weight: var(--weight-medium);
+}
+.type-input {
+  font-family: var(--font-sans);
+  font-size: var(--type-input-size);
+  line-height: var(--type-input-line);
+  font-weight: var(--weight-regular);
+  font-style: normal;  /* never italic — gospel §3 */
+}
+
+/* The only three italics permitted in the product (gospel §3). */
+.italic-accent-heading { font-style: italic; }
+.italic-accent-inline  { font-style: italic; }
+.italic-accent-memory  { font-style: italic; }
+
+/* Tabular numerals (the ONLY place sans 700 is allowed — gospel §2). */
+.num-tabular {
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
 }
 
 * { box-sizing: border-box; }
@@ -89,3 +226,747 @@ body {
     transition-duration: 0.001ms !important;
   }
 }
+
+/* ════════════════════════════════════════════════════════════════
+   Visual contract layer (donna-design-system/system.html)
+   Frame chrome, layout grid, intro region, inline primitives.
+   These class names are the contract — components self-register
+   into them. Do not introduce parallel chrome elsewhere.
+   ════════════════════════════════════════════════════════════════ */
+
+/* — focus ring (gospel) — */
+.focus-ring:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+
+/* ═══ FRAME — the canonical card. ═══
+   Every slot the brain emits is rendered through <Frame>. Identical
+   chrome at every width: paper-200, hairline ink-08, radius lg, padding
+   24 (16 mobile), no shadow. Width changes; nothing else does. */
+.frame {
+  background: var(--paper-200);
+  border: 1px solid var(--alpha-ink-08);
+  border-radius: var(--radius-lg);
+  padding: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  min-height: 144px;
+}
+@media (max-width: 480px) {
+  .frame { padding: var(--space-4); min-height: 96px; }
+}
+.frame__kicker {
+  font-family: var(--font-sans);
+  font-size: 11px; line-height: 16px;
+  font-weight: 500; letter-spacing: 0.14em;
+  color: var(--ink-500);
+  margin: 0 0 var(--space-2);
+}
+.frame__title {
+  font-family: var(--font-sans);
+  font-size: 15px; line-height: 20px;
+  font-weight: 600;
+  color: var(--ink-900);
+  margin: 0 0 var(--space-3);
+}
+.frame__title em { color: var(--rust-700); font-style: italic; font-weight: 500; }
+.frame__body {
+  font-family: var(--font-sans);
+  font-size: 16px; line-height: 25px;
+  color: var(--ink-800);
+  margin: 0;
+}
+
+.frame--tappable {
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+              transform  var(--duration-fast) var(--ease-out);
+}
+.frame--tappable:hover { background: var(--paper-300); }
+.frame--tappable:focus-visible { outline: none; box-shadow: var(--focus-ring); }
+.frame--tappable:active { transform: translateY(1px); background: var(--paper-300); }
+
+.frame--done { opacity: 0.55; position: relative; }
+.frame--done .frame__title {
+  text-decoration: line-through;
+  text-decoration-color: var(--ink-400);
+  text-decoration-thickness: 1px;
+}
+.frame--done::after {
+  content: "✓";
+  position: absolute; top: var(--space-4); right: var(--space-4);
+  font-family: var(--font-sans);
+  font-size: 14px; font-weight: 500;
+  color: var(--rust-500);
+}
+
+.frame--placeholder {
+  background: transparent;
+  border: 1px dashed var(--alpha-ink-14);
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: 96px;
+}
+.frame--placeholder .frame__ph {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--ink-400);
+  letter-spacing: 0.04em;
+}
+
+.frame--disabled { opacity: 0.45; pointer-events: none; }
+
+/* ═══ LAYOUT GRID — 12 cols, 7 canonical row compositions ═══
+   row gap: 32 between rows. cell gap: 16 within a row.
+   At ≤480px every cell becomes full-width, order preserved. */
+.row {
+  display: grid;
+  grid-template-columns: repeat(12, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
+}
+.row--last { margin-bottom: 0; }
+
+.cell--full           { grid-column: span 12; }
+.cell--three-quarters { grid-column: span 9;  }
+.cell--two-thirds     { grid-column: span 8;  }
+.cell--half           { grid-column: span 6;  }
+.cell--third          { grid-column: span 4;  }
+.cell--quarter        { grid-column: span 3;  }
+
+@media (max-width: 480px) {
+  .row { gap: var(--space-3); margin-bottom: var(--space-5); }
+  .cell--full,
+  .cell--three-quarters,
+  .cell--two-thirds,
+  .cell--half,
+  .cell--third,
+  .cell--quarter { grid-column: span 12; }
+}
+
+/* ═══ SECTION TITLE — sits between row groups ═══ */
+.section-title {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: var(--space-4) 0 var(--space-3);
+  border-bottom: 1px solid var(--alpha-ink-08);
+  margin-bottom: var(--space-4);
+}
+.section-title__h {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 32px; line-height: 36px;
+  letter-spacing: -0.015em;
+  color: var(--ink-900);
+  margin: 0;
+}
+.section-title__h em { color: var(--rust-700); font-style: italic; }
+.section-title__meta {
+  font-family: var(--font-sans);
+  font-size: 11px; line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--ink-400);
+}
+
+/* ═══ INTRO REGION — naked on canvas, no border, no radius ═══ */
+.intro {
+  padding: var(--space-2) 0 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.intro__kicker {
+  font-family: var(--font-sans);
+  font-size: 11px; line-height: 16px;
+  font-weight: 500; letter-spacing: 0.14em;
+  color: var(--ink-500);
+  margin: 0;
+}
+.intro__greet {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 44px; line-height: 48px;
+  letter-spacing: -0.02em;
+  color: var(--ink-900);
+  margin: 0;
+}
+.intro__greet em { color: var(--rust-700); font-style: italic; font-weight: 400; }
+.intro__place {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--ink-500);
+  margin: 0;
+}
+.intro__illo { margin-top: var(--space-4); width: 100%; display: block; }
+.intro__illo svg { width: 100%; height: auto; display: block; }
+
+/* ═══ INLINE PRIMITIVES — live inside a Frame ═══ */
+.checkbox {
+  width: 18px; height: 18px;
+  border-radius: var(--radius-md);
+  border: 1.5px solid var(--ink-700);
+  background: var(--paper-100);
+  display: inline-flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+.checkbox--done::after { content: "✓"; color: var(--rust-700); font-size: 14px; font-weight: 600; line-height: 1; }
+
+.tap-chip {
+  font-family: var(--font-sans);
+  font-size: 14px; font-weight: 500;
+  color: var(--rust-700);
+  background: transparent; border: 0; padding: 0;
+  cursor: pointer;
+  display: inline-flex; align-items: center; gap: 4px;
+  text-decoration: none;
+}
+.tap-chip::after { content: "→"; transition: transform var(--duration-fast) var(--ease-out); }
+.tap-chip:hover::after { transform: translateX(2px); }
+
+.pill {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 4px 12px;
+  border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 12px; font-weight: 500; line-height: 16px;
+  background: var(--paper-300);
+  color: var(--ink-700);
+  border: 1px solid var(--alpha-ink-08);
+}
+.pill--moss    { background: var(--moss-100);    color: var(--moss-700);    border-color: transparent; }
+.pill--amber   { background: var(--amber-100);   color: var(--amber-700);   border-color: transparent; }
+.pill--oxblood { background: var(--oxblood-100); color: var(--oxblood-700); border-color: transparent; }
+
+.progress {
+  height: 4px;
+  background: var(--paper-400);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+}
+.progress__fill {
+  height: 100%;
+  background: var(--rust-700);
+  border-radius: var(--radius-md);
+}
+
+.source {
+  font-family: var(--font-serif);
+  font-style: italic; font-weight: 400;
+  font-size: 14px;
+  color: var(--ink-500);
+}
+
+.btn-solid {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  width: 100%; padding: 14px 20px;
+  background: var(--rust-500);
+  color: var(--paper-100);
+  border: 0; border-radius: var(--radius-md);
+  font-family: var(--font-sans);
+  font-size: 15px; font-weight: 500;
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.btn-solid:hover { background: var(--rust-700); }
+.btn-solid--ghost {
+  background: transparent;
+  color: var(--ink-900);
+  border: 1px solid var(--alpha-ink-14);
+}
+.btn-solid--ghost:hover { background: var(--paper-300); }
+
+.note {
+  background: var(--paper-200);
+  border-left: 2px solid var(--rust-500);
+  border-radius: 0 var(--radius-md) var(--radius-md) 0;
+  padding: var(--space-3) var(--space-4);
+  font-family: var(--font-sans);
+  font-size: 14px; line-height: 22px;
+  color: var(--ink-700);
+  margin: var(--space-2) 0;
+}
+
+/* ═══ TOAST — bottom-pinned ═══ */
+.toast {
+  background: var(--paper-200);
+  border: 1px solid var(--alpha-ink-08);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4) var(--space-5);
+  max-width: 480px;
+  display: flex; flex-direction: column; gap: 6px;
+  position: relative;
+}
+.toast__kicker {
+  font-family: var(--font-sans);
+  font-size: 11px; font-weight: 500;
+  letter-spacing: 0.14em;
+  color: var(--rust-700);
+}
+.toast__body {
+  font-family: var(--font-sans);
+  font-size: 14px; line-height: 22px;
+  color: var(--ink-900);
+  margin: 0;
+}
+.toast__close {
+  position: absolute; top: 12px; right: 12px;
+  background: transparent; border: 0;
+  cursor: pointer;
+  color: var(--ink-400);
+  font-size: 16px; padding: 4px;
+  line-height: 1;
+}
+
+/* ═══ TRACKER PRIMITIVES ═══ */
+.tracker-num {
+  font-family: var(--font-serif);
+  font-weight: 400;
+  font-size: 44px; line-height: 1;
+  letter-spacing: -0.02em;
+  color: var(--rust-700);
+  font-variant-numeric: tabular-nums;
+}
+.tracker-unit {
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--ink-500);
+  margin-left: 6px;
+}
+.tracker-sub {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  color: var(--ink-500);
+  margin: 8px 0 0;
+}
+
+.whisper-body {
+  font-family: var(--font-serif);
+  font-style: italic; font-weight: 400;
+  font-size: 18px; line-height: 26px;
+  color: var(--ink-700);
+  margin: 0;
+}
+.confront-kicker { color: var(--rust-700) !important; }
+
+/* ── Auth surface (magic link expired + OTP) ─────────────────────────────
+ * Editorial, paper-toned, donna-voiced. Same rhythm as the Intro region
+ * on the dashboard — kicker / headline / lede / content — so /auth feels
+ * like part of the same system, not a generic login screen.
+ */
+.auth-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-7) var(--space-5);
+  background:
+    radial-gradient(circle at 18% 8%, var(--paper-200) 0%, transparent 55%),
+    radial-gradient(circle at 82% 92%, var(--rust-50) 0%, transparent 50%),
+    var(--paper-100);
+  font-family: var(--font-sans);
+  color: var(--ink-900);
+}
+
+/* ── Signin (welcoming, not a card-rack) ─────────────────────────────────
+ * One primary action: open the WhatsApp thread. OTP is a quiet
+ * secondary line below. Editorial layout — generous breathing room,
+ * serif headline with a rust italic accent, the same moon glyph the
+ * rest of /auth uses so this feels continuous.
+ */
+.signin-page {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  padding: var(--space-7) var(--space-5);
+  background:
+    radial-gradient(circle at 12% 10%, var(--paper-200) 0%, transparent 55%),
+    radial-gradient(circle at 88% 92%, var(--rust-50) 0%, transparent 55%),
+    var(--paper-100);
+  font-family: var(--font-sans);
+  color: var(--ink-900);
+}
+
+.signin-frame {
+  width: 100%;
+  max-width: 520px;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+  /* No border, no card chrome — this is a magazine page, not a panel. */
+}
+
+.signin-glyph {
+  color: var(--rust-700);
+  align-self: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.signin-kicker {
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+  font-weight: 500;
+}
+
+.signin-headline {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 48px;
+  line-height: 1.08;
+  letter-spacing: -0.015em;
+  margin: var(--space-2) 0 0;
+  color: var(--ink-900);
+}
+@media (max-width: 520px) {
+  .signin-headline {
+    font-size: 36px;
+  }
+}
+.signin-headline em {
+  font-style: italic;
+  color: var(--rust-700);
+}
+
+.signin-lede {
+  font-size: 15.5px;
+  line-height: 1.55;
+  color: var(--ink-700, var(--ink-600));
+  margin: var(--space-3) 0 var(--space-5);
+  max-width: 44ch;
+}
+
+.signin-prose {
+  margin: var(--space-3) 0 var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  max-width: 46ch;
+}
+.signin-prose p {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-700, var(--ink-600));
+  margin: 0;
+}
+.signin-prose__quiet {
+  font-size: 14.5px !important;
+  color: var(--ink-500) !important;
+  font-style: italic;
+}
+
+/* Ink CTA — the calm, design-system-aligned primary action. No green. */
+.signin-cta {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: 16px 22px;
+  border-radius: 12px;
+  background: var(--ink-900);
+  color: var(--paper-50);
+  text-decoration: none;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  align-self: flex-start;
+  border: 1px solid var(--ink-900);
+  transition:
+    transform 140ms ease,
+    background 140ms ease,
+    border-color 140ms ease,
+    box-shadow 140ms ease;
+  box-shadow: 0 1px 0 rgba(30, 26, 24, 0.04);
+}
+.signin-cta:hover,
+.signin-cta:focus-visible {
+  background: var(--ink-800, #3A3331);
+  border-color: var(--ink-800, #3A3331);
+  transform: translateY(-1px);
+  box-shadow: 0 6px 18px -8px rgba(30, 26, 24, 0.35);
+  outline: none;
+}
+.signin-cta:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 0 rgba(30, 26, 24, 0.04);
+}
+.signin-cta__arrow {
+  margin-left: 4px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+.signin-otp {
+  margin-top: var(--space-4);
+  font-size: 13px;
+  color: var(--ink-500);
+  text-decoration: none;
+  align-self: flex-start;
+  border-bottom: 1px solid transparent;
+  padding-bottom: 1px;
+  transition: color 120ms ease, border-color 120ms ease;
+}
+.signin-otp:hover,
+.signin-otp:focus-visible {
+  color: var(--rust-700);
+  border-bottom-color: var(--rust-700);
+  outline: none;
+}
+
+.signin-meta {
+  margin-top: var(--space-7);
+  padding-top: var(--space-4);
+  border-top: 1px solid rgba(30, 26, 24, 0.06);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+  font-weight: 500;
+}
+
+.auth-frame {
+  width: 100%;
+  max-width: 560px;
+  background: var(--paper-50);
+  border: 1px solid rgba(30, 26, 24, 0.08);
+  border-radius: var(--radius-lg);
+  padding: var(--space-7) var(--space-7) var(--space-6);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-3);
+}
+@media (max-width: 520px) {
+  .auth-frame {
+    padding: var(--space-6) var(--space-5) var(--space-5);
+  }
+}
+
+.auth-glyph {
+  color: var(--rust-700);
+  align-self: flex-start;
+  margin-bottom: var(--space-3);
+}
+
+.auth-kicker {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+  font-weight: 500;
+}
+
+.auth-headline {
+  font-family: var(--font-serif);
+  font-weight: 500;
+  font-size: 36px;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+  margin: var(--space-1) 0 0;
+  color: var(--ink-900);
+}
+@media (max-width: 520px) {
+  .auth-headline {
+    font-size: 30px;
+  }
+}
+
+.auth-headline em {
+  font-style: italic;
+  color: var(--rust-700);
+}
+
+.auth-lede {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--ink-600);
+  margin: var(--space-3) 0 0;
+  max-width: 46ch;
+}
+
+.auth-content {
+  margin-top: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.auth-meta {
+  margin-top: var(--space-5);
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+
+/* ── Two-option grid (used on /auth/expired and /auth/otp footer) ────── */
+.auth-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+}
+@media (max-width: 520px) {
+  .auth-options {
+    grid-template-columns: 1fr;
+  }
+}
+
+.auth-option {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--paper-100);
+  border: 1px solid rgba(30, 26, 24, 0.06);
+  text-decoration: none;
+  color: inherit;
+  transition: background 120ms ease, border-color 120ms ease;
+}
+.auth-option:hover,
+.auth-option:focus-visible {
+  background: var(--paper-200);
+  border-color: rgba(30, 26, 24, 0.12);
+  outline: none;
+}
+.auth-option--primary {
+  background: var(--paper-200);
+  border-color: rgba(30, 26, 24, 0.10);
+}
+
+.auth-option__kicker {
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--rust-700);
+  font-weight: 600;
+}
+.auth-option__title {
+  font-family: var(--font-serif);
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--ink-900);
+  margin: 0;
+}
+.auth-option__body {
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--ink-600);
+  margin: 0;
+}
+.auth-option__cue {
+  margin-top: auto;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  color: var(--rust-700);
+  font-weight: 500;
+}
+
+/* ── OTP form ──────────────────────────────────────────────────────────── */
+.auth-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+.auth-field__label {
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+  font-weight: 500;
+}
+.auth-input {
+  font-family: var(--font-sans);
+  font-size: 16px;
+  padding: 12px 14px;
+  border: 1px solid rgba(30, 26, 24, 0.10);
+  border-radius: var(--radius-sm);
+  background: var(--paper-50);
+  color: var(--ink-900);
+  outline: none;
+  transition: border-color 120ms ease;
+}
+.auth-input:focus {
+  border-color: var(--ink-800);
+}
+.auth-input--code {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  letter-spacing: 0.42em;
+  text-align: center;
+  padding: 14px 12px 14px 18px;
+}
+.auth-input--code::placeholder {
+  color: var(--ink-400);
+  letter-spacing: 0.42em;
+}
+.auth-button {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  font-weight: 500;
+  padding: 14px 18px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--ink-900);
+  background: var(--ink-900);
+  color: var(--paper-50);
+  cursor: pointer;
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+.auth-button:hover {
+  opacity: 0.92;
+}
+.auth-button:active {
+  transform: translateY(1px);
+}
+.auth-button[disabled] {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.auth-error {
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--oxblood-700, var(--rust-900));
+  margin: 0;
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin: var(--space-3) 0 var(--space-1);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-500);
+}
+.auth-divider::before,
+.auth-divider::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  background: rgba(30, 26, 24, 0.08);
+}
+
+.auth-link {
+  font-size: 13px;
+  color: var(--rust-700);
+  text-decoration: none;
+  border-bottom: 1px solid currentColor;
+  align-self: flex-start;
+}
+.auth-link:hover {
+  color: var(--rust-900);
+}
+

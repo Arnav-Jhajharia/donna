@@ -13,19 +13,50 @@ lives outside this module.
 
 Design bias: archive quietly rather than offer noisily. The whole point
 of shadow mode is to fail silent.
+
+When ``DONNA_PROACTIVE_TIERED=1 AND DONNA_PROACTIVE_OFFER_ACTIVE=1`` are
+both set, a SHADOW → OFFERED transition fires a ``ProactiveEvent``
+through the unified dispatcher. Tier 2 then decides whether to actively
+push the offer card via WhatsApp, hold it (passive surfacing keeps
+working through the OFFERED block), or drop it. Default behavior with
+neither flag set is unchanged: the promoter only flips status.
 """
 from __future__ import annotations
 
+import asyncio
 import logging
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 
 from donna.attention.dry_run import DryRunResult, dry_run
-from donna.attention.schema import Attention, AttentionStatus, ShadowState
+from donna.attention.schema import (
+    Attention,
+    AttentionOrigin,
+    AttentionStatus,
+    ShadowState,
+)
 from donna.attention.store import AttentionStore, AttentionTick, now_iso
 from donna.attention.vocabulary import SourceType
 
 logger = logging.getLogger(__name__)
+
+
+_TIERED_ENV = "DONNA_PROACTIVE_TIERED"
+_OFFER_ACTIVE_ENV = "DONNA_PROACTIVE_OFFER_ACTIVE"
+
+
+def _offer_dispatch_enabled() -> bool:
+    """Both flags must be ``1`` before promote dispatches an event.
+
+    The promote cycle is hot (every 15 min in production); we keep the
+    fast path zero-overhead unless the user has explicitly opted into
+    active push.
+    """
+    return (
+        os.getenv(_TIERED_ENV, "0").strip() == "1"
+        and os.getenv(_OFFER_ACTIVE_ENV, "0").strip() == "1"
+    )
 
 PROMOTION_THRESHOLD = 2  # distinct ticks that produced real signal
 
@@ -112,13 +143,21 @@ def run_shadow_cycle(
     *,
     store: AttentionStore | None = None,
 ) -> list[PromotionResult]:
-    """Tick every SHADOW attention once and transition as warranted."""
+    """Tick every SHADOW attention once and transition as warranted.
+
+    When the offer-active flag combination is enabled, transitions to
+    OFFERED additionally dispatch a ``ProactiveEvent`` so Tier 2 can
+    decide between active push (ping) and passive surfacing (hold). The
+    dispatch is best-effort: a failure here must not prevent the status
+    transition from being persisted.
+    """
     store = store or AttentionStore()
     shadow_atts = [
         a for a in store.list(user_id=user_id) if a.status is AttentionStatus.SHADOW
     ]
 
     results: list[PromotionResult] = []
+    promoted: list[tuple[Attention, dict[str, int]]] = []
     for attention in shadow_atts:
         try:
             preview = dry_run(attention.spec, user_id=str(attention.user_id))
@@ -145,7 +184,56 @@ def run_shadow_cycle(
         updated, result = _step_shadow(refreshed, preview)
         store.save(updated)
         results.append(result)
+        if result.action == "promoted":
+            promoted.append((updated, source_counts))
+
+    if promoted and _offer_dispatch_enabled():
+        try:
+            _dispatch_offer_events(promoted)
+        except Exception:
+            logger.exception(
+                "promote: offer dispatch failed (non-fatal); "
+                "passive surfacing still active"
+            )
+
     return results
+
+
+def _dispatch_offer_events(
+    promoted: list[tuple[Attention, dict[str, int]]],
+) -> None:
+    """Build + dispatch ``ProactiveEvent``s for SHADOW → OFFERED transitions.
+
+    Lazily imports the dispatcher and source adapter so the import cost
+    is paid only when the active-push flag is on. ``run_shadow_cycle``
+    is sync; we materialize an async runner here so the dispatch can
+    walk through the standard async pipeline without forcing the
+    promoter signature to change.
+    """
+    from proactive.dispatcher import dispatch as dispatcher_dispatch
+    from proactive.sources.attention_offer import (
+        attach_recent_source_counts,
+        make_event,
+    )
+
+    async def _go() -> None:
+        for attention, counts in promoted:
+            try:
+                event = make_event(attention)
+                event = attach_recent_source_counts(event, counts)
+                await dispatcher_dispatch(event)
+            except Exception:
+                logger.exception(
+                    "promote: dispatch failed for attention=%s", attention.id
+                )
+
+    try:
+        asyncio.run(_go())
+    except RuntimeError:
+        # Already inside an event loop (rare for the promote path,
+        # but harmless): schedule on the running loop instead.
+        loop = asyncio.get_event_loop()
+        loop.create_task(_go())
 
 
 # -- Offer decisions ---------------------------------------------------------
@@ -154,13 +242,17 @@ def run_shadow_cycle(
 def accept_offer(
     attention_id: str, *, store: AttentionStore | None = None
 ) -> Attention | None:
-    """User said yes → LIVE, discard shadow bookkeeping."""
+    """User said yes → LIVE, origin bumped to OFFER_ACCEPTED, shadow bookkeeping discarded."""
     store = store or AttentionStore()
     a = store.get(attention_id)
     if a is None or a.status is not AttentionStatus.OFFERED:
         return None
     updated = a.model_copy(
-        update={"status": AttentionStatus.LIVE, "shadow_state": None}
+        update={
+            "status": AttentionStatus.LIVE,
+            "origin": AttentionOrigin.OFFER_ACCEPTED,
+            "shadow_state": None,
+        }
     )
     return store.save(updated)
 

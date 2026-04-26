@@ -37,18 +37,31 @@ def build_options(config: DonnaAgentConfig | None = None) -> ClaudeAgentOptions:
     # Keep system_prompt stable across turns so the SDK's prefix cache stays
     # warm. Per-turn volatile context is prepended to the user message by the
     # runner via wrap_user_message_with_context().
+    env: dict[str, str] = {}
+    if config.cache_ttl_1h:
+        # Forwarded to the spawned `claude` CLI subprocess; the CLI converts it
+        # into the 1h cache-TTL beta header on /v1/messages.
+        env["ENABLE_PROMPT_CACHING_1H"] = "1"
     kwargs = {
         "model": config.model,
         "system_prompt": build_system_prompt(
             tool_mode=config.tool_mode,
-            user_model_block=config.user_model_block,
         ),
         "mcp_servers": {TOOL_NAMESPACE: build_mcp_server(config)},
         "extra_args": {
             "thinking": "enabled" if config.thinking_enabled else "disabled",
             "bare": None,
             "strict-mcp-config": None,
+            # Empty string disables ALL built-in tools (Bash/Read/Write/Edit/etc).
+            # Donna only uses MCP tools — built-in schemas are pure overhead.
+            "tools": "",
+            # Skip skill descriptions; --bare alone still resolves /skill-name.
+            "disable-slash-commands": None,
+            # Keep dynamic per-machine sections out of the system prompt so the
+            # prefix cache stays warm across machines and turns.
+            "exclude-dynamic-system-prompt-sections": None,
         },
+        "env": env,
         "allowed_tools": _allowed_for_mode(config.tool_mode, config),
         "disallowed_tools": list(config.disallowed_tools),
         "setting_sources": [],

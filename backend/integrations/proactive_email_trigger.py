@@ -1,10 +1,12 @@
 """Single-source proactive trigger: 'important email arrived'.
 
-When a Gmail webhook ingests a row, fan out here. Score → rate-limit →
-invoke Donna's brain in mode='proactive' with the email as trigger context.
+When a Gmail webhook ingests a row, fan out here. Score → unified proactive
+dispatcher → in mirror mode also invoke the legacy ``donna_turn`` proactive
+flow so behavior does not change.
 
-NOTE: this is one hardcoded producer. The general noticing layer (multi-
-source, learning-aware) is a separate spec.
+When ``DONNA_PROACTIVE_TIERED=1`` the dispatcher takes over: it ships
+Tier 2 drafts directly, holds notes, drops with telemetry, and only
+escalates to ``donna_turn`` when Tier 2 needs tools or fails.
 """
 from __future__ import annotations
 
@@ -21,7 +23,13 @@ from backend.integrations.proactive_rate_limit import (
     can_fire_proactive,
     record_ping,
 )
-from db.models import ChatMessage, OpenLoop, User
+from db.models import OpenLoop, User
+from proactive.dispatcher import dispatch as dispatcher_dispatch
+from proactive.dispatcher import is_tiered_active
+from proactive.sources.email import (
+    fetch_recent_sent_thread_ids,
+    make_event,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -46,32 +54,32 @@ async def _build_scoring_context(user_id: str) -> ScoringContext:
                 .where(OpenLoop.status == "active")
             )
         ).scalars().all()
-        # Fetched but unused for now — sent-folder mirror not in P2.
-        _recent_sent = (
-            await session.execute(
-                select(ChatMessage)
-                .where(ChatMessage.user_id == user_id)
-                .order_by(ChatMessage.created_at.desc())
-                .limit(50)
-            )
-        ).scalars().all()
 
     biography = (
         (user.living_profile or {}).get("biography", {})
         if user else {}
     )
     relationships = list(biography.get("relationships") or [])
+    recent_sent = await fetch_recent_sent_thread_ids(user_id)
     return ScoringContext(
         biography_relationships=relationships,
         open_loop_keywords=[
             (loop.content or "").strip()
             for loop in loops if (loop.content or "").strip()
         ],
-        recent_sent_thread_ids=set(),
+        recent_sent_thread_ids=recent_sent,
     )
 
 
 def _format_trigger_prompt(msg: NormalizedGmailMessage, signals: list[str]) -> str:
+    """DEPRECATED: only the legacy mirror-mode fallback path uses this.
+
+    The unified dispatcher builds its own escalation prompt in
+    ``proactive.dispatcher._build_escalation_prompt`` from the
+    ``ProactiveEvent`` envelope. Kept here so mirror mode (Phase 1)
+    remains a strict superset of pre-dispatcher behavior. Once mirror
+    mode is fully retired, delete this and the legacy brain-path caller.
+    """
     body_excerpt = (msg.body_text or msg.snippet or "")[:600]
     return (
         "[SYSTEM TRIGGER: proactive_email]\n"
@@ -92,14 +100,15 @@ async def _invoke_brain(state: dict, config=None) -> dict:
     return await donna_turn(state, config)
 
 
-async def maybe_surface_email(
-    user_id: str, msg: NormalizedGmailMessage
+async def _run_legacy_brain_path(
+    user_id: str, msg: NormalizedGmailMessage, score
 ) -> None:
-    ctx = await _build_scoring_context(user_id)
-    score = score_email(msg, ctx)
-    if score.score < THRESHOLD:
-        return
+    """Original score → arbiter → brain proactive turn flow.
 
+    Kept verbatim so mirror mode (Phase 1) is a strict superset of
+    today's behavior. When ``DONNA_PROACTIVE_TIERED=1`` the dispatcher
+    handles ship/hold/drop/escalate and this path is skipped.
+    """
     decision = await can_fire_proactive(user_id, source="email")
     if not decision.allowed:
         await record_ping(
@@ -120,8 +129,6 @@ async def maybe_surface_email(
     prompt = _format_trigger_prompt(msg, score.signals)
     state = {
         "user_id": user_id,
-        # raw_input is what brain.donna_turn reads; user_message is the
-        # human-friendly mirror used for tracing + tests.
         "raw_input": prompt,
         "user_message": prompt,
         "trigger": {
@@ -139,3 +146,42 @@ async def maybe_surface_email(
             "proactive_email: brain invocation failed user=%s msg=%s",
             user_id, msg.gmail_message_id,
         )
+
+
+async def maybe_surface_email(
+    user_id: str, msg: NormalizedGmailMessage
+) -> None:
+    """Phase 1/2 entry point.
+
+    Phase 1 (default): the dispatcher runs in mirror mode (telemetry only)
+    AND the legacy brain path runs. Phase 2 (``DONNA_PROACTIVE_TIERED=1``):
+    only the dispatcher runs; legacy brain path is skipped unless the
+    dispatcher itself escalates.
+    """
+    ctx = await _build_scoring_context(user_id)
+    score = score_email(msg, ctx)
+    if score.score < THRESHOLD:
+        return
+
+    event = make_event(user_id, msg, score)
+    tiered = is_tiered_active()
+    try:
+        outcome = await dispatcher_dispatch(event)
+    except Exception:
+        logger.exception(
+            "proactive_email: dispatcher raised user=%s msg=%s",
+            user_id, msg.gmail_message_id,
+        )
+        outcome = None
+
+    if tiered:
+        # In gated mode the dispatcher owns the full path. The legacy
+        # flow runs only when the dispatcher itself failed before
+        # escalating (defensive — should be rare).
+        if outcome is None:
+            await _run_legacy_brain_path(user_id, msg, score)
+        return
+
+    # Mirror mode: run the legacy brain path regardless of dispatcher
+    # outcome so existing behavior is unchanged.
+    await _run_legacy_brain_path(user_id, msg, score)

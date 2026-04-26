@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json.schemastore.org/stylelintrc",
+  "extends": ["stylelint-config-standard"],
+  "plugins": ["stylelint-declaration-strict-value"],
+  "rules": {
+    "color-no-hex": [true, {
+      "message": "Donna: no raw hex. Use a token from tokens.css (e.g. var(--color-ink))."
+    }],
+    "color-named": ["never", {
+      "message": "Donna: named colors are not in the system. Use a token."
+    }],
+    "scale-unlimited/declaration-strict-value": [
+      ["/color$/", "background", "background-color", "border-color", "fill", "stroke", "box-shadow"],
+      {
+        "ignoreValues": ["transparent", "currentColor", "inherit", "initial", "unset", "none", "/^var\\(--/"],
+        "message": "Donna: use a CSS variable from tokens.css — not a literal value."
+      }
+    ],
+    "declaration-property-value-disallowed-list": {
+      "font-family": ["/^(?!var\\(--font-).*/"],
+      "font-size": ["/^\\d+px$/", "/^\\d+rem$/", "/^\\d+em$/"],
+      "box-shadow": [
+        "/^(?!var\\(--shadow-).*/"
+      ],
+      "background": [
+        "/linear-gradient/",
+        "/radial-gradient/",
+        "/conic-gradient/"
+      ],
+      "background-image": [
+        "/linear-gradient/",
+        "/radial-gradient/",
+        "/conic-gradient/"
+      ],
+      "/^":  ["/#[0-9A-Fa-f]{3,8}/"]
+    },
+    "declaration-property-value-allowed-list": {
+      "font-weight": ["400", "500", "600", "700", "/^var\\(--weight-/"],
+      "font-style": ["normal", "italic"]
+    },
+    "custom-property-pattern": [
+      "^(color|paper|ink|rust|signal|font|type|weight|space|radius|border|shadow|ease|duration|focus|bg|text|border)-[a-z0-9-]+$",
+      {
+        "message": "Donna: custom property names must follow the token naming convention."
+      }
+    ]
+  },
+  "ignoreFiles": [
+    "**/tokens.css",
+    "**/node_modules/**"
+  ]
+}

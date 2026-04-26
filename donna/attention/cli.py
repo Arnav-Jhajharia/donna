@@ -103,9 +103,24 @@ async def _cmd_create(args: argparse.Namespace) -> int:
 
 
 def _cmd_list(args: argparse.Namespace) -> int:
+    from donna.attention.noise import filter_attentions
+
     attentions = list_attentions()
     if not attentions:
         print(f"{_DIM}no attentions yet{_RESET}")
+        return 0
+    show_all = bool(getattr(args, "all", False))
+    if not show_all:
+        before = len(attentions)
+        attentions = filter_attentions(attentions)
+        hidden = before - len(attentions)
+        if hidden:
+            print(
+                f"{_DIM}({hidden} test/debug-shape attention(s) hidden — "
+                f"pass --all to see them){_RESET}"
+            )
+    if not attentions:
+        print(f"{_DIM}nothing to show{_RESET}")
         return 0
     print(f"{_BOLD}{'ID':<10}{'STATUS':<12}{'CARD':<14}{'TITLE':<40}{'#UPD':>5}{_RESET}")
     for a in attentions:
@@ -179,7 +194,7 @@ def _make_status_cmd(fn: Callable[[str], Attention | None], label: str):
 
 async def _cmd_propose(args: argparse.Namespace) -> int:
     if not args.shadow:
-        candidates = propose_candidates(args.user_id)
+        candidates = await propose_candidates(args.user_id)
         _section("CANDIDATES", _CYAN)
         if not candidates:
             print(f"{_DIM}no candidates{_RESET}")
@@ -264,6 +279,11 @@ def _build_parser() -> argparse.ArgumentParser:
     p_create.set_defaults(func=_cmd_create, async_=True)
 
     p_list = sub.add_parser("list", help="print all saved attentions")
+    p_list.add_argument(
+        "--all",
+        action="store_true",
+        help="include test/debug-shape attentions (hidden by default)",
+    )
     p_list.set_defaults(func=_cmd_list, async_=False)
 
     p_show = sub.add_parser("show", help="full spec + tick history")

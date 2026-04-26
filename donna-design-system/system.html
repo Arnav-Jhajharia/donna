@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Donna — Visual Contract</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..700;1,400..700&family=Red+Hat+Text:wght@400..600&display=swap" rel="stylesheet">
+<style>
+/* ════════════════════════════════════════════════════════════════
+   DONNA · VISUAL CONTRACT
+   This document IS the design system. Every value here is
+   the source of truth.
+
+   Voice & copy rules (apply to all UI strings):
+     1. Lowercase by default. Capitalise proper nouns and the
+        first word of a CTA.
+     2. Donna refers to herself as "I", never "she" or "Donna".
+     3. No em-dashes in UI strings.
+     4. No emoji.
+     5. Italic serif appears only in the wordmark, the d mark,
+        whisper Frame bodies, and source attribution.
+     6. Source attribution: small italic, prefixed "from".
+     7. CTA verbs are imperative, one word: log, see, keep.
+     8. Numbers in trackers use tabular-nums.
+
+   Visual rules:
+     • No drop shadows. Hairlines and tonal background only.
+     • Two radii: md (10) for buttons/checks, lg (16) for cards.
+     • Rust-700 is the editorial accent; reserved for serif
+       headings, tracker numerals, and key nouns.
+   ════════════════════════════════════════════════════════════════ */
+
+:root {
+  /* color · paper */
+  --color-paper-50:  #FDFBFA;
+  --color-paper-100: #FBF7F5;
+  --color-paper-200: #F5EFEA;
+  --color-paper-300: #F0EAE4;
+  --color-paper-400: #E7DFD7;
+  --color-paper-500: #D9CDC2;
+
+  /* color · ink */
+  --color-ink-300: #B8AAA3;
+  --color-ink-400: #8F837C;
+  --color-ink-500: #6B615C;
+  --color-ink-600: #4A413E;
+  --color-ink-700: #3A3331;
+  --color-ink-800: #2A2422;
+  --color-ink-900: #1E1A18;
+
+  /* color · rust */
+  --color-rust-100: #F5EFEA;
+  --color-rust-300: #C9A796;
+  --color-rust-500: #7B5544;
+  --color-rust-700: #5D3F31;
+  --color-rust-900: #3F2A21;
+
+  /* color · signal */
+  --color-moss-100:    #E5EBDF;
+  --color-moss-700:    #4A5A3A;
+  --color-amber-100:   #F4E8D6;
+  --color-amber-700:   #6B5429;
+  --color-oxblood-100: #EBDDD9;
+  --color-oxblood-700: #6B342B;
+
+  /* color · alpha */
+  --color-alpha-ink-04: rgba(30, 26, 24, 0.04);
+  --color-alpha-ink-08: rgba(30, 26, 24, 0.08);
+  --color-alpha-ink-14: rgba(30, 26, 24, 0.14);
+
+  /* font */
+  --font-serif: "EB Garamond", Georgia, Cambria, "Times New Roman", serif;
+  --font-sans:  "Red Hat Text", -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+
+  /* space */
+  --space-0: 0;     --space-1: 4px;  --space-2: 8px;  --space-3: 12px;
+  --space-4: 16px;  --space-5: 24px; --space-6: 32px; --space-7: 48px;
+  --space-8: 64px;  --space-9: 96px;
+
+  /* radius — only md and lg */
+  --radius-md: 10px;
+  --radius-lg: 16px;
+
+  /* shadow — focus only */
+  --shadow-focus: 0 0 0 2px var(--color-paper-100), 0 0 0 4px var(--color-rust-500);
+
+  /* motion */
+  --duration-fast:      160ms;
+  --duration-normal:    280ms;
+  --duration-editorial: 380ms;
+  --ease-default:       cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-editorial:     cubic-bezier(0.20, 0.80, 0.20, 1);
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--color-paper-100);
+  color: var(--color-ink-900);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+.doc { max-width: 1180px; margin: 0 auto; padding: 64px 48px 128px; }
+.section { margin-top: 96px; }
+.section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 24px; margin-bottom: 32px; padding-bottom: 16px; border-bottom: 1px solid var(--color-alpha-ink-08); }
+.section-num { font-family: var(--font-sans); font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-rust-700); }
+.section-h { font-family: var(--font-serif); font-weight: 400; font-size: 32px; line-height: 36px; letter-spacing: -0.015em; margin: 4px 0 0; flex: 1; }
+.section-h em { color: var(--color-rust-700); font-style: italic; }
+.section-blurb { font-family: var(--font-sans); font-size: 14px; line-height: 1.6; color: var(--color-ink-500); max-width: 60ch; margin: 0 0 32px; }
+.subhead { font-family: var(--font-sans); font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-ink-500); margin: 32px 0 16px; }
+
+/* ═══ FRAME — the canonical card ═══ */
+.frame {
+  background: var(--color-paper-200);
+  border: 1px solid var(--color-alpha-ink-08);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  display: flex; flex-direction: column;
+  min-height: 144px;
+}
+@media (max-width: 480px) { .frame { padding: 16px; min-height: 64px; } }
+.frame__kicker { font-family: var(--font-sans); font-size: 11px; font-weight: 500; letter-spacing: 0.14em; color: var(--color-ink-500); margin: 0 0 8px; }
+.frame__title  { font-family: var(--font-sans); font-size: 15px; font-weight: 600; line-height: 20px; color: var(--color-ink-900); margin: 0 0 12px; }
+.frame__title em { color: var(--color-rust-700); font-style: italic; font-weight: 500; }
+.frame__body   { font-family: var(--font-sans); font-size: 16px; line-height: 25px; color: var(--color-ink-700); margin: 0; }
+
+.frame--tappable { cursor: pointer; transition: background var(--duration-fast) var(--ease-default), transform var(--duration-fast) var(--ease-default); }
+.frame--tappable:hover { background: var(--color-paper-300); }
+.frame--tappable:focus-visible { outline: none; box-shadow: var(--shadow-focus); }
+.frame--tappable:active { transform: translateY(1px); background: var(--color-paper-300); }
+
+.frame--done { opacity: 0.55; position: relative; }
+.frame--done .frame__title { text-decoration: line-through; text-decoration-color: var(--color-ink-400); text-decoration-thickness: 1px; }
+
+.frame--placeholder {
+  background: transparent;
+  border: 1px dashed var(--color-alpha-ink-14);
+  align-items: center; justify-content: center;
+  text-align: center;
+}
+.frame--placeholder .ph-label { font-family: var(--font-sans); font-size: 12px; color: var(--color-ink-400); letter-spacing: 0.04em; }
+
+/* ═══ LAYOUT GRID — 12 columns, 7 row compositions ═══ */
+.row { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; margin-bottom: 32px; }
+.cell--full           { grid-column: span 12; }
+.cell--three-quarters { grid-column: span 9;  }
+.cell--two-thirds     { grid-column: span 8;  }
+.cell--half           { grid-column: span 6;  }
+.cell--third          { grid-column: span 4;  }
+.cell--quarter        { grid-column: span 3;  }
+@media (max-width: 480px) {
+  .row { gap: 12px; margin-bottom: 24px; }
+  .cell--full, .cell--three-quarters, .cell--two-thirds,
+  .cell--half, .cell--third, .cell--quarter { grid-column: span 12; }
+}
+
+/* ═══ INTRO REGION — naked on canvas ═══ */
+.intro { padding: 8px 0 0; display: flex; flex-direction: column; gap: 8px; }
+.intro__kicker { font-family: var(--font-sans); font-size: 11px; font-weight: 500; letter-spacing: 0.14em; text-transform: uppercase; color: var(--color-ink-500); margin: 0; }
+.intro__greet { font-family: var(--font-serif); font-weight: 400; font-size: 44px; line-height: 48px; letter-spacing: -0.02em; color: var(--color-ink-900); margin: 0; }
+.intro__greet em { color: var(--color-rust-700); font-style: italic; font-weight: 400; }
+.intro__place { font-family: var(--font-sans); font-size: 14px; color: var(--color-ink-500); margin: 0; }
+
+/* ═══ INLINE PRIMITIVES ═══ */
+.checkbox { width: 18px; height: 18px; border-radius: var(--radius-md); border: 1.5px solid var(--color-ink-700); background: var(--color-paper-100); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer; }
+.checkbox--done::after { content: "✓"; color: var(--color-rust-700); font-size: 14px; font-weight: 600; line-height: 1; }
+.tap-chip { font-family: var(--font-sans); font-size: 14px; font-weight: 500; color: var(--color-rust-700); background: transparent; border: 0; padding: 0; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; text-decoration: none; }
+.tap-chip::after { content: "→"; transition: transform var(--duration-fast) var(--ease-default); }
+.tap-chip:hover::after { transform: translateX(2px); }
+.pill { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: var(--radius-md); font-family: var(--font-sans); font-size: 12px; font-weight: 500; background: var(--color-paper-300); color: var(--color-ink-700); border: 1px solid var(--color-alpha-ink-08); }
+.pill--moss    { background: var(--color-moss-100);    color: var(--color-moss-700);    border-color: transparent; }
+.pill--amber   { background: var(--color-amber-100);   color: var(--color-amber-700);   border-color: transparent; }
+.pill--oxblood { background: var(--color-oxblood-100); color: var(--color-oxblood-700); border-color: transparent; }
+.progress { height: 4px; background: var(--color-paper-400); border-radius: var(--radius-md); overflow: hidden; }
+.progress__fill { height: 100%; background: var(--color-rust-700); border-radius: var(--radius-md); }
+.source { font-family: var(--font-serif); font-style: italic; font-weight: 400; font-size: 14px; color: var(--color-ink-500); }
+.btn-solid { display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 14px 20px; background: var(--color-rust-500); color: var(--color-paper-100); border: 0; border-radius: var(--radius-md); font-family: var(--font-sans); font-size: 15px; font-weight: 500; cursor: pointer; }
+.btn-solid--ghost { background: transparent; color: var(--color-ink-900); border: 1px solid var(--color-alpha-ink-14); }
+.note { background: var(--color-paper-200); border-left: 2px solid var(--color-rust-500); border-radius: 0 var(--radius-md) var(--radius-md) 0; padding: 12px 16px; font-family: var(--font-sans); font-size: 14px; line-height: 22px; color: var(--color-ink-700); margin: 8px 0; }
+
+/* ═══ TOAST ═══ */
+.toast { background: var(--color-paper-200); border: 1px solid var(--color-alpha-ink-08); border-radius: var(--radius-lg); padding: 16px 20px; max-width: 480px; display: flex; flex-direction: column; gap: 6px; position: relative; }
+.toast__kicker { font-family: var(--font-sans); font-size: 11px; font-weight: 500; letter-spacing: 0.14em; color: var(--color-rust-700); }
+.toast__body { font-family: var(--font-sans); font-size: 14px; line-height: 22px; color: var(--color-ink-900); margin: 0; }
+.toast__close { position: absolute; top: 12px; right: 12px; background: transparent; border: 0; cursor: pointer; color: var(--color-ink-400); font-size: 16px; padding: 4px; line-height: 1; }
+
+/* ═══ TYPE ROLES ═══ */
+.t-h1      { font-family: var(--font-serif); font-weight: 400; font-size: 44px; line-height: 48px; letter-spacing: -0.02em; }
+.t-h2      { font-family: var(--font-serif); font-weight: 400; font-size: 32px; line-height: 36px; letter-spacing: -0.015em; }
+.t-h3      { font-family: var(--font-serif); font-weight: 500; font-size: 22px; line-height: 28px; letter-spacing: -0.01em; }
+.t-h4      { font-family: var(--font-sans);  font-weight: 600; font-size: 15px; line-height: 20px; }
+.t-lead    { font-family: var(--font-sans);  font-weight: 400; font-size: 18px; line-height: 29px; }
+.t-body    { font-family: var(--font-sans);  font-weight: 400; font-size: 16px; line-height: 25px; }
+.t-small   { font-family: var(--font-sans);  font-weight: 400; font-size: 14px; line-height: 22px; }
+.t-caption { font-family: var(--font-sans);  font-weight: 400; font-size: 12px; line-height: 18px; }
+.t-label   { font-family: var(--font-sans);  font-weight: 500; font-size: 11px; line-height: 16px; letter-spacing: 0.14em; }
+.t-button  { font-family: var(--font-sans);  font-weight: 500; font-size: 15px; line-height: 1; }
+.accent { color: var(--color-rust-700); }
+</style>
+</head>
+<body>
+<div class="doc">
+  <header style="margin-bottom: 64px;">
+    <p class="t-label" style="color: var(--color-rust-700); margin: 0 0 14px;">Donna · visual contract · v2</p>
+    <h1 style="font-family: var(--font-serif); font-weight: 400; font-size: 56px; line-height: 60px; letter-spacing: -0.02em; margin: 0 0 18px;">The visual <em style="color: var(--color-rust-700); font-style: italic;">contract.</em></h1>
+    <p class="t-lead" style="color: var(--color-ink-500); max-width: 60ch; margin: 0;">Eleven sections. Every component the dashboard composes is shown once here, with its rules. If a thing isn't on this page, it doesn't exist in the system.</p>
+  </header>
+
+  <section class="section">
+    <div class="section-head"><span class="section-num">02</span><h2 class="section-h">Frame</h2><span class="t-label" style="color: var(--color-ink-400);">canonical card</span></div>
+    <p class="section-blurb">Every slot the brain emits is rendered into a Frame. Same chrome at every width — only the column span changes.</p>
+    <div class="row">
+      <div class="cell--third"><div class="frame"><h4 class="frame__title">title only</h4><p class="frame__body">internal title sits top-left in h4. body wraps below.</p></div></div>
+      <div class="cell--third"><div class="frame"><p class="frame__kicker">friday · 18 april</p><p class="frame__body">kicker only. label style.</p></div></div>
+      <div class="cell--third"><div class="frame"><p class="frame__kicker">friday · 18 april</p><h4 class="frame__title">title and kicker</h4><p class="frame__body">kicker on top, title below it, body under.</p></div></div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><span class="section-num">04</span><h2 class="section-h">Layout grid</h2><span class="t-label" style="color: var(--color-ink-400);">seven canonical rows</span></div>
+    <p class="section-blurb">12-column grid. Gap within a row: 16px. Gap between rows: 32px.</p>
+    <p class="t-caption" style="color: var(--color-ink-400); padding-left: 4px;">[full]</p>
+    <div class="row"><div class="cell--full"><div class="frame"></div></div></div>
+    <p class="t-caption" style="color: var(--color-ink-400); padding-left: 4px;">[half, half]</p>
+    <div class="row"><div class="cell--half"><div class="frame"></div></div><div class="cell--half"><div class="frame"></div></div></div>
+    <p class="t-caption" style="color: var(--color-ink-400); padding-left: 4px;">[two-thirds, third]</p>
+    <div class="row"><div class="cell--two-thirds"><div class="frame"></div></div><div class="cell--third"><div class="frame"></div></div></div>
+    <p class="t-caption" style="color: var(--color-ink-400); padding-left: 4px;">[third, third, third]</p>
+    <div class="row"><div class="cell--third"><div class="frame"></div></div><div class="cell--third"><div class="frame"></div></div><div class="cell--third"><div class="frame"></div></div></div>
+  </section>
+
+  <section class="section">
+    <div class="section-head"><span class="section-num">06</span><h2 class="section-h">Intro region</h2><span class="t-label" style="color: var(--color-ink-400);">naked on canvas</span></div>
+    <div class="intro">
+      <p class="intro__kicker">friday · 18 april</p>
+      <h2 class="intro__greet">good morning, <em>aarav.</em></h2>
+      <p class="intro__place">mumbai · 29° · slight haze, cooler by the sea</p>
+    </div>
+  </section>
+
+  <footer style="margin-top: 96px; padding-top: 24px; border-top: 1px solid var(--color-alpha-ink-08); display: flex; justify-content: space-between; font-family: var(--font-sans); font-size: 13px; color: var(--color-ink-400);">
+    <span>Donna · visual contract · v2</span>
+    <span>tokens.json + system.html · sole sources of truth</span>
+  </footer>
+</div>
+</body>
+</html>

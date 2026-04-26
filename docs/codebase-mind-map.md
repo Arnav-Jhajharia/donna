@@ -1,6 +1,6 @@
 # Codebase Mind Map
 
-Generated from the current repo state on 2026-04-22.
+Generated from the current repo state on 2026-04-23.
 
 ## High-Level Map
 
@@ -13,6 +13,7 @@ mindmap
         Webhook verify and handler
         Per-phone cancel-and-restart dispatcher
         Durable inbound replay
+        Optional schedule worker (env-gated)
       ingress/
         payload.py transport-agnostic dataclasses
         whatsapp.py WhatsApp webhook parser and media downloader
@@ -20,6 +21,7 @@ mindmap
       api/graph.py
         payload-to-state adapter
         phone-to-user lookup
+        timezone guessing + tz confirmation flags (_tz_done)
       delivery/
         messages.py channel-agnostic outbound types
         whatsapp.py WhatsApp Cloud renderer and sender
@@ -45,12 +47,16 @@ mindmap
     Memory Backend
       backend/memory/
         tools/ model-callable memory/action tools
+          set_timezone
+          schedule_reminder
         hooks/ post-turn persistence and extraction
         retrieval/ smart_recall pipeline
         clients/ Supermemory and Graphiti adapters
         user_facts/ living profile facts
         gates/ graph ingestion decisioning
         synthesis/ living profile and procedural rules synthesis
+        time.py timezone helpers (naive UTC storage + local boundaries)
+        jobs/ schedule worker (DonnaSchedule sender)
       backend/db/
         models.py memory-subset tables
         session.py backend DB engine
@@ -141,6 +147,12 @@ flowchart TD
   SaveAssistant --> Send[delivery/whatsapp.py send_many]
   Send --> WAAPI[WhatsApp Cloud API]
   Send --> MarkProcessed[db/inbound.py mark_processed]
+
+  %% Reminders (one-shot schedules)
+  Tools --> ScheduleTool[mcp__donna__schedule_reminder]
+  ScheduleTool --> SchedRow[db.models.DonnaSchedule]
+  SchedRow --> SchedWorker[backend/memory/jobs/schedule_worker.py]
+  SchedWorker --> Send
 ```
 
 ## Runtime Components
@@ -241,17 +253,15 @@ The dashboard is currently a Next.js app using static plan fixtures. `lib/getPla
 | Graphiti/FalkorDB | `backend/memory/clients/graphiti.py` | Per-user knowledge graph ingestion/search. |
 | Anthropic/OpenAI structured calls | `backend/memory/retrieval/structured.py`, attention authoring/normalization paths | Extraction, synthesis, and spec authoring. |
 
-## Cleanup Hot Spots
+## Cleanup Hot Spots (Current)
 
-These are the highest-friction edges I noticed while mapping the repo:
+These are the highest-friction edges in the current repo state:
 
-1. **Two DB packages with divergent schemas.** Root `db/models.py` has production/app tables like `InboundMessage`, `UserSession`, `DonnaInstance`, `RunTrace`, and `OAuthToken`; `backend/db/models.py` has a trimmed memory subset. The live API path uses root `db`, while memory tools use `backend.db`.
-2. **`donna_runtime/brain.py` imports DB session helpers but calls file-session helper names.** It imports `resolve_session_id_db` and `save_user_session_db`, but calls `resolve_session_id(...)` and `save_user_session(...)`. As written, the live WhatsApp brain path should fall into the outer API fallback before the SDK turn starts.
-3. **WhatsApp send return contract mismatch.** `api/main.py` expects `wamids = await _wa.send_many(...)` and uses `wamids[0]` for assistant message backfill, but `delivery/whatsapp.py::send_many` returns `None`, and `send`/`_post` do not surface message ids.
-4. **Memory hooks write through `backend.db`, while the live webhook saves chat through root `db`.** That can split conversation history depending on which path wrote it.
-5. **`donna_runtime.config` defaults to `tool_mode="fake"`.** That is useful for tests/prototype runs, but it means the default runtime does not expose the real `backend/memory` tools unless configuration changes.
-6. **Dashboard is not wired to backend data yet.** `dashboard/web/lib/getPlan.ts` returns a static fixture; `DashboardPlan` is a good contract, but integration is still a seam.
-7. **Attention is mostly a harness, not integrated into the live WhatsApp runtime.** It has CLI/store/scheduler pieces, but no obvious call from `api/main.py` or `donna_runtime` into attention creation/ticking.
+1. **Scheduling is MVP-level.** `DonnaSchedule` sending exists (env-gated worker), but recurring schedules, robust locking, and idempotent delivery semantics are not fully productized.
+2. **Calendar tool query bounds are UTC-windowed.** `list_calendar` returns local-rendered times, but the query window is `utcnow..utcnow+within_days`, which can mis-answer "today/tomorrow" near local midnight.
+3. **Timezone drift risk.** `users.timezone` is guessed from phone prefix; it needs explicit confirmation (`_tz_done`) to prevent week-boundary and reminder misbehavior. See `docs/timezone-audit.md`.
+4. **Attention is still a harness.** It is timezone-aware for bare reminders but does not drive WhatsApp delivery in production yet.
+5. **Dashboard remains a seam.** `dashboard/web` still uses static plan fixtures; backend integration is intentionally deferred.
 
 ## Suggested Ownership Boundaries
 

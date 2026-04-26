@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { ChevIcon, ICONS } from '../icons';
 import SectionHead from './SectionHead';
+import { useAction } from '@/lib/action-context';
 import type { NudgeGridBlock as NudgeGridSpec, NudgeItem, NudgeVariant } from '@/lib/plan';
 
 interface Palette {
@@ -32,10 +33,31 @@ export default function NudgeGridBlock({ spec }: { spec: NudgeGridSpec }) {
 
 function NudgeTile({ item }: { item: NudgeItem }) {
   const Icon = ICONS[item.icon];
+  const fire = useAction();
+  const onTap = () => {
+    if (item.action) void fire(item.action);
+  };
+  const tappable = Boolean(item.action);
+  const tappableProps = tappable
+    ? {
+        role: 'button' as const,
+        tabIndex: 0,
+        onClick: onTap,
+        onKeyDown: (e: React.KeyboardEvent) => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            onTap();
+          }
+        },
+        style: { cursor: 'pointer' as const },
+      }
+    : {};
 
   if (item.variant === 'featured') {
     return (
-      <div
+      <motion.div
+        whileTap={tappable ? { scale: 0.98 } : undefined}
+        {...tappableProps}
         style={{
           background: 'var(--rust-700)',
           color: 'var(--paper-100)',
@@ -46,6 +68,7 @@ function NudgeTile({ item }: { item: NudgeItem }) {
           display: 'flex',
           flexDirection: 'column',
           justifyContent: 'space-between',
+          ...(tappable ? { cursor: 'pointer' } : {}),
         }}
       >
         <div>
@@ -94,13 +117,15 @@ function NudgeTile({ item }: { item: NudgeItem }) {
           {item.cta}
           <ChevIcon size={11} color="var(--paper-100)" />
         </div>
-      </div>
+      </motion.div>
     );
   }
 
   const p = PALETTE[item.variant];
   return (
-    <div
+    <motion.div
+      whileTap={tappable ? { scale: 0.98 } : undefined}
+      {...tappableProps}
       style={{
         background: p.bg,
         border: '1px solid var(--border-hairline)',
@@ -110,6 +135,7 @@ function NudgeTile({ item }: { item: NudgeItem }) {
         display: 'flex',
         flexDirection: 'column',
         justifyContent: 'space-between',
+        ...(tappable ? { cursor: 'pointer' } : {}),
       }}
     >
       <div>
@@ -166,6 +192,6 @@ function NudgeTile({ item }: { item: NudgeItem }) {
         {item.cta}
         <ChevIcon size={11} color={p.tone} />
       </div>
-    </div>
+    </motion.div>
   );
 }

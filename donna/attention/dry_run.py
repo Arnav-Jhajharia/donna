@@ -45,19 +45,113 @@ class StubFetcher:
 
 
 class CalendarFetcher:
-    """Real calendar fetcher — falls back to fixture when DB not available."""
+    """Real calendar fetcher — falls back to fixture when DB not available.
+
+    Queries the local ``calendar_entries`` mirror via a SYNC SQLAlchemy
+    session so the (sync) Proposer interface doesn't have to await the
+    async list_calendar tool. The previous implementation tried to call
+    list_calendar (async) without awaiting it — which produced a runtime
+    warning and the result was always a coroutine, so isinstance(list)
+    failed and we silently fell through to the stub fixture every time.
+    """
 
     def fetch(self, source: Source, user_id: str | None) -> list[dict[str, Any]]:
         if user_id:
             try:
-                from backend.memory.tools.list_calendar import list_calendar  # type: ignore
-
-                result = list_calendar(user_id=user_id, lookahead_days=14)  # type: ignore
-                if isinstance(result, list):
-                    return result
+                lookahead_days = int(source.params.get("lookahead_days") or 14)
+                rows = _query_calendar_sync(user_id, lookahead_days)
+                if rows is not None:
+                    return rows
             except Exception:
-                logger.info("calendar live fetch unavailable; using fixture")
+                logger.exception(
+                    "calendar live fetch failed; using fixture"
+                )
         return StubFetcher().fetch(source, user_id)
+
+
+# A single sync engine, lazily built. Reused across CalendarFetcher calls
+# to avoid spinning up a fresh psycopg connection per propose pass.
+_SYNC_ENGINE = None
+
+
+def _get_sync_engine():
+    """Build (once) a sync SQLAlchemy engine off the same DATABASE_URL the
+    async engine uses, swapping the driver to psycopg2/psycopg so we can
+    talk to Postgres from sync proposer code without rewriting the
+    async pipeline."""
+    global _SYNC_ENGINE
+    if _SYNC_ENGINE is not None:
+        return _SYNC_ENGINE
+    try:
+        from sqlalchemy import create_engine
+        from db.session import _clean_url
+        from config import settings
+    except Exception:
+        return None
+    url, _kwargs = _clean_url(settings.database_url)
+    # Async URLs use postgresql+asyncpg://; rewrite to use psycopg2 which
+    # is what's installed for the sync path. _clean_url's connect_args
+    # were tuned for asyncpg (statement_cache_size, ssl) and don't apply
+    # to the sync driver, so we drop them entirely — defaults are fine
+    # for a low-traffic propose pass.
+    for prefix in ("postgresql+asyncpg://", "postgresql+psycopg://"):
+        if url.startswith(prefix):
+            url = "postgresql+psycopg2://" + url[len(prefix):]
+            break
+    if url.startswith("postgresql://"):
+        url = "postgresql+psycopg2://" + url[len("postgresql://"):]
+    try:
+        _SYNC_ENGINE = create_engine(url, pool_pre_ping=True, pool_size=2)
+    except Exception:
+        logger.exception("calendar sync engine init failed")
+        _SYNC_ENGINE = None
+    return _SYNC_ENGINE
+
+
+def _query_calendar_sync(
+    user_id: str, lookahead_days: int
+) -> list[dict[str, Any]] | None:
+    """Returns the upcoming events list in the dict shape proposer
+    consumes (id, title, start_time iso, end_time iso, location). Returns
+    None on any DB failure so the caller can fall back to fixture."""
+    from datetime import datetime, timedelta, timezone
+
+    engine = _get_sync_engine()
+    if engine is None:
+        return None
+    try:
+        from sqlalchemy import select
+        from sqlalchemy.orm import Session
+        from db.models import CalendarEntry
+    except Exception:
+        return None
+
+    now = datetime.now(timezone.utc).replace(tzinfo=None)
+    until = now + timedelta(days=lookahead_days)
+    try:
+        with Session(engine) as s:
+            stmt = (
+                select(CalendarEntry)
+                .where(CalendarEntry.user_id == user_id)
+                .where(CalendarEntry.start_time >= now)
+                .where(CalendarEntry.start_time <= until)
+                .order_by(CalendarEntry.start_time.asc())
+                .limit(100)
+            )
+            rows = s.execute(stmt).scalars().all()
+    except Exception:
+        logger.exception("calendar sync query failed user=%s", user_id)
+        return None
+    return [
+        {
+            "id": r.id,
+            "title": r.title,
+            "start_time": r.start_time.isoformat() if r.start_time else None,
+            "end_time": r.end_time.isoformat() if r.end_time else None,
+            "location": r.location,
+        }
+        for r in rows
+    ]
 
 
 class UserElicitationFetcher:

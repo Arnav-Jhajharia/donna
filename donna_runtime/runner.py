@@ -11,12 +11,13 @@ from typing import Any
 from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, TextBlock, ToolUseBlock, query
 
 from .config import DonnaAgentConfig
-from .hooks import _OUTBOUND_BUFFER, drain_memory_hooks, trace_hook_context
+from .hooks import _OUTBOUND_BUFFER, _fire_memory_hooks, drain_memory_hooks, trace_hook_context
 from .langsmith_tracing import end_run, flush as langsmith_flush, trace_run, tracing_context
 from .observability import (
     _CURRENT_TURN_ID,
     emit,
     emit_error,
+    emit_prompt_snapshot,
     emit_turn_end,
     emit_turn_start,
     turn_span,
@@ -24,7 +25,7 @@ from .observability import (
 from .options import build_options
 from .prompt import wrap_user_message_with_context
 from .session_store import save_user_session
-from .tool_logic import set_voice_filter_enabled
+from .tool_logic import send_burst_result, set_voice_filter_enabled
 from .tracing import TurnTrace
 
 
@@ -59,6 +60,8 @@ async def _donna_turn_core(user_message: str, config: DonnaAgentConfig) -> TurnT
     set_voice_filter_enabled(config.voice_filter_enabled)
     trace = TurnTrace(user_message)
     trace.record_resume_session_id(config.resume_session_id)
+    trace.user_phone = config.user_phone or config.target_phone
+    trace.inbound_wa_message_id = config.inbound_wa_message_id
 
     existing = _OUTBOUND_BUFFER.get()
     buffer: list = existing if existing is not None else []
@@ -85,12 +88,39 @@ async def _donna_turn_core(user_message: str, config: DonnaAgentConfig) -> TurnT
                 chat_already_persisted=config.chat_already_persisted,
             ):
                 try:
+                    options = build_options(config)
                     wrapped_prompt = wrap_user_message_with_context(
-                        user_message, config.system_context
+                        user_message,
+                        config.system_context,
+                        config.user_model_block,
+                    )
+                    system_prompt = str(getattr(options, "system_prompt", "") or "")
+                    prompt_metadata = {
+                        "model": config.model,
+                        "tool_mode": config.tool_mode,
+                        "resume_session_id": config.resume_session_id,
+                        "fork_session": config.fork_session,
+                        "max_turns": config.max_turns,
+                        "user_id": config.user_id,
+                    }
+                    trace.record_prompts(
+                        system_prompt=system_prompt,
+                        wrapped_user_prompt=wrapped_prompt,
+                        metadata=prompt_metadata,
+                    )
+                    emit_prompt_snapshot(
+                        system_prompt=system_prompt,
+                        wrapped_user_prompt=wrapped_prompt,
+                        model=config.model,
+                        tool_mode=config.tool_mode,
+                        resume_session_id=config.resume_session_id,
+                        fork_session=config.fork_session,
+                        max_turns=config.max_turns,
                     )
                     async with asyncio.timeout(config.request_timeout_s):
-                        async for message in query(prompt=wrapped_prompt, options=build_options(config)):
+                        async for message in query(prompt=wrapped_prompt, options=options):
                             _record_message(trace, message)
+                    await _fallback_plain_text_to_send_burst(trace)
                 except TimeoutError:
                     trace.record_runtime_error(f"Donna Agent SDK query timed out after {config.request_timeout_s:.1f}s")
                     emit_error(where="runner._donna_turn_core", error="sdk_query_timeout", timeout_s=config.request_timeout_s)
@@ -111,6 +141,25 @@ async def _donna_turn_core(user_message: str, config: DonnaAgentConfig) -> TurnT
     return trace
 
 
+async def _fallback_plain_text_to_send_burst(trace: TurnTrace) -> None:
+    """Convert SDK plain final text into the required WhatsApp terminator.
+
+    Sonnet occasionally returns plain text after tool use instead of calling the
+    terminator. Production still needs an outbound WhatsApp message, and traces
+    should show a terminal send_burst-shaped call for evals.
+    """
+    if trace.has_terminal_tool_call() or trace.result_is_error:
+        return
+    text = (trace.result_text or "").strip()
+    if not text:
+        return
+    args = {"messages": [{"type": "text", "body": text}], "fallback": "plain_result_text"}
+    call_id = "fallback_plain_text_send_burst"
+    trace.record_tool_call("mcp__donna__send_burst", args, call_id)
+    await send_burst_result(args)
+    _fire_memory_hooks(trace, args)
+
+
 @contextmanager
 def _nullspan():
     yield
@@ -120,12 +169,18 @@ def _emit_tool_call_event(block: ToolUseBlock) -> None:
     name = str(block.name or "")
     short = name.split("__")[-1] if name else ""
     inputs = block.input if isinstance(block.input, dict) else {}
+    # Include a truncated preview of the input so /observe can show what
+    # Donna actually said in send_burst, what query she ran in recall,
+    # what fields she logged. Without this, observability shows only the
+    # input keys — a critical blind spot.
+    from .hooks import _preview_value
     emit(
         "tool.call",
         tool=name,
         tool_short=short,
         call_id=str(block.id),
         input_keys=list(inputs.keys())[:20],
+        input_preview=_preview_value(inputs),
     )
 
 

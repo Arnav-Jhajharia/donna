@@ -253,7 +253,8 @@ function weightOf(b: Block): number {
     thesis: 1, hero: 3, whisper: 1, witness: 1, confrontation: 2,
     celebration: 2, reflection: 2, 'open-loops': 2, 'weather-of-you': 1,
     'calendar-shape': 2, 'todo-list': 3, 'tracker-grid': 2, 'nudge-grid': 3,
-    permission: 1, footer: 0,
+    permission: 1, reminders: 2, 'tracker-starter': 2, relationship: 2,
+    'news-brief': 2, footer: 0,
   };
   return w[b.type];
 }

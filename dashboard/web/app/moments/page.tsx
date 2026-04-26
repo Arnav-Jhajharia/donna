@@ -7,6 +7,7 @@ import { middayCheckPlan } from '@/lib/plans/midday-check';
 import { eveningReflectionPlan } from '@/lib/plans/evening-reflection';
 import { celebrationMomentPlan } from '@/lib/plans/celebration-moment';
 import { lowEnergyPlan } from '@/lib/plans/low-energy';
+import { fromAttentionPlan } from '@/lib/plans/from-attention';
 
 interface GalleryEntry {
   plan: DashboardPlan;
@@ -44,6 +45,11 @@ const GALLERY: GalleryEntry[] = [
     plan: lowEnergyPlan,
     label: 'late · restraint',
     subtitle: 'user is spiralling · donna chooses small',
+  },
+  {
+    plan: fromAttentionPlan,
+    label: 'midday · from attention',
+    subtitle: 'every block composed by the attention→block adapter, not hand-authored',
   },
 ];
 

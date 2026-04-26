@@ -27,10 +27,15 @@ APP_GOOGLE_CALENDAR = "GOOGLECALENDAR"
 
 
 # Trigger name constants — verify against current Composio docs at impl time.
+# V3 Composio trigger slugs. Verified against `c.triggers.list(toolkit_slugs=...)`
+# 2026-04-26 — the calendar slugs were renamed from the v2 form
+# (GOOGLECALENDAR_NEW_CALENDAR_EVENT etc.) to add the
+# `_GOOGLE_CALENDAR_` infix and `_TRIGGER` suffix; the old slugs 404
+# at trigger creation time. Gmail kept its v2 slug.
 TRIGGER_GMAIL_NEW_MESSAGE = "GMAIL_NEW_GMAIL_MESSAGE"
-TRIGGER_CALENDAR_EVENT_CREATED = "GOOGLECALENDAR_NEW_CALENDAR_EVENT"
-TRIGGER_CALENDAR_EVENT_UPDATED = "GOOGLECALENDAR_UPDATED_CALENDAR_EVENT"
-TRIGGER_CALENDAR_EVENT_DELETED = "GOOGLECALENDAR_DELETED_CALENDAR_EVENT"
+TRIGGER_CALENDAR_EVENT_CREATED = "GOOGLECALENDAR_GOOGLE_CALENDAR_EVENT_CREATED_TRIGGER"
+TRIGGER_CALENDAR_EVENT_UPDATED = "GOOGLECALENDAR_GOOGLE_CALENDAR_EVENT_UPDATED_TRIGGER"
+TRIGGER_CALENDAR_EVENT_DELETED = "GOOGLECALENDAR_EVENT_CANCELED_DELETED_TRIGGER"
 
 
 # ── Gmail message normalization ───────────────────────────────────────────
@@ -100,27 +105,73 @@ def _decode_body(payload: dict | None) -> str | None:
 
 
 def _normalize_gmail(raw: dict) -> NormalizedGmailMessage:
+    """Normalize a GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID payload into our DTO.
+
+    Composio's response shape (post-rename) exposes top-level convenience
+    fields like ``messageId``, ``messageText``, ``messageTimestamp``,
+    ``sender``, ``subject``, ``to`` alongside the raw ``payload.headers``
+    array. We prefer the convenience fields when present and fall back
+    to header parsing for the legacy shape.
+    """
     headers = {
         (h.get("name") or "").lower(): h.get("value") or ""
         for h in (raw.get("payload") or {}).get("headers", [])
     }
-    from_name, from_addr = _parse_address(headers.get("from", ""))
-    labels = list(raw.get("labelIds") or [])
-    internal_ms = int(raw.get("internalDate") or 0)
-    internal_dt = datetime.fromtimestamp(
-        internal_ms / 1000, tz=timezone.utc
-    ).replace(tzinfo=None)
+    # Sender/subject/to: prefer the parsed top-level fields when Composio
+    # provides them; fall back to raw headers for forward/back compat.
+    sender_raw = raw.get("sender") or headers.get("from", "")
+    from_name, from_addr = _parse_address(sender_raw)
+
+    to_raw = raw.get("to") or headers.get("to", "")
+    to_addresses = (
+        to_raw if isinstance(to_raw, list) else _split_addresses(to_raw)
+    )
+
+    labels = list(raw.get("labelIds") or raw.get("labels") or [])
+
+    # Timestamp: prefer messageTimestamp ISO; fall back to internalDate ms.
+    timestamp_iso = raw.get("messageTimestamp")
+    if timestamp_iso:
+        try:
+            # Strip trailing Z for fromisoformat compat.
+            iso = timestamp_iso.rstrip("Z")
+            internal_dt = datetime.fromisoformat(iso).replace(tzinfo=None)
+        except ValueError:
+            internal_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+    else:
+        internal_ms = int(raw.get("internalDate") or 0)
+        internal_dt = datetime.fromtimestamp(
+            internal_ms / 1000, tz=timezone.utc
+        ).replace(tzinfo=None)
+
+    body_text = (
+        raw.get("messageText")
+        or _decode_body(raw.get("payload"))
+        or None
+    )
+    # Empty string from messageText counts as "no body" — fall back so
+    # downstream classifiers don't see truthy-empty.
+    if isinstance(body_text, str) and not body_text.strip():
+        body_text = _decode_body(raw.get("payload"))
+
+    # ``preview`` is a string in some responses, a {body, subject} dict
+    # in others. We only want a short text snippet for the snippet column.
+    preview_raw = raw.get("preview") or raw.get("snippet")
+    if isinstance(preview_raw, dict):
+        snippet = preview_raw.get("body") or preview_raw.get("subject")
+    else:
+        snippet = preview_raw
 
     return NormalizedGmailMessage(
-        gmail_message_id=raw["id"],
-        thread_id=raw["threadId"],
+        gmail_message_id=raw.get("messageId") or raw.get("id") or "",
+        thread_id=raw.get("threadId") or raw.get("thread_id") or "",
         from_address=from_addr,
         from_name=from_name,
-        to_addresses=_split_addresses(headers.get("to", "")),
+        to_addresses=to_addresses,
         cc_addresses=_split_addresses(headers.get("cc", "")),
-        subject=headers.get("subject") or None,
-        snippet=raw.get("snippet"),
-        body_text=_decode_body(raw.get("payload")),
+        subject=raw.get("subject") or headers.get("subject") or None,
+        snippet=snippet,
+        body_text=body_text,
         labels=labels,
         is_important="IMPORTANT" in labels,
         is_starred="STARRED" in labels,
@@ -163,47 +214,76 @@ class ComposioClient:
         the OAuth start URL the user must tap.
         """
         composio = _composio()
-        result = composio.toolkits.authorize(user_id, app)
-        return result.connected_account_id, result.redirect_url
+        result = composio.toolkits.authorize(user_id=user_id, toolkit=app)
+        return result.id, result.redirect_url
 
     async def subscribe_triggers(
         self,
         user_id: str,
         connection_id: str,
         trigger_names: Iterable[str],
-    ) -> None:
-        """Subscribe Composio triggers for live webhook delivery.
+    ) -> list[str]:
+        """Create Composio trigger instances so webhook events fire on
+        new mail / calendar updates.
 
-        Idempotent: re-subscribing an active trigger is a no-op at Composio.
-        Failures are logged and swallowed — caller decides whether to retry.
+        V3 split the API: ``triggers.subscribe()`` is the websocket-style
+        receive handler (takes ``timeout`` only); ``triggers.create()``
+        actually registers a trigger instance against a connected account.
+        We want create. Idempotent: Composio dedupes by
+        (slug, user_id, connected_account_id), so re-creating an existing
+        trigger returns the same id.
+
+        Returns the list of created trigger ids (so callers can mirror
+        them in their own DB if needed). Failures per slug are logged
+        but don't abort — partial subscription is still useful.
         """
         composio = _composio()
-        for name in trigger_names:
+        created_ids: list[str] = []
+        for slug in trigger_names:
             try:
-                composio.triggers.subscribe(
+                resp = composio.triggers.create(
+                    slug=slug,
                     user_id=user_id,
                     connected_account_id=connection_id,
-                    trigger_name=name,
+                )
+                trigger_id = (
+                    getattr(resp, "trigger_id", None)
+                    or getattr(resp, "id", None)
+                )
+                if trigger_id:
+                    created_ids.append(str(trigger_id))
+                logger.info(
+                    "subscribe_triggers: created user=%s slug=%s id=%s",
+                    user_id, slug, trigger_id,
                 )
             except Exception:
                 logger.exception(
-                    "subscribe_triggers: failed user=%s trigger=%s",
-                    user_id,
-                    name,
+                    "subscribe_triggers: failed user=%s slug=%s",
+                    user_id, slug,
                 )
+        return created_ids
 
     async def fetch_gmail_message(
         self, user_id: str, message_id: str, include_body: bool = True
     ) -> NormalizedGmailMessage:
-        """Fetch one Gmail message and normalize into a vendor-agnostic shape."""
+        """Fetch one Gmail message and normalize into a vendor-agnostic shape.
+
+        Composio renamed ``GMAIL_FETCH_MESSAGE_BY_ID`` to
+        ``GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID`` in their toolkit refresh —
+        the old slug now 404s with Tool_ToolNotFound."""
         composio = _composio()
         result = composio.tools.execute(
-            "GMAIL_FETCH_MESSAGE_BY_ID",
+            "GMAIL_FETCH_MESSAGE_BY_MESSAGE_ID",
             user_id=user_id,
             arguments={
                 "message_id": message_id,
                 "format": "full" if include_body else "metadata",
             },
+            # Composio's SDK refuses to dispatch typed tools without an
+            # explicit version pin since v1; we don't track per-toolkit
+            # versions, so opt-in to "latest" via this flag. Same flag
+            # already used by composio_meta for the COMPOSIO_* tools.
+            dangerously_skip_version_check=True,
         )
         return _normalize_gmail(result["data"])
 
@@ -217,20 +297,37 @@ class ComposioClient:
         """Page through Gmail message IDs by query string.
 
         Returns (ids, next_page_token). next_page_token=None means EOF.
-        """
+
+        Composio renamed ``GMAIL_LIST_MESSAGES`` to ``GMAIL_FETCH_EMAILS``
+        — the old slug 404s. The response shape kept ``data.messages`` and
+        ``data.nextPageToken`` (matching the underlying Gmail API)."""
         composio = _composio()
         result = composio.tools.execute(
-            "GMAIL_LIST_MESSAGES",
+            "GMAIL_FETCH_EMAILS",
             user_id=user_id,
             arguments={
-                "q": query,
+                "query": query,
                 "max_results": max_results,
                 "page_token": page_token,
+                # IDs-only is faster + lighter; we hydrate body via
+                # fetch_gmail_message for the few we keep.
+                "include_payload": False,
+                "ids_only": True,
             },
+            dangerously_skip_version_check=True,
         )
         data = result.get("data") or {}
-        ids = [m["id"] for m in data.get("messages", [])]
-        next_token = data.get("nextPageToken")
+        # GMAIL_FETCH_EMAILS returns {messageId, threadId, display_url}
+        # per item; older slug returned {id, threadId}. Accept either so
+        # we don't break again on the next rename.
+        ids = [
+            m.get("messageId") or m.get("id")
+            for m in data.get("messages", [])
+        ]
+        ids = [i for i in ids if i]
+        next_token = data.get("nextPageToken") or None
+        if next_token == "":
+            next_token = None
         return ids, next_token
 
     async def list_calendar_events(
@@ -241,10 +338,13 @@ class ComposioClient:
         max_results: int = 250,
     ) -> list[dict]:
         """List primary-calendar events in [time_min, time_max). Single events,
-        i.e. recurring instances are expanded."""
+        i.e. recurring instances are expanded.
+
+        Composio renamed ``GOOGLECALENDAR_LIST_EVENTS`` to
+        ``GOOGLECALENDAR_EVENTS_LIST`` — the old slug 404s."""
         composio = _composio()
         result = composio.tools.execute(
-            "GOOGLECALENDAR_LIST_EVENTS",
+            "GOOGLECALENDAR_EVENTS_LIST",
             user_id=user_id,
             arguments={
                 "calendar_id": "primary",
@@ -253,5 +353,6 @@ class ComposioClient:
                 "max_results": max_results,
                 "single_events": True,
             },
+            dangerously_skip_version_check=True,
         )
         return (result.get("data") or {}).get("items", [])

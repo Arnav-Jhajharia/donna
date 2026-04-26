@@ -90,3 +90,80 @@ async def test_list_gmail_recent_orders_newest_first(db) -> None:
     result = await list_gmail_recent(user_id="u1", within_hours=24)
     ids = [m["id"] for m in result["payload"]["messages"]]
     assert ids == ["new", "old"]
+
+
+# --- bootstrap-aware empty-mirror behavior ---------------------------------
+
+
+async def _connect_gmail(db, user_id: str) -> None:
+    """Insert a connected google_gmail integration row for the user."""
+    from backend.integrations import state
+    await state.upsert_pending(user_id, "google", "gmail")
+    await state.mark_connected(
+        user_id, "google", "gmail", connection_id="ca_test"
+    )
+
+
+async def _set_bootstrap_status(db, user_id: str, status: str | None) -> None:
+    from sqlalchemy.orm.attributes import flag_modified
+    from sqlalchemy import select
+    from db.models import User
+    async with db() as s:
+        u = (await s.execute(select(User).where(User.id == user_id))).scalar_one()
+        prof = dict(u.living_profile or {})
+        if status is None:
+            prof.pop("bootstrap_runs", None)
+        else:
+            prof["bootstrap_runs"] = {"last_status": status}
+        u.living_profile = prof
+        flag_modified(u, "living_profile")
+        await s.commit()
+
+
+@pytest.mark.asyncio
+async def test_no_hits_when_gmail_not_connected_at_all(db) -> None:
+    """User has no integration row at all -> tool returns no_hits (the
+    legitimate 'this person never connected gmail' case)."""
+    result = await list_gmail_recent(user_id="u1", within_hours=24)
+    assert result["status"] == "no_hits"
+
+
+@pytest.mark.asyncio
+async def test_degrades_when_connected_but_bootstrap_never_ran(db) -> None:
+    """Critical case from real incident: gmail integration is green but
+    bootstrap was never spawned (webhook missed, watcher killed). Donna
+    must NOT lie that the inbox is empty."""
+    await _connect_gmail(db, "u1")
+    # No bootstrap_runs entry written.
+    result = await list_gmail_recent(user_id="u1", within_hours=24)
+    assert result["status"] == "degraded"
+    assert "bootstrap" in result["payload"]["reason"].lower()
+
+
+@pytest.mark.asyncio
+async def test_degrades_when_bootstrap_running(db) -> None:
+    await _connect_gmail(db, "u1")
+    await _set_bootstrap_status(db, "u1", "running")
+    result = await list_gmail_recent(user_id="u1", within_hours=24)
+    assert result["status"] == "degraded"
+    assert "warming up" in result["payload"]["reason"].lower()
+
+
+@pytest.mark.asyncio
+async def test_degrades_when_bootstrap_failed(db) -> None:
+    await _connect_gmail(db, "u1")
+    await _set_bootstrap_status(db, "u1", "failed")
+    result = await list_gmail_recent(user_id="u1", within_hours=24)
+    assert result["status"] == "degraded"
+    assert "failed" in result["payload"]["reason"].lower()
+
+
+@pytest.mark.asyncio
+async def test_no_hits_after_bootstrap_completed_with_empty_window(db) -> None:
+    """bootstrap completed + zero recent mail = legitimately empty.
+    Returns no_hits (not degraded) so Donna can honestly say 'nothing
+    new'."""
+    await _connect_gmail(db, "u1")
+    await _set_bootstrap_status(db, "u1", "completed")
+    result = await list_gmail_recent(user_id="u1", within_hours=24)
+    assert result["status"] == "no_hits"

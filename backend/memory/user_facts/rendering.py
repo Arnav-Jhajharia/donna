@@ -88,6 +88,165 @@ _SECTIONS = (
 
 _PER_SECTION_CAP = 4
 
+# v2 living-profile rendering. Narrative-first: the synthesizer's
+# `narrative` field is the alive read Donna sees at turn time. The
+# structured fields (active_tensions, watch_for_tomorrow, what_changed,
+# misses, anomalies) are sidecars for downstream code (pattern miners,
+# proactive triggers) and are intentionally NOT rendered as bullets —
+# they would feel like a database to the model and dilute the narrative.
+# Only narrative + a small set of orienting one-liners (people roster,
+# rhythm) reach the system prompt.
+_V2_NARRATIVE_CAP = 800
+_V2_PEOPLE_CAP = 4
+_V2_THEMES_CAP = 3
+_V2_THEME_CHARS_CAP = 60
+_V2_TENSIONS_CAP = 3
+_V2_TENSION_CHARS_CAP = 60
+_V2_TODAY_CAP = 280
+_V2_WATCH_CAP = 4
+_V2_WATCH_CHARS_CAP = 60
+_V2_KEYS = (
+    "narrative",
+    "running_themes",
+    "current_situation",
+    "today_shape",
+    "yesterday",
+    "rhythm",
+    "watch_for_tomorrow",
+    "active_tensions",
+    "key_people",
+    "what_changed_this_week",
+)
+
+
+def _v2_present(profile: dict) -> bool:
+    """True when the profile carries any v2 synthesizer field with content."""
+    for key in _V2_KEYS:
+        value = profile.get(key)
+        if value in (None, "", [], {}):
+            continue
+        return True
+    return False
+
+
+def _trim(text: str, limit: int) -> str:
+    text = (text or "").strip()
+    if len(text) <= limit:
+        return text
+    return text[: max(0, limit - 3)].rstrip() + "..."
+
+
+def _render_v2_living_profile(profile: dict) -> list[str]:
+    lines: list[str] = ["LIVING PROFILE"]
+
+    # Narrative leads. If the synth produced one, it carries the work.
+    # Fall back to current_situation only when narrative is missing
+    # (older profiles persisted before the schema changed).
+    narrative = _trim(str(profile.get("narrative") or ""), _V2_NARRATIVE_CAP)
+    if not narrative:
+        narrative = _trim(
+            str(profile.get("current_situation") or ""), _V2_NARRATIVE_CAP
+        )
+    if narrative:
+        lines.append(narrative)
+
+    # Running themes — ambient frame for the longer arc (last 14-30 days).
+    # One comma-joined line so Donna can read the durations without
+    # parsing the narrative for them.
+    themes = profile.get("running_themes") or []
+    if isinstance(themes, list):
+        cleaned_themes: list[str] = []
+        for theme in themes[:_V2_THEMES_CAP]:
+            phrase = str(theme).strip()
+            if not phrase:
+                continue
+            cleaned_themes.append(_trim(phrase, _V2_THEME_CHARS_CAP))
+        if cleaned_themes:
+            lines.append("themes: " + "; ".join(cleaned_themes))
+
+    # Compact people roster — names and current dynamic, comma-joined.
+    # Useful for the model to know who's actively in this user's life
+    # this week without forcing the narrative to enumerate everyone.
+    people = profile.get("key_people") or []
+    if isinstance(people, list):
+        rendered_people: list[str] = []
+        for person in people[:_V2_PEOPLE_CAP]:
+            if not isinstance(person, dict):
+                continue
+            name = (person.get("name") or "").strip()
+            if not name:
+                continue
+            role = (person.get("role") or "").strip()
+            dynamic = (person.get("current_dynamic") or "").strip()
+            tail_parts = [part for part in (role, dynamic) if part]
+            tail = ", ".join(tail_parts)
+            rendered_people.append(
+                f"{name} ({tail})" if tail else name
+            )
+        if rendered_people:
+            lines.append("people: " + "; ".join(rendered_people))
+
+    # One-line rhythm so the model can read time-of-day signal without
+    # parsing the narrative. Cheap to render, costly when missing.
+    rhythm = profile.get("rhythm") or {}
+    if isinstance(rhythm, dict):
+        wake = (rhythm.get("typical_wake_window") or "").strip()
+        engage = (rhythm.get("typical_first_engage_window") or "").strip()
+        rhythm_parts: list[str] = []
+        if wake:
+            rhythm_parts.append(f"up {wake}")
+        if engage:
+            rhythm_parts.append(f"first engages {engage}")
+        median = rhythm.get("typical_message_gap_median_hours")
+        if isinstance(median, (int, float)) and median > 0:
+            rhythm_parts.append(f"avg gap ~{median:.1f}h")
+        if rhythm_parts:
+            lines.append("rhythm: " + ", ".join(rhythm_parts))
+
+    # Emotional read + active tensions — a single ambient signal the
+    # model uses to calibrate voice (calm vs stressed vs hopeful) and
+    # to know what's pulling on the user without re-parsing the
+    # narrative. Auto-rendering THESE as instructions would push us
+    # back toward procedural rules; rendering as a short status line
+    # keeps it ambient.
+    temperature = (profile.get("emotional_temperature") or "").strip().lower()
+    tensions = profile.get("active_tensions") or []
+    cleaned_tensions: list[str] = []
+    if isinstance(tensions, list):
+        for t in tensions[:_V2_TENSIONS_CAP]:
+            phrase = str(t).strip()
+            if not phrase:
+                continue
+            cleaned_tensions.append(_trim(phrase, _V2_TENSION_CHARS_CAP))
+    if temperature or cleaned_tensions:
+        bits: list[str] = []
+        if temperature:
+            bits.append(temperature)
+        if cleaned_tensions:
+            bits.append("(" + ", ".join(cleaned_tensions) + ")")
+        lines.append("read: " + " ".join(bits))
+
+    # today_shape — the synth's read of today specifically. Capped
+    # tight so it doesn't repeat the narrative or eclipse it.
+    today_shape = (profile.get("today_shape") or "").strip()
+    if today_shape:
+        lines.append("today: " + _trim(today_shape, _V2_TODAY_CAP))
+
+    # watch_for_tomorrow — what donna should be ready to surface next.
+    # Most useful at morning turns; harmless other turns.
+    watch = profile.get("watch_for_tomorrow") or []
+    cleaned_watch: list[str] = []
+    if isinstance(watch, list):
+        for w in watch[:_V2_WATCH_CAP]:
+            phrase = str(w).strip()
+            if not phrase:
+                continue
+            cleaned_watch.append(_trim(phrase, _V2_WATCH_CHARS_CAP))
+    if cleaned_watch:
+        lines.append("watch: " + "; ".join(cleaned_watch))
+
+    return lines if len(lines) > 1 else []
+
 
 def _is_informative(key: FactKey, fact: dict) -> bool:
     if (
@@ -178,6 +337,16 @@ def _summary_is_boilerplate(summary: str) -> bool:
 def render_living_profile_block(profile: dict | None) -> str:
     if not profile:
         return ""
+
+    # v2 path — new synthesizer output. Renders the rich Living Profile and
+    # short-circuits the legacy situation_brief/biography rendering. We
+    # still render the legacy summary/biography blocks if a v1 profile
+    # carries them (back-compat for users whose profile predates v2).
+    if _v2_present(profile):
+        v2_lines = _render_v2_living_profile(profile)
+        if v2_lines:
+            return "\n".join(v2_lines).strip()
+
     lines: list[str] = []
     situation = profile.get("situation_brief")
     if isinstance(situation, dict):

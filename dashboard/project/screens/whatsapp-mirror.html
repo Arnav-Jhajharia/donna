@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Donna — WhatsApp · mirror</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root{--paper-50:#FDFAF8;--paper-100:#FBF7F5;--paper-200:#F5EFEA;--paper-300:#F0EAE4;--paper-400:#E7DFD7;--ink-900:#1E1A18;--ink-800:#3A3331;--ink-600:#6B615C;--ink-500:#8F837C;--ink-400:#B5A89F;--rust-700:#7B5544;--rust-100:#EBDCD2;--rust-50:#F5EFEA;--moss-700:#5C6B4A;--amber-700:#A8804A;--hairline:rgba(30,26,24,0.08);--hairline-strong:rgba(30,26,24,0.14);--sans:'Red Hat Text',sans-serif;--serif:'EB Garamond',serif;
+    /* WhatsApp palette — matched to app */
+    --wa-bg:#ECE5DD; --wa-in:#FFFFFF; --wa-out:#DCF8C6; --wa-head:#075E54; --wa-text:#0B141A; --wa-meta:#667781}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--paper-200);color:var(--ink-900);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  .gate{max-width:1240px;margin:0 auto;padding:56px 48px 32px}
+  .crumbs{font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:var(--ink-500);font-weight:500;margin-bottom:24px}
+  .crumbs a{color:var(--ink-500);text-decoration:none}
+  .tag{font-size:10px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--rust-700);margin-bottom:10px}
+  h1{font-family:var(--serif);font-weight:400;font-size:44px;line-height:1.06;letter-spacing:-0.02em;margin:0 0 14px;max-width:22ch}
+  h1 em{font-style:italic;color:var(--rust-700)}
+  .lead{font-family:var(--serif);font-style:italic;font-size:19px;line-height:1.5;color:var(--ink-800);max-width:60ch;margin:0 0 10px}
+  .meta{font-size:13px;color:var(--ink-600);line-height:1.55;max-width:68ch}
+
+  .stage{max-width:1240px;margin:0 auto;padding:32px 48px 48px}
+  .grid{display:grid;grid-template-columns:repeat(3,1fr);gap:24px}
+  .col{display:flex;flex-direction:column;gap:12px}
+  .col .hdr{font-size:11px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--rust-700)}
+  .col .sub{font-family:var(--serif);font-style:italic;font-size:14px;color:var(--ink-600);line-height:1.45;margin:0 0 4px}
+
+  /* phone */
+  .phone{width:100%;max-width:360px;height:660px;background:var(--wa-bg);border:1px solid var(--hairline);border-radius:18px;overflow:hidden;display:flex;flex-direction:column;position:relative}
+  .wa-top{background:var(--wa-head);color:#fff;padding:14px 14px 12px;display:flex;align-items:center;gap:10px}
+  .wa-top .av{width:34px;height:34px;border-radius:999px;background:var(--paper-100);color:var(--ink-900);display:grid;place-items:center;font-family:var(--serif);font-style:italic;font-weight:500;font-size:16px}
+  .wa-top .nm{font-weight:500;font-size:15px}
+  .wa-top .ln{font-size:11px;opacity:0.8}
+  .wa-thread{flex:1;padding:12px 10px;overflow-y:auto;display:flex;flex-direction:column;gap:6px}
+  .day{align-self:center;font-size:10.5px;background:rgba(255,255,255,0.75);color:var(--wa-meta);padding:3px 10px;border-radius:6px;margin:4px 0;font-weight:500}
+  .msg{max-width:86%;padding:7px 10px 18px;border-radius:8px;font-size:13.5px;line-height:1.42;color:var(--wa-text);position:relative;white-space:pre-wrap;word-wrap:break-word}
+  .msg .time{position:absolute;right:9px;bottom:4px;font-size:10px;color:var(--wa-meta)}
+  .msg.in{background:var(--wa-in);align-self:flex-start;border-top-left-radius:0}
+  .msg.out{background:var(--wa-out);align-self:flex-end;border-top-right-radius:0}
+  .msg b{font-weight:600}
+  .msg em{font-style:italic}
+  .msg .card{margin-top:6px;padding:8px 10px;background:rgba(30,26,24,0.04);border-left:3px solid var(--rust-700);border-radius:4px;font-size:12.5px;line-height:1.4}
+  .msg .card b{display:block;font-size:10px;letter-spacing:0.1em;text-transform:uppercase;color:var(--rust-700);margin-bottom:2px;font-weight:600}
+  .msg .btns{display:flex;gap:4px;margin-top:8px}
+  .msg .btns .b{flex:1;padding:7px 6px;text-align:center;font-size:11px;font-weight:500;color:var(--wa-head);background:rgba(7,94,84,0.08);border-radius:4px}
+  .msg .btns .b.y{background:var(--wa-head);color:#fff;font-weight:600}
+  .wa-bar{padding:10px 12px;background:rgba(255,255,255,0.9);font-size:12px;color:var(--wa-meta);display:flex;align-items:center;gap:8px;border-top:1px solid var(--hairline)}
+  .wa-bar .input{flex:1;padding:8px 12px;background:#fff;border-radius:20px;border:1px solid var(--hairline);font-size:13px;color:var(--wa-meta)}
+
+  /* dashboard peek */
+  .dash{width:100%;max-width:360px;background:var(--paper-100);border:1px solid var(--hairline);min-height:660px;border-radius:4px;overflow:hidden}
+  .dash .top{display:flex;justify-content:space-between;align-items:center;padding:14px 16px 11px;border-bottom:1px solid var(--hairline);font-size:11px}
+  .dash .top .m{font-family:var(--serif);font-style:italic;font-weight:500;font-size:17px;color:var(--ink-900)}
+  .dash .top .r{font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-500)}
+  .dash .eye{font-size:9.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-500);margin-bottom:4px}
+  .dash .eye.rust{color:var(--rust-700)}
+  .dash .section{padding:14px 16px;border-bottom:1px solid var(--hairline)}
+  .dash .thesis{font-family:var(--serif);font-size:18px;line-height:1.22;letter-spacing:-0.005em;margin:0}
+  .dash .thesis em{font-style:italic;color:var(--rust-700)}
+  .dash .blk h4{font-family:var(--serif);font-size:15px;line-height:1.2;margin:0 0 4px}
+  .dash .blk h4 em{font-style:italic;color:var(--rust-700)}
+  .dash .blk p{font-family:var(--serif);font-style:italic;font-size:12.5px;color:var(--ink-600);margin:0 0 6px;line-height:1.45}
+  .dash .blk p em{font-style:italic;color:var(--rust-700)}
+  .dash .blk .kind{font-size:8.5px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--ink-500);margin-bottom:5px}
+  .dash .offer-tint{background:var(--rust-50)}
+  .dash .pa{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;margin-top:8px;border:1px solid var(--hairline-strong);border-radius:3px;overflow:hidden}
+  .dash .pa b{padding:7px 4px;text-align:center;font-size:9.5px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-700);background:var(--paper-100);border-right:1px solid var(--hairline)}
+  .dash .pa b:last-child{border-right:0;background:var(--rust-700);color:var(--paper-100);font-weight:600}
+
+  /* matrix */
+  .decide{max-width:1240px;margin:0 auto;padding:40px 48px 48px;border-top:1px solid var(--hairline)}
+  .decide h2{font-family:var(--serif);font-weight:400;font-size:28px;letter-spacing:-0.01em;margin:0 0 12px}
+  .decide h2 em{font-style:italic;color:var(--rust-700)}
+  .decide .sub{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink-700);max-width:60ch;margin:0 0 24px}
+  .matrix{width:100%;border-collapse:collapse;font-size:13px}
+  .matrix th{text-align:left;font-size:10.5px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-500);padding:10px 12px;border-bottom:1px solid var(--hairline-strong)}
+  .matrix td{padding:11px 12px;border-bottom:1px solid var(--hairline);vertical-align:top;line-height:1.5;color:var(--ink-800)}
+  .matrix td.p{font-family:var(--serif);font-weight:500;font-style:italic;color:var(--ink-900);font-size:14.5px;white-space:nowrap}
+  .matrix td em{font-style:italic;color:var(--rust-700)}
+
+  .nav{max-width:1240px;margin:0 auto;padding:24px 48px 72px;border-top:1px solid var(--hairline);display:flex;justify-content:space-between;font-size:12px;color:var(--ink-500)}
+  .nav a{color:var(--ink-500);text-decoration:none}
+  .nav a:hover{color:var(--ink-900)}
+  code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;background:var(--paper-300);padding:1px 5px;border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="gate">
+  <div class="crumbs"><a href="action-plans-index.html">Action plans</a> &nbsp;/&nbsp; WhatsApp mirror</div>
+  <div class="tag">Two surfaces, one attention</div>
+  <h1>WhatsApp and the dashboard, <em>compared.</em></h1>
+  <p class="lead">The same <code style="font-family:var(--sans);font-size:14px">event_stream</code> attention rendered three ways — as an offer in chat, as a live update in chat, and as a block on the dashboard. The question: should they mirror, replace, or complement each other?</p>
+  <p class="meta">Each surface is good at a different thing. WhatsApp is narrow, synchronous, verbal. The dashboard is wide, asynchronous, visual. The recommendation: <em>complement</em> — each surface carries the shape it handles best, and no attention is visible twice.</p>
+</div>
+
+<div class="stage">
+  <div class="grid">
+
+    <!-- 1. OFFER on whatsapp -->
+    <div class="col">
+      <div class="hdr">01 · Offer · WhatsApp</div>
+      <p class="sub">what a freshly&#8209;offered attention looks like if Donna pushes the offer to WhatsApp instead of the dashboard.</p>
+      <div class="phone">
+        <div class="wa-top">
+          <div class="av">d</div>
+          <div><div class="nm">donna</div><div class="ln">online</div></div>
+        </div>
+        <div class="wa-thread">
+          <div class="day">thursday, 24 april</div>
+          <div class="msg out">morning<div class="time">06:54</div></div>
+          <div class="msg in">morning aarav. i want to ask about something.<div class="time">06:56</div></div>
+          <div class="msg in">you mentioned luca three times this week. tuesday in hindi, wednesday about the deck, friday after midnight. i can start watching his replies + the deck thread daily so you stop carrying his tone in your head.
+            <div class="card"><b>attention · event_stream</b>subject: luca — antler
+daily 07:30 · email + calendar + chat</div>
+            <div class="btns"><div class="b y">yes, watch him</div><div class="b">tweak</div><div class="b">not yet</div></div>
+            <div class="time">06:57</div>
+          </div>
+          <div class="msg out">tweak. only the deck thread, not email.<div class="time">07:01</div></div>
+          <div class="msg in">done. watching the deck thread only. first update tomorrow morning.<div class="time">07:01</div></div>
+        </div>
+        <div class="wa-bar"><div class="input">message</div><span>🎤</span></div>
+      </div>
+      <div style="font-size:12px;color:var(--ink-600);line-height:1.5"><b style="color:var(--ink-900)">Pros.</b> Conversational. Tweak in one reply. No screen to open.</div>
+      <div style="font-size:12px;color:var(--ink-600);line-height:1.5"><b style="color:var(--ink-900)">Cons.</b> Thread gets dense. Offers mix with chat and disappear. No batch review.</div>
+    </div>
+
+    <!-- 2. LIVE UPDATE on whatsapp -->
+    <div class="col">
+      <div class="hdr">02 · Live update · WhatsApp</div>
+      <p class="sub">what the next morning's update looks like once the attention is live.</p>
+      <div class="phone">
+        <div class="wa-top">
+          <div class="av">d</div>
+          <div><div class="nm">donna</div><div class="ln">online</div></div>
+        </div>
+        <div class="wa-thread">
+          <div class="day">friday, 25 april</div>
+          <div class="msg in">luca replied on the deck thread at 22:11 last night. said he's "still working through slide 14 with the partners."
+
+tone reads tired. second night in a row past ten.
+
+<b>nothing urgent</b> — you don't need to respond before your standup.<div class="time">07:30</div></div>
+          <div class="msg out">thanks<div class="time">07:33</div></div>
+          <div class="msg out">is slide 14 the traction one<div class="time">07:34</div></div>
+          <div class="msg in">yes. and it's the one that hasn't moved in 5 days.<div class="time">07:34</div></div>
+        </div>
+        <div class="wa-bar"><div class="input">message</div><span>🎤</span></div>
+      </div>
+      <div style="font-size:12px;color:var(--ink-600);line-height:1.5"><b style="color:var(--ink-900)">Pros.</b> Live, notifies immediately. Opens a real conversation — "is slide 14 the traction one" follows naturally.</div>
+      <div style="font-size:12px;color:var(--ink-600);line-height:1.5"><b style="color:var(--ink-900)">Cons.</b> Interrupts. Nine live attentions = nine pings a day.</div>
+    </div>
+
+    <!-- 3. dashboard block -->
+    <div class="col">
+      <div class="hdr">03 · Same live attention · dashboard</div>
+      <p class="sub">same attention at the same moment, rendered as a block on the dashboard today-surface.</p>
+      <div class="dash">
+        <div class="top"><div class="m">donna</div><div class="r">fri · 25 apr · 07:30</div></div>
+        <div class="section">
+          <div class="eye rust">today</div>
+          <p class="thesis">slide 14 is <em>still</em> the quiet problem.</p>
+        </div>
+        <div class="section blk">
+          <div class="kind">event_stream · live</div>
+          <h4>watching <em>luca</em></h4>
+          <p>replied to the deck thread at <em>22:11 last night.</em> "still working through slide 14 with the partners." tone reads <em>tired.</em> second night past ten.</p>
+          <p style="font-family:var(--sans);font-style:normal;font-size:11px;color:var(--ink-500);letter-spacing:0.04em">last hit 9h ago · 11 days live · daily 07:30</p>
+        </div>
+        <div class="section blk">
+          <div class="kind">tally · live</div>
+          <h4>slide 14 days <em>unchanged</em></h4>
+          <p style="font-family:var(--serif);font-size:32px;line-height:1;margin:0;font-variant-numeric:tabular-nums;color:var(--ink-900)">5</p>
+          <p style="margin-top:6px">since 20 apr. you said 2 days.</p>
+        </div>
+        <div class="section blk">
+          <div class="kind">open_loop · aging</div>
+          <h4>send <em>updated deck</em> to priya</h4>
+          <p>promised by friday. today is friday.</p>
+        </div>
+      </div>
+      <div style="font-size:12px;color:var(--ink-600);line-height:1.5"><b style="color:var(--ink-900)">Pros.</b> Spatial. You see luca + slide 14 + the deck loop together — the <em>pattern</em> is the point. Calm.</div>
+      <div style="font-size:12px;color:var(--ink-600);line-height:1.5"><b style="color:var(--ink-900)">Cons.</b> Requires opening. Pull, not push. Doesn't notify.</div>
+    </div>
+
+  </div>
+</div>
+
+<div class="decide">
+  <h2>Three stances. <em>Complement</em> wins.</h2>
+  <p class="sub">The same attention is well-served by different surfaces at different lifecycle moments. Don't force one surface to carry both shapes.</p>
+
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th style="width:18%">Stance</th>
+        <th style="width:30%">What it means</th>
+        <th>Pros</th>
+        <th>Cons</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="p">Mirror</td>
+        <td>Every offer and every update appears on both WhatsApp and the dashboard. Acting on one clears the other.</td>
+        <td>Strongest consistency. User never misses anything.</td>
+        <td>Highest implementation cost (real-time sync). Doubles Donna's writing budget. Feels redundant.</td>
+      </tr>
+      <tr>
+        <td class="p">Replace</td>
+        <td>Dashboard carries everything that isn't urgent. WhatsApp reduces to urgent pings and <code>reach_out</code> approvals only.</td>
+        <td>Cleanest product. Dashboard becomes the primary object. No duplicate authoring.</td>
+        <td>Loses WhatsApp-first ergonomics. Users who never open the web UI lose Donna's machinery.</td>
+      </tr>
+      <tr>
+        <td class="p">Complement · <em>recommended</em></td>
+        <td>WhatsApp = event channel (live pings, <code>reach_out</code> approvals, chat-mode intent). Dashboard = object channel (offer review, brief reading, machinery, Living).</td>
+        <td>Matches what each surface is already good at. No duplicate authoring. Natural routing per card type.</td>
+        <td>Users need a mental model of "two places." Needs one clear rule for each attention type.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div style="margin-top:28px">
+    <h2 style="font-size:22px">The complement rules, <em>per card.</em></h2>
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th style="width:18%">Card</th>
+          <th style="width:34%">Offer surface</th>
+          <th>Live update surface</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td class="p">ping</td><td>WhatsApp (a ping is a conversational object)</td><td>WhatsApp (it's literally a notification)</td></tr>
+        <tr><td class="p">open_loop</td><td>WhatsApp, quick yes/no</td><td>Both — WhatsApp when aging past deadline, dashboard for the list</td></tr>
+        <tr><td class="p">event_stream</td><td>Dashboard (needs a dry-run card with sources + cadence)</td><td>Dashboard by default; WhatsApp only when <em>surface: urgent</em> on the spec</td></tr>
+        <tr><td class="p">tally</td><td>Dashboard (needs spec preview)</td><td>Dashboard (it's a number on a screen)</td></tr>
+        <tr><td class="p">brief</td><td>Dashboard (the brief is rendered there)</td><td>Dashboard (longform — chat is wrong shape)</td></tr>
+        <tr><td class="p">prep_doc</td><td>Dashboard</td><td>WhatsApp 2-line summary + dashboard link for the full doc</td></tr>
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="nav">
+  <a href="action-plans-index.html">← All plans</a>
+  <span>WhatsApp · mirror</span>
+  <a href="comparison-gallery.html">Side by side →</a>
+</div>
+
+</body>
+</html>

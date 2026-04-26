@@ -1,0 +1,11 @@
+{
+  "trunk": {
+    "name": "donna-outbound-twilio",
+    "address": "donna-pstn.pstn.twilio.com",
+    "numbers": ["+14154232657"],
+    "auth_username": "donna_livekit",
+    "auth_password": "$TWILIO_SIP_PASSWORD",
+    "metadata": "donna voice agent outbound trunk to twilio termination",
+    "transport": "SIP_TRANSPORT_TLS"
+  }
+}

@@ -63,15 +63,34 @@ class ListMessage:
 
 @dataclass
 class ImageMessage:
-    url: str            # publicly accessible URL or WA media ID
+    url: str = ""                   # public URL — used when media_id is not set
     caption: str = ""
     reply_to_message_id: str | None = None
+    media_id: str | None = None     # WA media id from /media upload; takes precedence over url
+
+    def __post_init__(self) -> None:
+        has_url = bool(self.url)
+        has_media = bool(self.media_id)
+        if has_url == has_media:
+            raise ValueError(
+                "ImageMessage requires exactly one of url or media_id"
+            )
 
 
 @dataclass
 class AudioMessage:
-    url: str            # publicly accessible URL or WA media ID
+    url: str = ""                   # public URL — used when media_id is not set
     reply_to_message_id: str | None = None
+    media_id: str | None = None     # WA media id from /media upload; takes precedence over url
+    voice: bool = False             # WA native voice-note flag (requires ogg/opus)
+
+    def __post_init__(self) -> None:
+        has_url = bool(self.url)
+        has_media = bool(self.media_id)
+        if has_url == has_media:
+            raise ValueError(
+                "AudioMessage requires exactly one of url or media_id"
+            )
 
 
 @dataclass

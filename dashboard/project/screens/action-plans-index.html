@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Donna — dashboard · action plans</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --paper-50:#FDFAF8; --paper-100:#FBF7F5; --paper-200:#F5EFEA; --paper-300:#F0EAE4;
+    --ink-900:#1E1A18; --ink-800:#3A3331; --ink-600:#6B615C; --ink-500:#8F837C; --ink-400:#B5A89F;
+    --rust-700:#7B5544; --rust-100:#EBDCD2;
+    --moss-700:#5C6B4A; --amber-700:#A8804A; --oxblood-700:#8B3A2E;
+    --hairline:rgba(30,26,24,0.08); --hairline-strong:rgba(30,26,24,0.14);
+    --sans:'Red Hat Text',sans-serif; --serif:'EB Garamond',serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--paper-100);color:var(--ink-900);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  .wrap{max-width:1040px;margin:0 auto;padding:72px 48px 96px}
+  .crumbs{font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:var(--ink-500);font-weight:500;margin-bottom:32px}
+  .crumbs a{color:var(--ink-500);text-decoration:none}
+  h1{font-family:var(--serif);font-weight:400;font-size:56px;line-height:1.05;letter-spacing:-0.02em;margin:0 0 20px;max-width:18ch}
+  h1 em{font-style:italic;color:var(--rust-700)}
+  .lead{font-size:17px;line-height:1.6;color:var(--ink-800);max-width:62ch;margin:0 0 16px;font-family:var(--serif)}
+  .meta{font-size:13px;color:var(--ink-500);line-height:1.55;max-width:62ch;margin:0 0 56px}
+  .grid{display:grid;grid-template-columns:repeat(2,1fr);gap:24px;margin-top:24px}
+  .card{display:block;border:1px solid var(--hairline);background:var(--paper-50);padding:28px 28px 24px;text-decoration:none;color:inherit;transition:border-color .16s ease, background .16s ease}
+  .card:hover{border-color:var(--hairline-strong);background:var(--paper-200)}
+  .card .tag{font-size:10px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--rust-700);margin-bottom:10px}
+  .card h2{font-family:var(--serif);font-weight:400;font-size:28px;line-height:1.12;margin:0 0 10px;letter-spacing:-0.01em}
+  .card h2 em{font-style:italic;color:var(--rust-700)}
+  .card .thesis{font-family:var(--serif);font-style:italic;font-size:16px;line-height:1.45;color:var(--ink-800);margin:0 0 14px}
+  .card .ax{display:flex;gap:16px;font-size:11px;color:var(--ink-500);letter-spacing:0.02em;padding-top:14px;border-top:1px dashed var(--hairline)}
+  .card .ax span b{display:block;color:var(--ink-800);font-weight:500;text-transform:uppercase;letter-spacing:0.12em;font-size:9px;margin-bottom:3px}
+  .rule{border-top:1px solid var(--hairline);margin:64px 0 32px;padding-top:28px}
+  .rule h3{font-family:var(--serif);font-weight:400;font-size:20px;margin:0 0 8px;letter-spacing:-0.005em}
+  .rule p{font-size:13px;line-height:1.6;color:var(--ink-600);margin:0 0 6px;max-width:70ch}
+  footer{margin-top:64px;padding-top:24px;border-top:1px solid var(--hairline);font-size:12px;color:var(--ink-500);display:flex;justify-content:space-between}
+  footer a{color:var(--ink-500);text-decoration:none}
+  footer a:hover{color:var(--ink-900)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="crumbs"><a href="../index.html">Package</a> &nbsp;/&nbsp; Dashboard · Action plans</div>
+
+  <h1>Six philosophies for the <em>action</em> surface.</h1>
+  <p class="lead">Donna's dashboard should do more than show you what she knows. It should be where she proposes the machinery she wants to install in your life, and where you accept, tune, or decline. Every action collapses to one of six AttentionSpec cards: tally, event&#8209;stream, brief, prep&#8209;doc, open&#8209;loop, ping. The question is how they arrive.</p>
+  <p class="meta">Each plan below answers three questions differently: how aggressively does Donna shadow? When do offers surface? How are the four surfaces — Living, Today, Offers, Machinery — mixed on screen? Click any to open the signature moment.</p>
+
+  <div class="grid">
+
+    <a class="card" href="plan-a-invitation.html">
+      <div class="tag">Plan A</div>
+      <h2>Invitation.</h2>
+      <p class="thesis">Donna never proposes on her own. You author every attention. The dashboard is where the dry&#8209;run spec lands for your approval.</p>
+      <div class="ax">
+        <span><b>Shadow</b>off</span>
+        <span><b>Offer cadence</b>user&#8209;driven</span>
+        <span><b>Best for</b>control&#8209;forward</span>
+      </div>
+    </a>
+
+    <a class="card" href="plan-b-quiet-garden.html">
+      <div class="tag">Plan B</div>
+      <h2>Quiet <em>garden</em>.</h2>
+      <p class="thesis">Donna shadows aggressively all week. Sunday evening, the dashboard transforms into a harvest of seven proposals you batch&#8209;decide.</p>
+      <div class="ax">
+        <span><b>Shadow</b>aggressive</span>
+        <span><b>Offer cadence</b>weekly batch</span>
+        <span><b>Best for</b>weekly&#8209;review ritual</span>
+      </div>
+    </a>
+
+    <a class="card" href="plan-c-daily-offer.html">
+      <div class="tag">Plan C</div>
+      <h2>Daily offer.</h2>
+      <p class="thesis">One offer slot per day, never more. Shadow runs but surfaces sparingly. The dashboard always feels calm.</p>
+      <div class="ax">
+        <span><b>Shadow</b>moderate</span>
+        <span><b>Offer cadence</b>1/day capped</span>
+        <span><b>Best for</b>mid&#8209;adoption trust</span>
+      </div>
+    </a>
+
+    <a class="card" href="plan-d-live-today.html">
+      <div class="tag">Plan D</div>
+      <h2>Live today, <em>offers deep</em>.</h2>
+      <p class="thesis">Home is ninety percent today&#8209;surface — live attentions reporting in. Offers live on a separate route you visit when you want.</p>
+      <div class="ax">
+        <span><b>Shadow</b>aggressive</span>
+        <span><b>Offer cadence</b>inbox&#8209;style</span>
+        <span><b>Best for</b>live&#8209;first users</span>
+      </div>
+    </a>
+
+    <a class="card" href="plan-e-unified-lifecycle.html">
+      <div class="tag">Plan E</div>
+      <h2>Unified <em>lifecycle</em>.</h2>
+      <p class="thesis">Every attention visible with its status. One long scroll, color&#8209;banded. Full transparency of Donna's internal world.</p>
+      <div class="ax">
+        <span><b>Shadow</b>aggressive &amp; visible</span>
+        <span><b>Offer cadence</b>ambient</span>
+        <span><b>Best for</b>power users, legibility</span>
+      </div>
+    </a>
+
+    <a class="card" href="plan-f-promotion-ritual.html">
+      <div class="tag">Plan F</div>
+      <h2>Promotion <em>ritual</em>.</h2>
+      <p class="thesis">Morning dashboard is the attention review. "Three things I've been watching. Which are real?" Promotion happens in the ritual, not the background.</p>
+      <div class="ax">
+        <span><b>Shadow</b>heavy, user&#8209;triggered</span>
+        <span><b>Offer cadence</b>morning ritual</span>
+        <span><b>Best for</b>high&#8209;agency mornings</span>
+      </div>
+    </a>
+
+  </div>
+
+  <div class="rule">
+    <h3>How to read these</h3>
+    <p>Each prototype renders the signature moment of the plan — the one screen that makes it distinct from the others. Most also show a thin layer of the Living surface at the top, because you said the dashboard is "everything Donna knows about the user," not only the action surface.</p>
+    <p>All six share the same AttentionSpec vocabulary underneath (tally · event&#8209;stream · brief · prep&#8209;doc · open&#8209;loop · ping) and the same design system. They differ only on <em>policy</em> and <em>surface mix</em>.</p>
+  </div>
+
+  <div class="rule">
+    <h3>Decision tools &amp; shared surfaces</h3>
+    <p>Artifacts that sit across the six plans. The comparison gallery is the main decision tool — six phones in one scan plus the trade-off matrix. The shared surfaces are the pieces every plan reuses.</p>
+  </div>
+
+  <div class="grid">
+    <a class="card" href="comparison-gallery.html">
+      <div class="tag">Decision tool</div>
+      <h2>Side by <em>side</em>.</h2>
+      <p class="thesis">All six plans as scaled phones in one glance, plus the trade&#8209;off matrix (shadow · offers · cold start · template count · risk).</p>
+      <div class="ax"><span><b>What</b>6 phones + matrix</span><span><b>Use</b>pick a plan</span></div>
+    </a>
+    <a class="card" href="whatsapp-mirror.html">
+      <div class="tag">Decision tool</div>
+      <h2>WhatsApp <em>mirror</em>.</h2>
+      <p class="thesis">The same attention rendered on WhatsApp (offer · live update) and the dashboard. Compares three stances: mirror / replace / <em>complement</em>.</p>
+      <div class="ax"><span><b>What</b>3 phones + per&#8209;card rules</span><span><b>Use</b>surface split</span></div>
+    </a>
+    <a class="card" href="living-surface.html">
+      <div class="tag">Shared surface · 1 of 4</div>
+      <h2>Living — what she <em>knows.</em></h2>
+      <p class="thesis">Everything Donna knows about the user: facts, people, patterns, constitution. Short serif letter at top, editable rows below, cold&#8209;start prompts inline.</p>
+      <div class="ax"><span><b>Used by</b>A · B · C · D · E · F</span><span><b>Cold start</b>write surface</span></div>
+    </a>
+    <a class="card" href="offers-inbox.html">
+      <div class="tag">Shared surface · 2 of 4</div>
+      <h2>Offers · <em>inbox</em>.</h2>
+      <p class="thesis">Where Donna's proposals accumulate. Unread tint, age badges, expand&#8209;in&#8209;place dry&#8209;run. Familiar mental model — email.</p>
+      <div class="ax"><span><b>Used by</b>D primary · B/E reuse</span><span><b>Metaphor</b>inbox</span></div>
+    </a>
+    <a class="card" href="machinery-garden.html">
+      <div class="tag">Shared surface · 3 of 4</div>
+      <h2>Machinery · the <em>garden</em>.</h2>
+      <p class="thesis">Everything currently running. Live · paused · resolved. Filter by card type. One CTA: ask me to watch something.</p>
+      <div class="ax"><span><b>Used by</b>all plans</span><span><b>Metaphor</b>garden</span></div>
+    </a>
+    <a class="card" href="plan-f-cold-start.html">
+      <div class="tag">Plan F · day 1</div>
+      <h2>Cold start, <em>before &amp; after.</em></h2>
+      <p class="thesis">The morning ritual on day 1 — Donna has no shadows yet, so the three slots hold micro&#8209;interview prompts. Same surface as day 100.</p>
+      <div class="ax"><span><b>Shape</b>same as day 100</span><span><b>Retires</b>as shadow learns</span></div>
+    </a>
+  </div>
+
+  <footer>
+    <a href="../index.html">← Design package</a>
+    <span>donna · dashboard action plans · 12 prototypes · 2026</span>
+    <a href="mobile-dashboard.html">Mobile dashboard →</a>
+  </footer>
+</div>
+</body>
+</html>

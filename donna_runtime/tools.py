@@ -537,7 +537,74 @@ async def log_observation(args):
         event_time=str(args.get("event_time") or ""),
         confidence=float(args.get("confidence") or 1.0),
     )
+
+    # Best-effort: hand the freshly-written row to the observation
+    # spawner. Never block the original tool's reply on spawner failure.
+    try:
+        obs_id = _extract_observation_id(res)
+        if obs_id:
+            await _spawn_from_observation(
+                user_id=user_id,
+                obs_id=obs_id,
+                obs_type=obs_type,
+                fields=fields,
+                raw=str(args.get("raw") or ""),
+                event_time=str(args.get("event_time") or ""),
+            )
+    except Exception:
+        logger.exception("log_observation: spawner hook raised")
+
     return _tool_text(res, no_hits_text="Observation not logged.", degraded_text="Observation unavailable.")
+
+
+def _extract_observation_id(res: Any) -> str | None:
+    """Pull the observation id out of the ToolResult shape ({status, payload})."""
+    if not isinstance(res, dict):
+        return None
+    if res.get("status") != "ok":
+        return None
+    payload = res.get("payload")
+    if isinstance(payload, dict):
+        return payload.get("id")
+    return None
+
+
+async def _spawn_from_observation(
+    *,
+    user_id: str,
+    obs_id: str,
+    obs_type: str,
+    fields: dict,
+    raw: str,
+    event_time: str,
+) -> None:
+    """Fetch the persisted Observation row and feed the spawner.
+
+    Done in a fresh session so the spawner sees the committed event_time
+    + enriched fields rather than relying on the in-process tool args.
+    """
+    try:
+        from sqlalchemy import select
+
+        from backend.db.models import Observation
+        from backend.db.session import async_session
+    except Exception:
+        return
+    obs_row = None
+    try:
+        async with async_session() as session:
+            obs_row = (
+                await session.execute(
+                    select(Observation).where(Observation.id == obs_id)
+                )
+            ).scalar_one_or_none()
+    except Exception:
+        logger.exception("log_observation: spawner row fetch failed id=%s", obs_id)
+    if obs_row is None:
+        return
+    from proactive.spawners import observation as observation_spawner
+
+    await observation_spawner.maybe_spawn(obs_row, user_id)
 
 
 @tool(
@@ -594,6 +661,45 @@ async def close_open_loop(args):
 
 
 @tool(
+    "clear_pending_note",
+    "Dismiss a queued proactive note from the PENDING NOTES block. Use "
+    "when this turn's send_burst already addresses what the note was "
+    "queued for (reason='delivered'), when the note is no longer worth "
+    "surfacing (reason='irrelevant'), or when the user brought up the "
+    "topic themselves first (reason='superseded_by_user'). Do NOT use "
+    "for notes you have not actually consumed in this turn — the brain "
+    "is the only consumer of pending notes, and silently clearing is "
+    "indistinguishable from forgetting.",
+    {
+        "type": "object",
+        "required": ["note_id"],
+        "properties": {
+            "note_id": {"type": "string"},
+            "reason": {
+                "type": "string",
+                "enum": ["delivered", "irrelevant", "superseded_by_user"],
+                "description": "Default: delivered.",
+            },
+        },
+    },
+)
+@traceable(name="donna.tool.clear_pending_note", run_type="tool")
+async def clear_pending_note(args):
+    from proactive.dispatcher import clear_pending_note as _clear
+
+    note_id = str(args.get("note_id") or "").strip()
+    reason = str(args.get("reason") or "delivered").strip() or "delivered"
+    if not note_id:
+        return text_content("clear_pending_note: note_id is required.")
+    ok = await _clear(note_id, reason=reason)
+    if ok:
+        return text_content(f"Pending note {note_id} cleared as {reason}.")
+    return text_content(
+        f"Pending note {note_id} not cleared (already resolved or unknown id)."
+    )
+
+
+@tool(
     "set_timezone",
     "Set the user's timezone. `timezone` MUST be a valid IANA string "
     "('Asia/Singapore', 'America/New_York', 'Europe/London') — never an "
@@ -637,26 +743,33 @@ async def set_timezone(args):
 
 @tool(
     "connect_integration",
-    "Generate a connect link for an external provider (currently: google, "
-    "covering gmail, calendar, and drive). Use when the [INTEGRATIONS] context "
-    "block shows the integration as not_connected and the user asks for "
-    "something requiring it, or asks to connect explicitly. Do NOT use when "
-    "the integration is already connected, when status is 'pending' (a link "
-    "is already in flight — do not nag), or when the user is mid-task and a "
-    "connect prompt would derail them. Returns a one-line consent message "
-    "containing a single URL (the redirect chain covers every requested "
-    "product) — forward it verbatim.",
+    "Generate a one-tap consent link for ONE OR MANY Composio toolkits. Pass "
+    "any toolkit slug(s): google's are gmail, googlecalendar, googledrive; "
+    "others include slack, notion, linear, github, asana, hubspot, "
+    "salesforce, intercom, etc. Multiple toolkits in one call are bundled "
+    "into a single redirect chain — the user taps once, walks each consent "
+    "page in order, and lands back at done. Use when the [INTEGRATIONS] "
+    "context block shows a needed toolkit as not_connected and the user "
+    "asks for something requiring it, or asks to connect explicitly. Do NOT "
+    "use when the toolkit is already connected, when status is 'pending' (a "
+    "link is already in flight — do not nag), or when the user is mid-task "
+    "and a connect prompt would derail them. Returns a one-line consent "
+    "message containing a single URL — forward it verbatim.",
     {
         "type": "object",
         "properties": {
-            "provider": {"type": "string", "enum": ["google"]},
-            "products": {
+            "toolkits": {
                 "type": "array",
-                "items": {"type": "string", "enum": ["calendar", "gmail", "drive"]},
+                "items": {"type": "string"},
                 "minItems": 1,
+                "description": (
+                    "Composio toolkit slug(s). Examples: gmail, "
+                    "googlecalendar, googledrive, slack, notion, linear, "
+                    "github, asana, hubspot, salesforce."
+                ),
             },
         },
-        "required": ["provider", "products"],
+        "required": ["toolkits"],
     },
 )
 @traceable(name="donna.tool.connect_integration", run_type="tool")
@@ -668,15 +781,14 @@ async def connect_integration(args):
     user_id = _current_user_id()
     if not user_id:
         return text_content("Cannot connect: no user_id in scope.")
-    provider = str(args.get("provider") or "google").strip()
-    raw_products = args.get("products") or ["calendar", "gmail"]
-    if not isinstance(raw_products, list):
-        raw_products = [raw_products]
-    products = [str(p).strip() for p in raw_products if str(p).strip()]
-    if not products:
-        return text_content("Cannot connect: 'products' is required.")
+    raw = args.get("toolkits") or args.get("products") or []
+    if not isinstance(raw, list):
+        raw = [raw]
+    toolkits = [str(t).strip() for t in raw if str(t).strip()]
+    if not toolkits:
+        return text_content("Cannot connect: 'toolkits' is required.")
 
-    res = await _connect(user_id=user_id, provider=provider, products=products)
+    res = await _connect(user_id=user_id, toolkits=toolkits)
     status = res.get("status")
     if status == "already_connected":
         return text_content("already connected.")
@@ -686,43 +798,57 @@ async def connect_integration(args):
 
 
 @tool(
-    "schedule_reminder",
-    "Schedule a one-shot reminder to be delivered to the user at a specific "
-    "time. `text` is what the reminder will say (write it as Donna, not as the "
-    "user). Provide EITHER `fire_at` (ISO timestamp, resolve ambiguous times "
-    "via resolve_time_expression first) OR `in_minutes` (relative offset) — "
-    "not both. Use when the user explicitly asks to be reminded at a time "
-    "('remind me at 6pm', 'text me in an hour', 'ping me tomorrow morning'). "
-    "Do NOT use for open-ended follow-ups with no clock time ('remind me about "
-    "sarah', 'don't let me forget the deck') — those are track_open_loop. Do "
-    "NOT use for recurring reminders (not supported — one-shot only). Do NOT "
-    "invent a time the user did not give.",
+    "check_integration_status",
+    "Read-only ground truth for the user's Composio integrations. Lists "
+    "every connected_account on Composio's side AND merges with the local "
+    "integrations DB so you can answer 'is gmail working?' or 'why isn't "
+    "my slack connected yet?' honestly. Reconciles drift (e.g. user "
+    "completed OAuth in browser but our background watcher missed it) by "
+    "upgrading local rows to connected when Composio says ACTIVE. Use when "
+    "the user says 'didn't work' / 'still broken' / 'retry' AFTER a previous "
+    "connect_integration, when the user asks 'is X connected' or 'what "
+    "integrations do I have', or to verify ground truth before re-issuing "
+    "a chain (NEVER re-issue connect_integration blindly — call this first). "
+    "Do NOT use on first connect (the [INTEGRATIONS] block already shows "
+    "state), more than once per turn (second call returns identical data), "
+    "or as a way to poll OAuth completion (the watcher does that). Returns "
+    "per-toolkit status + a one-line summary.",
     {
         "type": "object",
-        "required": ["text"],
         "properties": {
-            "text": {"type": "string"},
-            "fire_at": {"type": "string", "description": "Optional ISO timestamp (use offset when known)."},
-            "in_minutes": {"type": "integer", "description": "Optional relative delay in minutes (alternative to fire_at)."},
+            "toolkits": {
+                "type": "array",
+                "items": {"type": "string"},
+                "description": (
+                    "Optional filter — only check these toolkit slugs "
+                    "(e.g. ['gmail', 'slack']). Omit to check everything "
+                    "the user has touched."
+                ),
+            }
         },
     },
 )
-@traceable(name="donna.tool.schedule_reminder", run_type="tool")
-async def schedule_reminder(args):
-    from backend.memory.tools.schedule_reminder import schedule_reminder as _schedule_reminder
+@traceable(name="donna.tool.check_integration_status", run_type="tool")
+async def check_integration_status(args):
+    from backend.memory.tools.check_integration_status import (
+        check_integration_status as _check,
+    )
 
     user_id = _current_user_id()
-    text = str(args.get("text") or "").strip()
-    if not user_id or not text:
-        return text_content("Reminder not scheduled.")
-    res = await _schedule_reminder(
-        user_id=user_id,
-        text=text,
-        fire_at=str(args.get("fire_at") or "") or None,
-        in_minutes=(int(args["in_minutes"]) if args.get("in_minutes") is not None else None),
-        origin="user",
-    )
-    return _tool_text(res, no_hits_text="Reminder not scheduled.", degraded_text="Scheduling unavailable.")
+    if not user_id:
+        return text_content("Cannot check: no user_id in scope.")
+    raw = (args or {}).get("toolkits") or []
+    if not isinstance(raw, list):
+        raw = [raw]
+    toolkits = [str(t).strip() for t in raw if str(t).strip()] or None
+
+    res = await _check(user_id=user_id, toolkits=toolkits)
+    import json as _json
+    payload = {
+        "summary": res.get("summary"),
+        "toolkits": res.get("toolkits") or {},
+    }
+    return text_content(_json.dumps(payload, indent=2))
 
 
 @tool(
@@ -895,6 +1021,12 @@ async def recall(args):
         "timezone into memory. This wrapper routes to the right backend. Bias "
         "toward using it when the current user message gives information Donna "
         "should hold onto. "
+        "For kind='observation': always pass observation_type. Pass fields when "
+        "the event has obvious numeric/structured data — expense {amount_usd: 6}, "
+        "meal {item, calories}, sleep {hours: 7}, mood {score: 4}, exercise "
+        "{minutes, type}, alcohol {count, unit}. For casual observations with no "
+        "natural numeric shape (notes, social events, ambient feelings), "
+        "fields may be empty {} — the `content` text captures the meaning. "
         "Profile facts (name, city, profession, age, etc.) are handled "
         "automatically by a pre-turn detector and the post-turn extractor — "
         "do NOT call this with kind='fact' or kind='preference'. Those kinds "
@@ -963,16 +1095,16 @@ async def remember(args):
         fields = args.get("fields") if isinstance(args.get("fields"), dict) else {}
         if not obs_type:
             return text_content(
-                "Observation not recorded: 'observation_type' is required. "
-                "Common types: expense, meal, mood, sleep, habit, exercise, symptom. "
-                "Example: observation_type='expense', fields={'amount_usd': 6}."
+                "OBSERVATION REJECTED. 'observation_type' is required. Do NOT "
+                "claim it was logged. Common types: expense, meal, mood, sleep, "
+                "habit, exercise, symptom, alcohol, note. Example: "
+                "observation_type='alcohol', fields={'count': 5, 'unit': 'beers'}."
             )
-        if not fields:
-            return text_content(
-                f"Observation not recorded: 'fields' is required and must be a non-empty object. "
-                f"For observation_type={obs_type!r}, pass the numeric/structured payload "
-                f"(e.g. {{'amount_usd': 6}} for expense, {{'hours': 7}} for sleep, {{'score': 4}} for mood)."
-            )
+        # Casual observations (alcohol, social events, notes) often have no
+        # obvious numeric `fields`. We accept empty `fields` — the `raw`
+        # text carries the meaning, and pattern miners still count by type.
+        # Structured types (expense, meal, sleep) should still pass fields,
+        # but the tool description handles that nudge; we don't reject here.
         res = await _log_observation(
             user_id=user_id,
             type=obs_type,
@@ -982,7 +1114,18 @@ async def remember(args):
             event_time=str(args.get("event_time") or ""),
             confidence=_numeric_confidence(args.get("confidence")),
         )
-        return _result_text("remembered observation", res, no_hits_text="Observation not recorded.")
+        return _result_text(
+            "remembered observation",
+            res,
+            no_hits_text=(
+                "OBSERVATION NOT RECORDED. Do NOT claim you logged it. "
+                "Note the user without saying 'logged'."
+            ),
+            degraded_text=(
+                "OBSERVATION FAILED (backend error). Do NOT claim you logged "
+                "it. Acknowledge the user without saying 'logged'."
+            ),
+        )
 
     if kind in {"open_loop", "commitment"}:
         from backend.memory.tools.track_open_loop import track_open_loop as _track_open_loop
@@ -1033,85 +1176,6 @@ def _fact_confidence(value: Any):
 
 
 @tool(
-    "schedule",
-    (
-        "Schedule a one-shot future message/reminder to the user. Use when the "
-        "user gives a time or asks Donna to ping/remind/text later. Accepts "
-        "natural language in `when`; the wrapper resolves it before writing. "
-        "Do NOT use for open-ended follow-ups with no clock time — those are "
-        "remember(kind='open_loop'). "
-        "Do NOT invent a time the user did not give. Ask them instead. "
-        "Do NOT use for recurring reminders — one-shot only. "
-        "Do NOT use for past events (memory, not scheduling)."
-    ),
-    {
-        "type": "object",
-        "required": ["text"],
-        "properties": {
-            "text": {"type": "string"},
-            "when": {"type": "string", "description": "Natural time, e.g. tomorrow morning."},
-            "fire_at": {"type": "string", "description": "Optional ISO timestamp."},
-            "in_minutes": {"type": "integer"},
-        },
-    },
-)
-@traceable(name="donna.tool.schedule", run_type="tool")
-async def schedule(args):
-    from backend.memory.tools.schedule_reminder import schedule_reminder as _schedule_reminder
-
-    user_id = _current_user_id()
-    text = str(args.get("text") or "").strip()
-    if not user_id:
-        return text_content(
-            "Reminder not scheduled: no user_id in scope. Runtime bug — report it."
-        )
-    if not text:
-        return text_content(
-            "Reminder not scheduled: 'text' is required. Write what Donna should say "
-            "to the user at fire time, in Donna's voice (not quoting the user)."
-        )
-
-    fire_at = str(args.get("fire_at") or "").strip() or None
-    in_minutes = int(args["in_minutes"]) if args.get("in_minutes") is not None else None
-    when = str(args.get("when") or "").strip()
-
-    if not fire_at and in_minutes is None and not when:
-        return text_content(
-            "Reminder not scheduled: need one of fire_at (ISO timestamp), "
-            "in_minutes (integer), or when (natural language like 'tomorrow at 6pm'). "
-            "Do not invent a time — if the user did not give one, ask them."
-        )
-
-    if not fire_at and in_minutes is None and when:
-        from backend.memory.tools.resolve_time_expression import resolve_time_expression as _resolve
-
-        resolved = await _resolve(user_id=user_id, expression=when)
-        if resolved.get("status") != "ok" or not isinstance(resolved.get("payload"), dict):
-            reason = (
-                resolved.get("payload", {}).get("reason")
-                if isinstance(resolved.get("payload"), dict) else None
-            )
-            hint = (
-                "Use fire_at with an ISO timestamp, or in_minutes with an integer. "
-                "For ambiguous expressions ('a few days'), ask the user."
-            )
-            return text_content(
-                f"Reminder not scheduled: could not resolve when={when!r}"
-                f"{f' ({reason})' if reason else ''}. {hint}"
-            )
-        fire_at = str(resolved["payload"].get("at") or "").strip() or None
-
-    res = await _schedule_reminder(
-        user_id=user_id,
-        text=text,
-        fire_at=fire_at,
-        in_minutes=in_minutes,
-        origin="user",
-    )
-    return _result_text("scheduled", res, no_hits_text="Reminder not scheduled.")
-
-
-@tool(
     "check_calendar",
     (
         "Check upcoming calendar context. Use for availability, conflicts, "
@@ -1144,68 +1208,6 @@ async def check_calendar(args):
         limit=int(args.get("limit") or 10),
     )
     return _result_text("calendar", res, no_hits_text="No calendar entries.")
-
-
-@tool(
-    "watch",
-    (
-        "Create a standing attention for Donna to watch, track, brief, prep, "
-        "or remind over time. Use when the user explicitly asks Donna to keep "
-        "an eye on something, or when the user accepts a specific offer to "
-        "watch it. "
-        "Do NOT use on a passing interest reference ('i follow tech news' is "
-        "not a watch request). "
-        "Do NOT use when the user did not explicitly ask or accept. "
-        "Do NOT use for a one-time timed reminder (use schedule) or an "
-        "in-flight commitment (use remember with kind='open_loop')."
-    ),
-    {
-        "type": "object",
-        "required": ["intent"],
-        "properties": {
-            "intent": {
-                "type": "string",
-                "description": "Natural instruction, e.g. keep an eye on Poke launch updates.",
-            },
-            "auto_live": {
-                "type": "boolean",
-                "description": "True when user explicitly asked or accepted.",
-            },
-        },
-    },
-)
-@traceable(name="donna.tool.watch", run_type="tool")
-async def watch(args):
-    user_id = _current_user_id()
-    intent = str(args.get("intent") or "").strip()
-    if not user_id:
-        return text_content(
-            "Watch not created: no user_id in scope. Runtime bug — report it and move on."
-        )
-    if not intent:
-        return text_content(
-            "Watch not created: 'intent' is required. Pass a natural instruction "
-            "describing what Donna should keep an eye on, e.g. "
-            "intent='keep an eye on the Poke launch updates'."
-        )
-    try:
-        from donna.attention.tools import create_attention
-
-        result = await create_attention(
-            intent,
-            user_id=user_id,
-            auto_live=bool(args.get("auto_live", True)),
-        )
-    except Exception as exc:
-        logger.exception("watch wrapper failed")
-        return text_content(
-            f"Watch not created: {type(exc).__name__}. "
-            f"The attention backend may be unavailable — do not retry this turn."
-        )
-    title = result.attention.spec.title
-    status = result.attention.status.value
-    card = result.attention.spec.card.value
-    return text_content(f"watch created: '{title}' ({card}, status={status})")
 
 
 @tool(
@@ -1804,6 +1806,671 @@ SEND_BURST_INPUT_SCHEMA: dict = {
 }
 
 
+async def _create_and_queue_attention(
+    *, intent: str, user_id: str | None, origin: str, label: str
+) -> dict[str, Any]:
+    """Shared core for `attend` / `remind` / future attention-creating tools.
+
+    Runs the author pipeline, materializes the first fire when the cadence
+    is queueable (ONE_SHOT or SCHEDULED), and returns a small dict the
+    individual tool wrappers turn into user-facing text. Keeps the failure
+    modes uniform across entry points.
+    """
+    if not user_id:
+        return {"status": "error", "reason": "no_user_id"}
+    if not intent:
+        return {"status": "error", "reason": "missing_intent"}
+
+    try:
+        from sqlalchemy import select
+
+        from backend.db.models import User
+        from backend.db.session import async_session as _session_factory
+        from donna.attention.firing import materialize_next_fire
+        from donna.attention.schema import AttentionOrigin
+        from donna.attention.tools import create_attention
+        from donna.attention.vocabulary import CadenceType
+    except Exception as exc:
+        logger.exception("%s: backend imports unavailable", label)
+        return {"status": "error", "reason": f"imports:{type(exc).__name__}"}
+
+    try:
+        result = await create_attention(intent, user_id=user_id, auto_live=True)
+    except Exception as exc:
+        logger.exception("%s: create_attention failed", label)
+        return {"status": "error", "reason": f"author:{type(exc).__name__}"}
+
+    attention = result.attention
+
+    # Near-match dedup: ``create_attention`` returns ``reused=True`` when
+    # a recent LIVE PING with the same normalised subject already exists.
+    # Skip every "wire it up" step (postgres mirror, schedule fire,
+    # DonnaInstance materialise) — they're already done for the
+    # original attention. Just confirm the merge to the caller.
+    if result.reused:
+        return {
+            "status": "reused",
+            "attention_id": str(attention.id),
+            "title": attention.spec.title,
+            "card": attention.spec.card.value,
+            "cadence_type": attention.spec.cadence.type.value,
+            "reused": True,
+        }
+
+    if origin == "donna":
+        attention = attention.model_copy(
+            update={"origin": AttentionOrigin.SHADOW_INFERRED}
+        )
+
+    try:
+        async with _session_factory() as session:
+            user = (
+                await session.execute(select(User).where(User.id == user_id))
+            ).scalar_one_or_none()
+            if user is None:
+                return {"status": "error", "reason": "user_not_found"}
+            phone = getattr(user, "phone", None)
+            tz = getattr(user, "timezone", None) or "Asia/Singapore"
+            if not phone:
+                return {"status": "error", "reason": "missing_phone"}
+    except Exception as exc:
+        logger.exception("%s: user lookup failed", label)
+        return {"status": "error", "reason": f"db:{type(exc).__name__}"}
+
+    # Dual-write to postgres so other replicas / the schedule worker see
+    # the attention. The file store was already written by
+    # ``create_attention`` above and remains the dev / cli fallback. We
+    # don't fail the user request on mirror failure — the fire still
+    # queues via DonnaSchedule, which is the path that actually delivers.
+    try:
+        from donna.attention.postgres_store import persist_attention
+
+        await persist_attention(attention, user_id=user_id)
+    except Exception:
+        logger.exception("%s: postgres mirror write failed", label)
+
+    cadence_type = attention.spec.cadence.type
+    queueable = cadence_type in (CadenceType.ONE_SHOT, CadenceType.SCHEDULED)
+    schedule_id: str | None = None
+    if queueable:
+        try:
+            schedule_id = await materialize_next_fire(
+                attention,
+                user_id=user_id,
+                user_phone=phone,
+                user_tz=tz,
+                origin=origin,
+            )
+        except Exception as exc:
+            logger.exception("%s: materialize_next_fire failed", label)
+            return {
+                "status": "partial",
+                "attention_id": str(attention.id),
+                "reason": f"queue:{type(exc).__name__}",
+            }
+        if schedule_id is None:
+            return {"status": "past_trigger", "attention_id": str(attention.id)}
+
+    # For tracker-shaped cards (TALLY/EVENT_STREAM), do the same
+    # post-accept work the dashboard accept handler does: materialize a
+    # DonnaInstance(primitive=track) so observations route correctly,
+    # and recompose the dashboard so the tracker-grid lands on the next
+    # poll. Best-effort — failures here don't void the attention.
+    instance_id: str | None = None
+    instance_created = False
+    try:
+        from backend.dashboard.actions import (
+            _maybe_materialize_instance,
+            _spawn_recompose,
+        )
+
+        instance_id, instance_created = await _maybe_materialize_instance(
+            user_id=user_id, attention=attention
+        )
+        if instance_id is not None:
+            # Only recompose when a tracker actually materialized — for
+            # PING / OPEN_LOOP / BRIEF cards there's nothing the
+            # dashboard would surface differently right now. Fire-and-
+            # forget so the brain turn doesn't block on a 60s LLM call.
+            _spawn_recompose(user_id=user_id)
+    except Exception:
+        logger.exception("%s: dashboard wireup failed (non-fatal)", label)
+
+    return {
+        "status": "ok",
+        "attention_id": str(attention.id),
+        "title": attention.spec.title,
+        "card": attention.spec.card.value,
+        "cadence_type": cadence_type.value,
+        "schedule_id": schedule_id,
+        "instance_id": instance_id,
+        "instance_created": instance_created,
+    }
+
+
+@tool(
+    "attend",
+    (
+        "Create an attention — the SINGLE creation primitive for anything "
+        "Donna will surface to the user in the future. One-shot reminders, "
+        "recurring nudges, standing watches, weekly briefs, calendar prep: "
+        "all collapse to this one tool. The author parses the intent and "
+        "picks the right card (ping / event_stream / tally / brief / "
+        "prep_doc / open_loop) and cadence (one_shot / scheduled / on_event) "
+        "for you — do not pre-classify the intent yourself. "
+        "Returns the attention_id; pass it to cancel_attention or "
+        "snooze_attention. Origin defaults to 'user'; pass origin='donna' "
+        "when Donna is proactively scheduling on the user's behalf (e.g. "
+        "good-luck before an interview, daily check-in she offered). "
+        "Use whenever the user asks to be reminded, watched, briefed, "
+        "prepped, or pinged at a time or on a cadence. Examples: 'remind "
+        "me at 5pm to call mom' (one-shot ping), 'every weekday at 9am "
+        "journal' (recurring ping), 'keep an eye on poke launch updates' "
+        "(standing event_stream), 'brief me on fundraising every friday' "
+        "(weekly brief), 'prep me 15 min before sarah 1:1' (calendar prep). "
+        "Do NOT use for open-ended commitments with no time or cadence "
+        "('text luca' — that is track_open_loop). Do NOT invent a time or "
+        "cadence the user did not give — ask them instead. Do NOT use for "
+        "past events (memory, not scheduling)."
+    ),
+    {
+        "type": "object",
+        "required": ["intent"],
+        "properties": {
+            "intent": {
+                "type": "string",
+                "description": (
+                    "Natural instruction in the user's words. Pass the "
+                    "phrasing through unchanged — the author parses time / "
+                    "cadence / subject / sources. Examples: 'remind me at "
+                    "5pm to call mom', 'every weekday at 9am journal', "
+                    "'keep an eye on poke launch updates', 'brief me on "
+                    "fundraising every friday', 'prep me 15 minutes before "
+                    "sarah 1:1'."
+                ),
+            },
+            "origin": {
+                "type": "string",
+                "enum": ["user", "donna"],
+                "description": (
+                    "'user' when the user explicitly asked, 'donna' when "
+                    "Donna is proactively scheduling. Defaults to 'user'."
+                ),
+            },
+        },
+    },
+)
+@traceable(name="donna.tool.attend", run_type="tool")
+async def attend(args):
+    user_id = _current_user_id()
+    intent = str(args.get("intent") or "").strip()
+    origin = str(args.get("origin") or "user").lower()
+    if origin not in ("user", "donna"):
+        origin = "user"
+
+    result = await _create_and_queue_attention(
+        intent=intent, user_id=user_id, origin=origin, label="attend"
+    )
+    return _render_attention_result(result)
+
+
+def _render_attention_result(result: dict[str, Any]):
+    status = result.get("status")
+    if status == "reused":
+        title = result.get("title") or "(untitled)"
+        aid = result.get("attention_id") or "?"
+        return text_content(
+            f"attention reused: '{title}' is already live (attention_id={aid}). "
+            "tell the user you already have this one running and you're "
+            "keeping the existing schedule, not adding a duplicate."
+        )
+    if status == "ok":
+        title = result.get("title") or "(untitled)"
+        cadence = result.get("cadence_type") or "?"
+        card = result.get("card") or "?"
+        aid = result.get("attention_id") or "?"
+        return text_content(
+            f"attention created: '{title}' (card={card}, cadence={cadence}, "
+            f"attention_id={aid})"
+        )
+    if status == "past_trigger":
+        return text_content(
+            "attention not queued: the parsed time is in the past. Ask the "
+            "user to clarify the time."
+        )
+    if status == "partial":
+        aid = result.get("attention_id") or "?"
+        reason = result.get("reason") or "unknown"
+        return text_content(
+            f"attention partly created (saved as {aid}, fire not queued: "
+            f"{reason}). Tell the user to retry."
+        )
+    reason = result.get("reason") or "unknown"
+    if reason == "no_user_id":
+        return text_content(
+            "attention not created: no user_id in scope. Runtime bug — report it."
+        )
+    if reason == "missing_intent":
+        return text_content(
+            "attention not created: 'intent' is required. Pass a natural "
+            "instruction in the user's words, e.g. 'remind me at 5pm to "
+            "call mom' or 'keep an eye on the poke launch updates'."
+        )
+    if reason == "user_not_found":
+        return text_content("attention not created: user not found.")
+    if reason == "missing_phone":
+        return text_content("attention not created: user missing phone.")
+    return text_content(f"attention not created: {reason}.")
+
+
+@tool(
+    "list_attentions",
+    (
+        "List the user's pending attentions (unfired attention-linked "
+        "schedules — reminders, scheduled watches, recurring nudges). "
+        "Returns attention_id, fire_at, message, and recurrence info per row. "
+        "Use when the user asks 'what reminders do I have', 'when is the next "
+        "ping', 'what are you watching', or before calling cancel_attention / "
+        "snooze_attention so you have the right id. "
+        "Do NOT use as a fishing expedition — only when the user is asking "
+        "about their pending attentions or you need to discover an "
+        "attention_id to act on."
+    ),
+    {"type": "object", "properties": {}},
+)
+@traceable(name="donna.tool.list_attentions", run_type="tool")
+async def list_attentions(args):
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("No attentions.")
+    try:
+        from donna.attention.firing import list_pending_for_user
+    except Exception:
+        logger.exception("list_attentions: import failed")
+        return text_content("Attentions unavailable.")
+    try:
+        rows = await list_pending_for_user(user_id)
+    except Exception:
+        logger.exception("list_attentions: query failed")
+        return text_content("Attentions unavailable.")
+    if not rows:
+        return text_content("No attentions.")
+    lines: list[str] = []
+    for r in rows[:20]:
+        meta = r.get("recurrence_meta") or {}
+        cad_type = meta.get("cadence_type") or "one_shot"
+        line = (
+            f"- {r['fire_at']}  ({cad_type})  {r.get('message') or '(no message)'}"
+            f"  [attention_id={r.get('attention_id')}]"
+        )
+        lines.append(line)
+    if len(rows) > 20:
+        lines.append(f"(showing 20 of {len(rows)})")
+    return text_content("\n".join(lines))
+
+
+@tool(
+    "cancel_attention",
+    (
+        "Cancel an attention by attention_id. Deletes any pending fires and "
+        "marks the attention resolved. Idempotent — safe to call twice. "
+        "Use when the user explicitly says to cancel / stop / forget a "
+        "reminder, watch, or scheduled nudge. Get the attention_id from "
+        "list_attentions first if you do not have it. "
+        "Do NOT cancel without an explicit user instruction. Do NOT use to "
+        "snooze (use snooze_attention). Do NOT use to pause temporarily — "
+        "cancel is permanent."
+    ),
+    {
+        "type": "object",
+        "required": ["attention_id"],
+        "properties": {
+            "attention_id": {
+                "type": "string",
+                "description": "The id returned by attend / list_attentions.",
+            },
+        },
+    },
+)
+@traceable(name="donna.tool.cancel_attention", run_type="tool")
+async def cancel_attention(args):
+    user_id = _current_user_id()
+    attention_id = str(args.get("attention_id") or "").strip()
+    if not user_id:
+        return text_content("Cancel failed: no user_id in scope.")
+    if not attention_id:
+        return text_content(
+            "Cancel failed: 'attention_id' is required. Call list_attentions "
+            "to discover it first."
+        )
+    try:
+        from donna.attention.firing import cancel_pending_fires
+        from donna.attention.postgres_store import update_attention_status
+        from donna.attention.schema import AttentionStatus
+        from donna.attention.tools import resolve_attention
+    except Exception:
+        logger.exception("cancel_attention: imports unavailable")
+        return text_content("Cancel failed: backend unavailable.")
+    try:
+        deleted = await cancel_pending_fires(attention_id)
+    except Exception:
+        logger.exception("cancel_attention: db delete failed")
+        return text_content("Cancel failed: db error.")
+    try:
+        resolve_attention(attention_id)
+    except Exception:
+        logger.info("cancel_attention: file-store status update skipped")
+    try:
+        await update_attention_status(attention_id, AttentionStatus.RESOLVED)
+    except Exception:
+        logger.exception("cancel_attention: postgres status update failed")
+    if deleted == 0:
+        return text_content(
+            f"Cancel: nothing pending for attention_id={attention_id} "
+            f"(already fired or unknown)."
+        )
+    return text_content(
+        f"Cancelled attention_id={attention_id} ({deleted} pending fire(s) removed)."
+    )
+
+
+@tool(
+    "snooze_attention",
+    (
+        "Push a pending attention's next fire forward by N minutes. Returns "
+        "the new fire time. Idempotent per call — calling twice snoozes "
+        "twice. "
+        "Use when the user says 'snooze 10 min', 'remind me 30 min later', "
+        "'push that back an hour'. Get the attention_id from list_attentions "
+        "if you do not have it. "
+        "Do NOT use for cancellation (use cancel_attention). Do NOT use to "
+        "set an absolute new time — create a fresh attention via attend "
+        "instead."
+    ),
+    {
+        "type": "object",
+        "required": ["attention_id", "minutes"],
+        "properties": {
+            "attention_id": {"type": "string"},
+            "minutes": {
+                "type": "integer",
+                "description": "How many minutes to push the next fire forward (1..1440).",
+            },
+        },
+    },
+)
+@traceable(name="donna.tool.snooze_attention", run_type="tool")
+async def snooze_attention(args):
+    user_id = _current_user_id()
+    attention_id = str(args.get("attention_id") or "").strip()
+    try:
+        minutes = int(args.get("minutes") or 0)
+    except Exception:
+        return text_content("Snooze failed: 'minutes' must be an integer.")
+    if not user_id:
+        return text_content("Snooze failed: no user_id in scope.")
+    if not attention_id:
+        return text_content("Snooze failed: 'attention_id' is required.")
+    if minutes <= 0 or minutes > 60 * 24:
+        return text_content("Snooze failed: 'minutes' must be 1..1440.")
+    try:
+        from donna.attention.firing import snooze_pending_fires
+    except Exception:
+        logger.exception("snooze_attention: import failed")
+        return text_content("Snooze failed: backend unavailable.")
+    try:
+        new_fire = await snooze_pending_fires(attention_id, by_seconds=minutes * 60)
+    except Exception:
+        logger.exception("snooze_attention: db update failed")
+        return text_content("Snooze failed: db error.")
+    if new_fire is None:
+        return text_content(
+            f"Snooze: nothing pending for attention_id={attention_id}."
+        )
+    return text_content(
+        f"snoozed attention_id={attention_id} by {minutes} min "
+        f"(new fire at {new_fire.isoformat()})"
+    )
+
+
+@tool(
+    "accept_attention",
+    (
+        "Accept an OFFERED attention so it goes LIVE and starts running. "
+        "OFFERED attentions appear in the per-turn ATTENTIONS WAITING block "
+        "with their attention_id. The user accepting one looks like 'yes', "
+        "'do it', 'start it', 'go ahead', or a clear contextual yes after "
+        "you proposed the structure last turn or this turn. "
+        "Use ONLY when the user agreed to a specific OFFERED attention from "
+        "ATTENTIONS WAITING — pass that exact attention_id. "
+        "Do NOT use for cancellation (use cancel_attention). Do NOT use to "
+        "create a brand new attention (use attend). Do NOT call without an "
+        "explicit user yes — never accept on the user's behalf. Do NOT pass "
+        "an attention_id that isn't in ATTENTIONS WAITING — accept_attention "
+        "only flips OFFERED -> LIVE."
+    ),
+    {
+        "type": "object",
+        "required": ["attention_id"],
+        "properties": {
+            "attention_id": {
+                "type": "string",
+                "description": (
+                    "The attention_id from ATTENTIONS WAITING in your per-turn context."
+                ),
+            },
+        },
+    },
+)
+@traceable(name="donna.tool.accept_attention", run_type="tool")
+async def accept_attention(args):
+    user_id = _current_user_id()
+    attention_id = str(args.get("attention_id") or "").strip()
+    if not user_id:
+        return text_content("Accept failed: no user_id in scope.")
+    if not attention_id:
+        return text_content(
+            "Accept failed: 'attention_id' is required. The id is shown in "
+            "ATTENTIONS WAITING."
+        )
+    try:
+        from donna.attention.promote import accept_offer
+    except Exception:
+        logger.exception("accept_attention: imports unavailable")
+        return text_content("Accept failed: backend unavailable.")
+    try:
+        updated = accept_offer(attention_id)
+    except Exception:
+        logger.exception("accept_attention: store update failed")
+        return text_content("Accept failed: store error.")
+    if updated is None:
+        return text_content(
+            f"Accept: attention_id={attention_id} is not OFFERED right now "
+            "(already accepted, expired, or unknown)."
+        )
+    title = getattr(getattr(updated, "spec", None), "title", "") or "attention"
+    return text_content(
+        f"accepted attention_id={attention_id} ({title}) — status LIVE."
+    )
+
+
+@tool(
+    "update_dashboard",
+    (
+        "Recompose the user's home dashboard from current state and persist "
+        "it. Use when the user explicitly asks for a fresh read on their "
+        "day ('redo my dashboard', 'refresh my home screen') or when a "
+        "genuine state shift just landed (a major open loop closed, a new "
+        "tracker started, a permission granted) and the previous manifest "
+        "is now wrong. Does NOT change WhatsApp output — purely updates "
+        "the web dashboard. Do NOT use to acknowledge a small action, "
+        "after every recall, or when nothing material has changed since "
+        "the last manifest. Returns a one-line confirmation."
+    ),
+    {
+        "type": "object",
+        "properties": {
+            "trigger": {
+                "type": "string",
+                "description": (
+                    "Short label for why this recompose was fired, e.g. "
+                    "'manual', 'open_loop_closed', 'integration_connected'. "
+                    "Stored alongside the manifest for debugging."
+                ),
+            }
+        },
+        "required": ["trigger"],
+    },
+)
+async def update_dashboard(args):
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("dashboard: no user_id in scope.")
+    trigger = ""
+    if isinstance(args, dict):
+        trigger = str(args.get("trigger") or "").strip()
+    if not trigger:
+        trigger = "manual"
+    try:
+        from backend.dashboard.compose import compose_manifest
+        from backend.dashboard.store import upsert_manifest
+    except Exception:
+        logger.exception("update_dashboard: import failed")
+        return text_content("dashboard: subsystem unavailable.")
+    try:
+        plan = await compose_manifest(user_id=user_id, trigger=trigger)
+    except Exception:
+        logger.exception("update_dashboard: compose raised user_id=%s", user_id)
+        return text_content("dashboard: compose failed (logged).")
+    if plan is None:
+        return text_content("dashboard: compose failed (logged).")
+    try:
+        await upsert_manifest(user_id, plan, trigger=trigger)
+    except Exception:
+        logger.exception("update_dashboard: upsert raised user_id=%s", user_id)
+        return text_content("dashboard: persist failed (logged).")
+    thesis_preview = (plan.thesis or "").strip()[:60]
+    return text_content(f"dashboard updated · {thesis_preview}")
+
+
+@tool(
+    "send_dashboard_link",
+    (
+        "Generate a fresh 5-minute magic link to the user's dashboard. "
+        "Use when (a) this is the user's first message ever and you are "
+        "welcoming them, or (b) the user explicitly asks for the dashboard "
+        "('send my dashboard', 'open my home screen', 'where can i see "
+        "all this'). Include the returned URL verbatim in your send_burst "
+        "reply so the user can tap it on WhatsApp. Tell them the link is "
+        "valid for 5 minutes. Do NOT use after every dashboard update, "
+        "after small actions, or unprompted in the middle of a thread — "
+        "it's a login link, not a status ping. Returns the URL and TTL "
+        "in seconds."
+    ),
+    {
+        "type": "object",
+        "properties": {
+            "reason": {
+                "type": "string",
+                "description": (
+                    "Short label for why the link was issued, e.g. "
+                    "'first_message', 'user_request'. Logged for debugging; "
+                    "not shown to the user."
+                ),
+            }
+        },
+        "required": ["reason"],
+    },
+)
+async def send_dashboard_link(args):
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("dashboard link: no user_id in scope.")
+    reason = ""
+    if isinstance(args, dict):
+        reason = str(args.get("reason") or "").strip()
+    reason = reason or "user_request"
+    try:
+        import os
+        from backend.auth.tokens import MAGIC_TTL_S, make_magic_token
+    except Exception:
+        logger.exception("send_dashboard_link: import failed")
+        return text_content("dashboard link: subsystem unavailable.")
+    base = (os.environ.get("DASHBOARD_BASE_URL") or "").rstrip("/")
+    if not base:
+        logger.warning("send_dashboard_link: DASHBOARD_BASE_URL not set")
+        return text_content("dashboard link: not configured.")
+    try:
+        token = make_magic_token(user_id)
+    except Exception:
+        logger.exception("send_dashboard_link: token mint failed")
+        return text_content("dashboard link: mint failed.")
+    url = f"{base}/auth/magic?t={token}"
+    logger.info(
+        "send_dashboard_link issued: user_id=%s reason=%s ttl=%ds",
+        user_id[:8], reason, MAGIC_TTL_S,
+    )
+    return text_content(
+        f"link: {url} · valid 5 min · reason={reason}"
+    )
+
+
+@tool(
+    "send_login_otp",
+    (
+        "Generate a 6-digit login code the user can type on the dashboard's "
+        "/auth/otp page. Use when the user explicitly asks for a login code "
+        "('send me a code', 'i need to log in another way', 'i lost the "
+        "link') or when the magic-link flow is broken on their end. Include "
+        "the code verbatim in your send_burst reply and tell them it's "
+        "valid for 10 minutes. After they verify, the dashboard session "
+        "lasts 24 hours (longer than a magic-link session — that's the "
+        "trade-off for typing a code). Do NOT use as the default login "
+        "path; magic links are the primary surface. Returns the plaintext "
+        "code (single-use, 10-min TTL)."
+    ),
+    {
+        "type": "object",
+        "properties": {
+            "reason": {
+                "type": "string",
+                "description": (
+                    "Short label for why the OTP was issued, e.g. "
+                    "'magic_link_failed', 'user_request'. Logged for "
+                    "debugging; not shown to the user."
+                ),
+            }
+        },
+        "required": ["reason"],
+    },
+)
+async def send_login_otp(args):
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("login code: no user_id in scope.")
+    reason = ""
+    if isinstance(args, dict):
+        reason = str(args.get("reason") or "").strip()
+    reason = reason or "user_request"
+    try:
+        from backend.auth.otp import OTP_TTL_S, issue_otp
+    except Exception:
+        logger.exception("send_login_otp: import failed")
+        return text_content("login code: subsystem unavailable.")
+    try:
+        code = await issue_otp(user_id)
+    except Exception:
+        logger.exception("send_login_otp: issue failed user_id=%s", user_id)
+        return text_content("login code: issue failed.")
+    logger.info(
+        "send_login_otp issued: user_id=%s reason=%s ttl=%ds",
+        user_id[:8], reason, OTP_TTL_S,
+    )
+    return text_content(
+        f"code: {code} · valid 10 min · reason={reason}"
+    )
+
+
 @tool(
     "send_burst",
     (
@@ -1838,14 +2505,18 @@ async def send_burst(args):
 DONNA_TOOLS = (
     recall,
     remember,
-    watch,
-    schedule,
+    attend,
+    list_attentions,
+    cancel_attention,
+    snooze_attention,
+    accept_attention,
     check_calendar,
     image,
     web_search,
     agentic_web_search,
     research,
     connect_integration,
+    check_integration_status,
     list_gmail_recent,
     read_gmail_thread,
     list_calendar,
@@ -1853,5 +2524,9 @@ DONNA_TOOLS = (
     composio_manage_connections,
     composio_wait_for_connections,
     composio_execute_tool,
+    update_dashboard,
+    send_dashboard_link,
+    send_login_otp,
+    clear_pending_note,
     send_burst,  # terminator — must remain last
 )

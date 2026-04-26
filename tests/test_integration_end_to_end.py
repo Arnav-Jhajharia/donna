@@ -34,6 +34,8 @@ async def _run_scenario(user_id: str) -> dict:
     from backend.db.models import (
         ChatMessage,
         DonnaInstance,
+        DonnaSchedule,
+        Fact,
         Observation,
         OpenLoop,
         ProceduralRule,
@@ -45,6 +47,13 @@ async def _run_scenario(user_id: str) -> dict:
     from backend.memory.tools.log_observation import log_observation
     from backend.memory.tools.read_situation_brief import read_situation_brief
     from backend.memory.tools.refresh_situation_brief import refresh_situation_brief
+    from backend.memory.tools.recall_chat_thread import recall_chat_thread
+    from backend.memory.tools.recall_document_chunks import recall_document_chunks
+    from backend.memory.tools.recall_episodic import recall_episodic
+    from backend.memory.tools.recall_graph import recall_graph
+    from backend.memory.tools.list_rules import list_rules
+    from backend.memory.tools.schedule_reminder import schedule_reminder
+    from backend.memory.tools.set_timezone import set_timezone
     from backend.memory.tools.smart_recall import smart_recall
     from backend.memory.user_facts.api import update_user_fact
     from backend.memory.user_facts.rendering import load_and_render
@@ -84,6 +93,14 @@ async def _run_scenario(user_id: str) -> dict:
     report["observation_event_time"] = (
         hits["payload"][0].get("event_time") if hits["status"] == "ok" and hits["payload"] else None
     )
+    expense_log = await log_observation(
+        user_id=user_id,
+        type="expense",
+        fields={"amount": 6, "currency": "USD", "category": "coffee"},
+        tags={"source": "e2e"},
+        event_time="2026-04-21T11:00:00+08:00",
+    )
+    report["log_expense"] = expense_log["status"]
 
     refresh = await refresh_situation_brief(user_id=user_id)
     report["refresh_situation_brief"] = refresh["status"]
@@ -126,6 +143,53 @@ async def _run_scenario(user_id: str) -> dict:
     recall = await smart_recall(user_id=user_id, message="tokyo", top_k=5)
     report["smart_recall_status"] = recall["status"]
 
+    spend_recall = await smart_recall(user_id=user_id, message="how much did i spend this week", top_k=5)
+    spend_payload = spend_recall.get("payload") or []
+    report["spend_recall_status"] = spend_recall["status"]
+    report["spend_recall_sources"] = [
+        row.get("source") for row in spend_payload if isinstance(row, dict)
+    ]
+    report["spend_recall_text"] = " ".join(
+        str(row.get("content") or "") for row in spend_payload if isinstance(row, dict)
+    )
+
+    # 5c. Exercise other memory surfaces (allow ok/no_hits/degraded).
+    chat_thread = await recall_chat_thread(user_id=user_id, limit=10)
+    report["recall_chat_thread_status"] = chat_thread["status"]
+    report["recall_chat_thread_count"] = len(chat_thread.get("payload") or [])
+
+    ep = await recall_episodic(user_id=user_id, query="tokyo", limit=5)
+    report["recall_episodic_status"] = ep["status"]
+
+    gr = await recall_graph(user_id=user_id, query="tokyo", limit=5)
+    report["recall_graph_status"] = gr["status"]
+
+    doc = await recall_document_chunks(user_id=user_id, query="tokyo", limit=3)
+    report["recall_document_chunks_status"] = doc["status"]
+
+    rules = await list_rules(user_id=user_id, type="tier2", limit=5)
+    report["list_rules_status"] = rules["status"]
+
+    # 5d. Exercise operational writes: timezone + reminder schedule rows.
+    tz = await set_timezone(user_id=user_id, timezone="Asia/Tokyo", source="e2e")
+    report["set_timezone_status"] = tz["status"]
+    async with async_session() as session:
+        refreshed_user = (await session.execute(select(User).where(User.id == user_id))).scalar_one_or_none()
+    report["user_timezone_after_set"] = refreshed_user.timezone if refreshed_user else None
+
+    sched = await schedule_reminder(user_id=user_id, text="e2e reminder", in_minutes=1, origin="user")
+    report["schedule_reminder_status"] = sched["status"]
+    schedule_id = (
+        (sched.get("payload") or {}).get("schedule_id")
+        if isinstance(sched.get("payload"), dict)
+        else None
+    )
+    report["schedule_reminder_id"] = schedule_id
+    if schedule_id:
+        async with async_session() as session:
+            exists = (await session.execute(select(DonnaSchedule).where(DonnaSchedule.id == schedule_id))).scalar_one_or_none()
+        report["schedule_row_exists"] = bool(exists)
+
     # 5b. Verify extract_user_facts wrote home_city from the Haiku extractor.
     from backend.memory.user_facts.api import get_user_facts
     facts = await get_user_facts(user_id)
@@ -133,7 +197,7 @@ async def _run_scenario(user_id: str) -> dict:
 
     # 6. Cleanup.
     async with async_session() as session:
-        for model in (ChatMessage, Observation, OpenLoop, ProceduralRule):
+        for model in (ChatMessage, Observation, OpenLoop, ProceduralRule, DonnaSchedule, Fact):
             await session.execute(delete(model).where(model.user_id == user_id))
         await session.execute(delete(DonnaInstance).where(DonnaInstance.user_id == user_id))
         await session.execute(delete(User).where(User.id == user_id))
@@ -149,6 +213,7 @@ async def test_full_memory_flow():
 
     assert report["user_seeded"]
     assert report["log_observation"] == "ok"
+    assert report["log_expense"] == "ok"
     assert report["log_refreshed_situation_brief"] is True
     assert report["list_observations"] == "ok"
     assert report["observation_count"] >= 1
@@ -160,6 +225,18 @@ async def test_full_memory_flow():
     assert report["rendered_has_tokyo"]
     assert report["chat_messages_persisted"] >= 3  # 1 inbound + 2 outbound
     assert report["smart_recall_status"] in ("ok", "no_hits", "degraded")
+    assert report["spend_recall_status"] == "ok"
+    assert "observations" in report["spend_recall_sources"]
+    assert "total 6 USD" in report["spend_recall_text"]
+    assert report["recall_chat_thread_status"] in ("ok", "no_hits", "degraded")
+    assert report["recall_episodic_status"] in ("ok", "no_hits", "degraded")
+    assert report["recall_graph_status"] in ("ok", "no_hits", "degraded")
+    assert report["recall_document_chunks_status"] in ("ok", "no_hits", "degraded")
+    assert report["list_rules_status"] in ("ok", "no_hits", "degraded")
+    assert report["set_timezone_status"] == "ok"
+    assert report["user_timezone_after_set"] == "Asia/Tokyo"
+    assert report["schedule_reminder_status"] == "ok"
+    assert report.get("schedule_row_exists") is True
 
 
 async def _run_period_boundary_scenario(base_id: str) -> dict:

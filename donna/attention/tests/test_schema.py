@@ -174,6 +174,65 @@ def test_cadence_scheduled_requires_cron_or_interval():
 
 
 @pytest.mark.unit
+def test_cadence_monthly_day_last():
+    Cadence(
+        type=CadenceType.SCHEDULED,
+        params={"monthly_day": "last", "hour": 9, "minute": 0},
+    )
+    # minute defaults to 0
+    Cadence(
+        type=CadenceType.SCHEDULED,
+        params={"monthly_day": "last", "hour": 9},
+    )
+
+
+@pytest.mark.unit
+def test_cadence_monthly_day_numeric_bounds():
+    Cadence(
+        type=CadenceType.SCHEDULED,
+        params={"monthly_day": 31, "hour": 9},
+    )
+    Cadence(
+        type=CadenceType.SCHEDULED,
+        params={"monthly_day": 1, "hour": 0},
+    )
+    with pytest.raises(ValidationError):
+        Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"monthly_day": 32, "hour": 9},
+        )
+    with pytest.raises(ValidationError):
+        Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"monthly_day": 0, "hour": 9},
+        )
+
+
+@pytest.mark.unit
+def test_cadence_monthly_day_rejects_invalid_variants():
+    with pytest.raises(ValidationError):
+        Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"monthly_day": "first", "hour": 9},
+        )
+    with pytest.raises(ValidationError):
+        Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"monthly_day": 15},  # missing hour
+        )
+    with pytest.raises(ValidationError):
+        Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"monthly_day": 15, "hour": 24},
+        )
+    with pytest.raises(ValidationError):
+        Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"monthly_day": 15, "hour": 9, "minute": 60},
+        )
+
+
+@pytest.mark.unit
 def test_one_shot_requires_trigger_at():
     with pytest.raises(ValidationError):
         Cadence(type=CadenceType.ONE_SHOT, params={})

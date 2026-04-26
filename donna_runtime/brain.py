@@ -41,6 +41,17 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
             user_id=user_id,
         )
     state["_resume_session_id"] = resume_id
+
+    # Deterministic pre-BRAIN fact detector — catches explicit corrections
+    # ("my name is arnav btw not aayam") and writes to users.facts BEFORE
+    # the USER MODEL block is rendered. No LLM call. The post-turn Haiku
+    # extractor still runs for implicit mentions that don't match regex.
+    try:
+        from backend.memory.hooks import deterministic_fact_detector
+        await deterministic_fact_detector.run(user_id, raw)
+    except Exception:
+        logger.exception("brain: deterministic fact detector failed (non-fatal)")
+
     turn_context = await render_turn_context(state)
     system_context = "\n\n".join(
         part for part in (cfg.system_context.strip(), turn_context.strip()) if part
@@ -54,6 +65,8 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
         system_context=system_context,
         user_model_block=user_model_block,
         chat_already_persisted=True,
+        user_phone=state.get("phone"),
+        inbound_wa_message_id=state.get("platform_message_id"),
     )
 
     buffer: list = []

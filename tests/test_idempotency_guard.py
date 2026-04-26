@@ -31,7 +31,10 @@ class TestIdempotencyGuard:
         assert set(_IDEMPOTENCY_GUARDED_TOOLS) == {
             "log_observation",
             "track_open_loop",
-            "schedule_reminder",
+            "remember",
+            "attend",
+            "cancel_attention",
+            "snooze_attention",
         }
 
     def test_first_call_to_guarded_tool_allowed(self) -> None:
@@ -112,18 +115,17 @@ class TestIdempotencyGuard:
         assert first == {}
         assert second == {}
 
-    def test_track_open_loop_and_schedule_reminder_also_guarded(self) -> None:
+    def test_track_open_loop_and_attend_also_guarded(self) -> None:
         async def check(tool_name: str) -> dict:
             trace = TurnTrace("test")
             args = {"content": "follow up with sarah"} if tool_name == "track_open_loop" else {
-                "text": "take meds",
-                "in_minutes": 30,
+                "intent": "remind me at 5pm to take meds",
             }
             with trace_hook_context(trace, user_id="u1"):
                 await pre_tool_hook(_pre(tool_name, args), "call_1", None)
                 return await pre_tool_hook(_pre(tool_name, args), "call_2", None)
 
-        for name in ("track_open_loop", "schedule_reminder"):
+        for name in ("track_open_loop", "attend"):
             result = _run(check(name))
             decision = result.get("hookSpecificOutput", {})
             assert decision.get("permissionDecision") == "deny", f"{name} should be guarded"

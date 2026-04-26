@@ -10,8 +10,8 @@ from datetime import datetime, timedelta, timezone
 
 from sqlalchemy import select
 
-from backend.memory.tools._shape import ToolResult, no_hits, ok
-from db.models import EmailMessage
+from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
+from db.models import EmailMessage, User
 from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
@@ -42,6 +42,38 @@ def _session_factory():
     return async_session
 
 
+async def _read_bootstrap_state(user_id: str) -> str | None:
+    """Returns the bootstrap pipeline status for the user, or None when
+    no run has ever been recorded. Used to disambiguate an empty local
+    mirror (no rows) from a not-yet-bootstrapped one."""
+    async with _session_factory()() as s:
+        u = (
+            await s.execute(select(User).where(User.id == user_id))
+        ).scalar_one_or_none()
+        if u is None:
+            return None
+        runs = (u.living_profile or {}).get("bootstrap_runs") or {}
+        return runs.get("last_status")
+
+
+async def _gmail_is_connected(user_id: str) -> bool:
+    """True iff the user has a connected google_gmail integration row.
+    Avoids the "warming up" degraded path for users who never connected
+    gmail (the local mirror is legitimately empty for them)."""
+    from db.models import Integration
+
+    async with _session_factory()() as s:
+        row = (
+            await s.execute(
+                select(Integration)
+                .where(Integration.user_id == user_id)
+                .where(Integration.provider == "google")
+                .where(Integration.product == "gmail")
+            )
+        ).scalar_one_or_none()
+        return row is not None and row.status == "connected"
+
+
 @instrument_memory_op("postgres.gmail")
 async def list_gmail_recent(
     user_id: str,
@@ -65,6 +97,34 @@ async def list_gmail_recent(
         rows = (await session.execute(stmt)).scalars().all()
 
     if not rows:
+        # Distinguish "actually empty inbox" from "bootstrap hasn't run /
+        # is still running / failed" so Donna doesn't lie to the user.
+        # Only meaningful when gmail is actually connected; otherwise
+        # there's no ingest pipeline to be waiting on.
+        if await _gmail_is_connected(user_id):
+            bootstrap_state = await _read_bootstrap_state(user_id)
+            if bootstrap_state == "running":
+                return degraded(
+                    "gmail mirror still warming up — bootstrap is running. "
+                    "tell the user the inbox is being read right now and "
+                    "try again in 30-60s."
+                )
+            if bootstrap_state == "failed":
+                return degraded(
+                    "gmail bootstrap failed — local mirror is empty. tell "
+                    "the user something went wrong on the ingest side and "
+                    "offer to retry."
+                )
+            if bootstrap_state is None:
+                # No bootstrap_runs entry -> never fired. Likely the
+                # OAuth-completion webhook didn't deliver and the
+                # per-turn reconcile hasn't auto-spawned bootstrap yet.
+                return degraded(
+                    "gmail mirror is empty — bootstrap hasn't run yet. "
+                    "tell the user the connection is fresh and the first "
+                    "inbox scan is still pending."
+                )
+            # bootstrap_state == "completed" → real empty window.
         return no_hits()
 
     return ok(

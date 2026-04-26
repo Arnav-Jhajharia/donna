@@ -1,0 +1,18 @@
+{
+  "trunk": {
+    "name": "donna-inbound-twilio",
+    "numbers": ["+14154232657"],
+    "metadata": "donna voice agent inbound trunk for twilio elastic sip",
+    "krisp_enabled": true,
+    "allowed_addresses": [
+      "54.172.60.0/30",
+      "54.244.51.0/30",
+      "54.171.127.192/30",
+      "35.156.191.128/30",
+      "54.252.254.64/30",
+      "54.169.127.128/30",
+      "177.71.206.192/30",
+      "13.210.2.128/30"
+    ]
+  }
+}

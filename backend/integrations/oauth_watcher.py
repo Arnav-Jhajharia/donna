@@ -2,8 +2,11 @@
 
 After ``connect_integration`` spawns OAuth, this watcher polls Composio
 until the requested toolkits flip to ACTIVE, then mirrors the connection
-state in our DB and fires ``run_bootstrap_async`` so gmail/calendar/drive
-ingestion kicks off without waiting for Composio's webhook.
+state in our DB. When any of the google toolkits (gmail / calendar /
+drive) lands, the watcher fires ``run_bootstrap_async`` so the smart
+gmail-driven bootstrap pipeline (today_dense + 30d_important +
+90d_aggregates + biography_synthesis) kicks off without waiting for
+Composio's webhook.
 
 Designed to run as a fire-and-forget ``asyncio.create_task`` from the
 PostToolUse hook. Catches and logs all exceptions — never raises.
@@ -18,15 +21,31 @@ from backend.integrations import composio_meta, state
 
 logger = logging.getLogger(__name__)
 
-# Maps Composio toolkit slug -> our local product name.
-_TOOLKIT_TO_PRODUCT = {
+# Composio toolkit slug -> (provider, product) for the integrations table.
+# Google toolkits keep ``provider="google"`` so the existing
+# [INTEGRATIONS] line format and downstream typed tools stay coherent.
+# Everything else lands as ``provider="composio"`` with the toolkit slug
+# as the product.
+_GOOGLE_TOOLKIT_TO_PRODUCT: dict[str, str] = {
     "gmail": "gmail",
     "googlecalendar": "calendar",
     "googledrive": "drive",
 }
 
+# Subset of toolkits whose connection should trigger the gmail-driven
+# bootstrap pipeline (run_bootstrap_async). Connecting slack does NOT.
+_BOOTSTRAP_TOOLKITS: frozenset[str] = frozenset({
+    "gmail", "googlecalendar", "googledrive"
+})
+
 POLL_INTERVAL_SECONDS = 5
 DEFAULT_TIMEOUT_SECONDS = 10 * 60  # 10 min OAuth window
+
+
+def _provider_product(toolkit: str) -> tuple[str, str]:
+    if toolkit in _GOOGLE_TOOLKIT_TO_PRODUCT:
+        return "google", _GOOGLE_TOOLKIT_TO_PRODUCT[toolkit]
+    return "composio", toolkit
 
 
 async def _list_active_connections(
@@ -54,21 +73,22 @@ async def _list_active_connections(
     return out
 
 
-async def watch_google_oauth_and_bootstrap(
+async def watch_oauth_and_bootstrap(
     *,
     user_id: str,
     toolkits: Iterable[str],
     timeout_seconds: int = DEFAULT_TIMEOUT_SECONDS,
     poll_interval: int = POLL_INTERVAL_SECONDS,
 ) -> None:
-    """Poll Composio until all toolkits ACTIVE, then mark DB + fire bootstrap.
+    """Poll Composio until all toolkits ACTIVE, then mark DB + (maybe) bootstrap.
 
     Fire-and-forget: never raises. If the deadline lapses before any
     connection becomes ACTIVE we log a warning and return without firing
-    bootstrap. Partial completion (some active, some not) still fires
-    bootstrap because the active connections are useful on their own.
+    bootstrap. Partial completion (some active, some not) still marks
+    the active ones and fires bootstrap when a google toolkit is in the
+    active set.
     """
-    requested = [t for t in toolkits if t in _TOOLKIT_TO_PRODUCT]
+    requested = [t for t in toolkits if t]
     if not requested:
         return
 
@@ -95,28 +115,63 @@ async def watch_google_oauth_and_bootstrap(
 
         # Mark each connected toolkit in our DB.
         for toolkit, ca_id in active.items():
-            product = _TOOLKIT_TO_PRODUCT[toolkit]
+            provider, product = _provider_product(toolkit)
             try:
-                await state.upsert_pending(user_id, "google", product)
+                await state.upsert_pending(user_id, provider, product)
                 await state.mark_connected(
-                    user_id, "google", product, connection_id=ca_id
+                    user_id, provider, product, connection_id=ca_id
                 )
             except Exception:
                 logger.exception(
-                    "oauth_watcher: mark_connected failed user=%s product=%s",
+                    "oauth_watcher: mark_connected failed user=%s toolkit=%s",
                     user_id,
-                    product,
+                    toolkit,
                 )
 
-        # Fire bootstrap (in-process — already async).
+        # Fire bootstrap only when at least one google toolkit went ACTIVE.
+        # Slack/notion/etc. don't get a bootstrap pass — that algorithm
+        # is gmail-specific.
+        google_active = [t for t in active if t in _BOOTSTRAP_TOOLKITS]
+        non_google_active = [t for t in active if t not in _BOOTSTRAP_TOOLKITS]
+
+        # Immediate-confirm ping for EVERY toolkit that just landed —
+        # google ones get the post-bootstrap follow-up later but should
+        # still get the immediate confirm so the user isn't staring at
+        # silence between the OAuth tap and the bootstrap finishing.
+        if active:
+            try:
+                from backend.integrations.notify import (
+                    STAGE_CONNECTED,
+                    notify_integration_complete,
+                )
+
+                await notify_integration_complete(
+                    user_id, list(active.keys()), stage=STAGE_CONNECTED
+                )
+            except Exception:
+                logger.exception(
+                    "oauth_watcher: notify failed user=%s", user_id
+                )
+
+        if not google_active:
+            logger.info(
+                "oauth_watcher: connections active user=%s toolkits=%s "
+                "(no google toolkit — skipping bootstrap)",
+                user_id,
+                list(active.keys()),
+            )
+            return
+
+        # Google toolkits go through bootstrap, which itself fires the
+        # post-bootstrap notify with the "read through your inbox" copy.
         try:
             from api.composio_webhook import run_bootstrap_async
 
             await run_bootstrap_async(user_id)
             logger.info(
-                "oauth_watcher: bootstrap fired user=%s toolkits=%s",
+                "oauth_watcher: bootstrap fired user=%s google_toolkits=%s",
                 user_id,
-                list(active.keys()),
+                google_active,
             )
         except Exception:
             logger.exception(
@@ -124,3 +179,9 @@ async def watch_google_oauth_and_bootstrap(
             )
     except Exception:
         logger.exception("oauth_watcher: unexpected failure user=%s", user_id)
+
+
+# Back-compat alias. Existing callers (including older trace data and any
+# imports we missed) keep working; new code should use
+# ``watch_oauth_and_bootstrap`` directly.
+watch_google_oauth_and_bootstrap = watch_oauth_and_bootstrap

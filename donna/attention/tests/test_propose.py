@@ -76,7 +76,9 @@ def test_propose_candidates_dedups_by_intent():
                 CandidateIntent(raw_intent="Same  ", proposer="dup", rationale="r"),
             ]
 
-    candidates = propose_candidates("u1", proposers=(_DupProposer(),))
+    candidates = asyncio.run(
+        propose_candidates("u1", proposers=(_DupProposer(),))
+    )
     assert len(candidates) == 1
 
 

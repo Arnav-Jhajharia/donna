@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from pathlib import Path
 from typing import Any, Literal, Mapping
 
@@ -24,6 +25,55 @@ _MAX_EXTRACTIONS = 3
 _PROMPT_PATH = (
     Path(__file__).resolve().parents[1] / "synthesis" / "prompts" / "user_facts_extractor.md"
 )
+
+# Identity-shaped fact keys where writing the wrong subject is costly.
+# For these we require a first-person marker in the inbound message and
+# reject any extraction that co-occurs with third-party markers.
+_IDENTITY_KEYS = frozenset(
+    {
+        FactKey.PREFERRED_NAME.value,
+        FactKey.PROFESSION.value,
+        FactKey.HOME_CITY.value,
+        FactKey.CURRENT_CITY.value,
+        FactKey.AGE_GROUP.value,
+        FactKey.LIFE_STAGE.value,
+        FactKey.HOUSEHOLD.value,
+    }
+)
+
+# First-person markers the user would use when describing themselves.
+_FIRST_PERSON_RE = re.compile(
+    r"\b(i|i'?m|i'?ve|i'?d|i'?ll|my|myself|me|mine|call me)\b",
+    re.IGNORECASE,
+)
+
+# Third-party markers indicating the message is about someone else.
+# "my friend / coworker / ..." always denotes another person; "my" alone is
+# first-person ("my job", "my home") so these must be multi-token patterns.
+_THIRD_PARTY_RE = re.compile(
+    r"\b(?:"
+    r"my\s+(?:friend|friends|buddy|pal|mate|mentor|manager|boss|partner|colleague|colleagues|"
+    r"coworker|coworkers|teammate|teammates|client|customer|investor|advisor|cofounder|"
+    r"co-founder|founder|classmate|roommate|neighbor|neighbour|cousin|uncle|aunt|brother|"
+    r"sister|sibling|parent|parents|mom|mum|dad|father|mother|son|daughter|kid|kids|"
+    r"husband|wife|girlfriend|boyfriend|ex|date|crush)"
+    r"|his|her|their|he\s+is|she\s+is|they\s+are|he'?s|she'?s|they'?re"
+    r"|just\s+met|i\s+met|met\s+\w+\s+(?:from|at|in)"
+    r")\b",
+    re.IGNORECASE,
+)
+
+
+def _message_is_first_person_about_self(message: str) -> bool:
+    """Is the message a first-person statement and NOT a third-party mention?
+
+    Returns True only when the message uses first-person markers AND lacks
+    third-party markers. Ambiguous messages (both or neither) return False
+    so identity-shaped extractions get suppressed.
+    """
+    has_first_person = bool(_FIRST_PERSON_RE.search(message))
+    has_third_party = bool(_THIRD_PARTY_RE.search(message))
+    return has_first_person and not has_third_party
 
 
 class _Extraction(BaseModel):
@@ -83,6 +133,7 @@ async def run(ctx: Mapping[str, Any]) -> None:
         return
 
     valid = [e for e in batch.extracted if is_valid_fact_key(e.key)][:_MAX_EXTRACTIONS]
+    message_is_first_person = _message_is_first_person_about_self(inbound)
     for item in valid:
         value = item.value.strip()
         if not value or item.confidence == "low":
@@ -90,6 +141,20 @@ async def run(ctx: Mapping[str, Any]) -> None:
         try:
             confidence = Confidence(item.confidence)
         except ValueError:
+            continue
+        # Identity-shaped fields (name, profession, city, age, life_stage,
+        # household) only accept extractions from messages that are
+        # unambiguously first-person about the user. This is the subject-
+        # safety guard for the "Aayam Bansal" class of leak where Haiku
+        # extracts a third party's name/profession onto the user.
+        if item.key in _IDENTITY_KEYS and not message_is_first_person:
+            logger.info(
+                "extract_user_facts: suppressed third-party identity extraction "
+                "user=%s key=%s value=%r (inbound not first-person)",
+                user_id[:8],
+                item.key,
+                value[:40],
+            )
             continue
         source = (
             Source.USER_CORRECTION if item.is_correction else Source.CONVERSATION_EXTRACTED

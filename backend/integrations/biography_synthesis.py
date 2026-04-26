@@ -80,6 +80,33 @@ def _format_aggregates(aggs: list[dict]) -> str:
     )
 
 
+def _strip_json_fences(raw: str) -> str:
+    """Sonnet sometimes wraps JSON in ```json ... ``` despite being told
+    not to. Strip those before parsing so the pass doesn't return {}.
+
+    Also tolerates leading/trailing prose by isolating the first {...}
+    or [...] block — same trick the agent SDK uses internally."""
+    s = (raw or "").strip()
+    if not s:
+        return ""
+    # ```json\n{...}\n``` or ```\n{...}\n```
+    if s.startswith("```"):
+        s = s[3:]
+        if s.lower().startswith("json"):
+            s = s[4:]
+        s = s.strip()
+        if s.endswith("```"):
+            s = s[:-3].rstrip()
+    # Pull first JSON object or array out of any remaining prose.
+    for opener, closer in (("{", "}"), ("[", "]")):
+        i = s.find(opener)
+        j = s.rfind(closer)
+        if i != -1 and j > i:
+            s = s[i:j + 1]
+            break
+    return s.strip()
+
+
 async def _run_pass(
     pass_name: str,
     prompt_file: str,
@@ -92,10 +119,19 @@ async def _run_pass(
         f"## FREQUENT SENDERS\n{aggregates_block}"
     )
     raw = await _call_llm(rendered)
+    cleaned = _strip_json_fences(raw)
+    if not cleaned:
+        logger.warning("biography pass %s: empty LLM response", pass_name)
+        return {}
     try:
-        return json.loads(raw)
+        return json.loads(cleaned)
     except json.JSONDecodeError:
-        logger.exception("biography pass %s: bad JSON", pass_name)
+        # Log the head of the raw response so we can debug prompt drift
+        # without blowing up the log file with a 250KB body.
+        logger.warning(
+            "biography pass %s: bad JSON, head=%r tail=%r",
+            pass_name, cleaned[:200], cleaned[-200:],
+        )
         return {}
 
 
@@ -128,9 +164,14 @@ async def synthesize_biography(
         + json.dumps(pass_outputs.get("life_signals", {}))
     )
     synth_raw = await _call_llm(synthesis_prompt)
+    synth_cleaned = _strip_json_fences(synth_raw)
     try:
-        synthesis = json.loads(synth_raw)
+        synthesis = json.loads(synth_cleaned) if synth_cleaned else {}
     except json.JSONDecodeError:
+        logger.warning(
+            "biography synthesis: bad JSON, head=%r",
+            synth_cleaned[:200],
+        )
         synthesis = {"overview": ""}
 
     work_pass = pass_outputs.get("work", {})

@@ -107,8 +107,8 @@ def test_render_living_profile_includes_situation_brief():
         {
             "situation_brief": {
                 "summary": "shipping memory work",
-                "current_status": ["2026-04-22 chat/user: working on Donna memory"],
-                "last_week": ["2026-04-16 chat/user: visa paperwork"],
+                "current_status": ["2026-04-22 open_loop: finish memory layer"],
+                "last_week": ["2026-04-16 calendar: visa appointment"],
                 "next_week": ["2026-04-28 calendar: investor call"],
             }
         }
@@ -117,4 +117,88 @@ def test_render_living_profile_includes_situation_brief():
     assert "SITUATION BRIEF" in block
     assert "shipping memory work" in block
     assert "last week" in block
+    assert "visa appointment" in block
     assert "investor call" in block
+    # Timestamps and dev-shaped prefixes must not leak into the prompt.
+    assert "2026-04-" not in block
+    assert "open_loop:" not in block
+    assert "calendar:" not in block
+
+
+def test_render_drops_chat_lines():
+    """Chat content is not a fact about the user — it belongs in RECENT CHAT only."""
+    block = render_living_profile_block(
+        {
+            "situation_brief": {
+                "summary": "in a stressful week",
+                "current_status": [
+                    "2026-04-24 chat/user: ur genuinely useless ngl",
+                    "2026-04-24 open_loop: finish building donna",
+                ],
+            }
+        }
+    )
+
+    assert "ur genuinely useless" not in block
+    assert "finish building donna" in block
+
+
+def test_render_suppresses_boilerplate_summary():
+    """Auto-generated dev summaries must not appear as 'summary' in the brief."""
+    block = render_living_profile_block(
+        {
+            "situation_brief": {
+                "summary": "Timestamped Postgres evidence grouped into last week, this week, and next week.",
+                "current_status": ["2026-04-24 open_loop: finish donna"],
+            }
+        }
+    )
+
+    assert "Timestamped Postgres" not in block
+    assert "evidence grouped" not in block
+    # The section body should still render cleanly.
+    assert "finish donna" in block
+
+
+def test_render_dedupes_across_sections():
+    """The same item (e.g. open loop) must not appear in both current and open threads."""
+    block = render_living_profile_block(
+        {
+            "situation_brief": {
+                "current_status": ["2026-04-24 open_loop: finish building donna"],
+                "open_loops": ["2026-04-24 open_loop: finish building donna"],
+            }
+        }
+    )
+
+    assert block.lower().count("finish building donna") == 1
+
+
+def test_render_strips_observation_prefix_but_annotates_type():
+    block = render_living_profile_block(
+        {
+            "situation_brief": {
+                "current_status": ["2026-04-24 observation:expense: spent $6 on coffee"],
+            }
+        }
+    )
+
+    assert "observation:expense:" not in block
+    # The original expense text already contained "spent $6" — keep it clean.
+    assert "spent $6" in block
+
+
+def test_render_empty_sections_collapse():
+    """If every section is chat-only, render empty (no orphan section headers)."""
+    block = render_living_profile_block(
+        {
+            "situation_brief": {
+                "current_status": ["2026-04-24 chat/user: lol"],
+                "this_week": ["2026-04-24 chat/user: hey"],
+            }
+        }
+    )
+
+    # No section headers should appear since everything was chat.
+    assert "right now" not in block
+    assert "this week" not in block

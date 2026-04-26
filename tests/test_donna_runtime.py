@@ -48,8 +48,10 @@ class DonnaRuntimeTests(unittest.TestCase):
         expected = {
             "mcp__donna__recall",
             "mcp__donna__remember",
-            "mcp__donna__watch",
-            "mcp__donna__schedule",
+            "mcp__donna__attend",
+            "mcp__donna__list_attentions",
+            "mcp__donna__cancel_attention",
+            "mcp__donna__snooze_attention",
             "mcp__donna__check_calendar",
             "mcp__donna__image",
             "mcp__donna__web_search",
@@ -57,6 +59,7 @@ class DonnaRuntimeTests(unittest.TestCase):
             "mcp__donna__research",
             "mcp__donna__send_burst",
             "mcp__donna__connect_integration",
+            "mcp__donna__check_integration_status",
             "mcp__donna__list_gmail_recent",
             "mcp__donna__read_gmail_thread",
             "mcp__donna__list_calendar",
@@ -64,6 +67,9 @@ class DonnaRuntimeTests(unittest.TestCase):
             "mcp__donna__composio_manage_connections",
             "mcp__donna__composio_wait_for_connections",
             "mcp__donna__composio_execute_tool",
+            "mcp__donna__update_dashboard",
+            "mcp__donna__send_dashboard_link",
+            "mcp__donna__send_login_otp",
         }
         self.assertEqual(set(ALLOWED_TOOLS), expected)
         self.assertEqual(set(build_options().allowed_tools), expected)
@@ -185,7 +191,12 @@ class DonnaRuntimeTests(unittest.TestCase):
         # fact/preference intentionally absent — handled by pre-BRAIN detector + post-turn hook.
         self.assertNotIn("fact", text)
 
-    def test_remember_observation_missing_fields_explains_payload_shape(self) -> None:
+    def test_remember_observation_missing_observation_type_is_rejected_imperatively(self) -> None:
+        """Missing observation_type still rejects (countable type is the
+        durable index for pattern miners). Missing `fields`, however, is
+        now allowed — casual observations with no obvious numeric shape
+        carry meaning in the `raw` text. The error wording must steer the
+        model away from claiming 'logged'."""
         from donna_runtime import tools as runtime_tools
         from donna_runtime.hooks import _CURRENT_USER_ID
 
@@ -193,16 +204,20 @@ class DonnaRuntimeTests(unittest.TestCase):
         try:
             result = asyncio.run(
                 runtime_tools.remember.handler(
-                    {"kind": "observation", "content": "6 bucks coffee",
-                     "observation_type": "expense"}
+                    {"kind": "observation", "content": "felt off today"}
                 )
             )
         finally:
             _CURRENT_USER_ID.reset(token)
 
         text = result["content"][0]["text"]
-        self.assertIn("'fields' is required", text)
-        self.assertIn("amount_usd", text)  # example shape included
+        # observation_type still required.
+        self.assertIn("observation_type", text)
+        # Imperative wording so the model can't synthesize a "logged" reply.
+        self.assertIn("REJECTED", text)
+        self.assertIn("Do NOT", text)
+        # Concrete example shape included to steer the next call.
+        self.assertIn("alcohol", text)
 
     def test_close_open_loop_missing_id_tells_agent_how_to_get_one(self) -> None:
         from donna_runtime import tools as runtime_tools
@@ -221,23 +236,22 @@ class DonnaRuntimeTests(unittest.TestCase):
         # must tell the agent how to acquire a loop_id, not just that it's missing
         self.assertIn("recall", text.lower())
 
-    def test_schedule_missing_time_tells_agent_the_three_options(self) -> None:
+    def test_attend_missing_intent_gives_example(self) -> None:
+        """The single creation tool must steer the agent on missing intent
+        with a concrete example (legacy: schedule + watch tested similar
+        contracts; orthogonal surface collapses both)."""
         from donna_runtime import tools as runtime_tools
         from donna_runtime.hooks import _CURRENT_USER_ID
 
         token = _CURRENT_USER_ID.set("test-user")
         try:
-            result = asyncio.run(
-                runtime_tools.schedule.handler({"text": "ping me about the thing"})
-            )
+            result = asyncio.run(runtime_tools.attend.handler({}))
         finally:
             _CURRENT_USER_ID.reset(token)
 
         text = result["content"][0]["text"]
-        self.assertIn("fire_at", text)
-        self.assertIn("in_minutes", text)
-        self.assertIn("when", text)
-        self.assertIn("do not invent", text.lower())
+        self.assertIn("'intent' is required", text)
+        self.assertIn("e.g.", text)  # must include an example
 
     def test_set_timezone_missing_value_rejects_abbreviations(self) -> None:
         from donna_runtime import tools as runtime_tools
@@ -253,20 +267,6 @@ class DonnaRuntimeTests(unittest.TestCase):
         self.assertIn("IANA", text)
         self.assertIn("Asia/Singapore", text)
         self.assertIn("PST", text)  # names an abbreviation to avoid
-
-    def test_watch_missing_intent_gives_example(self) -> None:
-        from donna_runtime import tools as runtime_tools
-        from donna_runtime.hooks import _CURRENT_USER_ID
-
-        token = _CURRENT_USER_ID.set("test-user")
-        try:
-            result = asyncio.run(runtime_tools.watch.handler({}))
-        finally:
-            _CURRENT_USER_ID.reset(token)
-
-        text = result["content"][0]["text"]
-        self.assertIn("'intent' is required", text)
-        self.assertIn("e.g.", text)  # must include an example
 
     def test_exported_tools_carry_when_not_to_use_clauses(self) -> None:
         """CLAUDE.md non-negotiable: every tool description must include a
@@ -366,7 +366,7 @@ class DonnaRuntimeTests(unittest.TestCase):
         self.assertLessEqual(len(rendered), 1200)
 
     def test_render_turn_context_hydrates_on_cold_start(self) -> None:
-        async def fake_recent(user_id):
+        async def fake_recent(user_id, *, timezone_name=None):
             return ["- user: last thing", "- assistant: noted"]
 
         state = {
@@ -383,7 +383,7 @@ class DonnaRuntimeTests(unittest.TestCase):
     def test_render_turn_context_always_hydrates_when_resumed(self) -> None:
         """Stateless/resumed alike should include recent chat — it's the only
         durable conversation history the model sees in stateless mode."""
-        async def fake_recent(user_id):
+        async def fake_recent(user_id, *, timezone_name=None):
             return ["- user: earlier", "- assistant: ack"]
 
         state = {
@@ -456,7 +456,8 @@ class DonnaRuntimeTests(unittest.TestCase):
             patch.object(brain, "save_user_session_db", fake_save), \
             patch.object(brain, "render_turn_context", fake_context), \
             patch.object(brain, "load_user_model_block", fake_user_model), \
-            patch.object(brain, "traced_donna_turn", fake_turn):
+            patch.object(brain, "traced_donna_turn", fake_turn), \
+            patch.object(brain, "_stateless_sessions_default", lambda: False):
             cfg = DonnaAgentConfig(trace_file=Path(tmpdir) / "trace.jsonl")
             result = asyncio.run(brain.donna_turn(state, config=cfg))
 

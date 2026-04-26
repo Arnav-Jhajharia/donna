@@ -176,6 +176,7 @@ async def _write_all(
             last_active_at=profile.last_active_at,
         )
         session.add(user_row)
+        await session.flush()  # User must exist before FK-dependent inserts.
 
         instance_by_type: dict[str, DonnaInstance] = {}
         for obs in observation_rows:

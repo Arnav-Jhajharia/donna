@@ -1,0 +1,406 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Donna — Six plans · side by side</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root{--paper-50:#FDFAF8;--paper-100:#FBF7F5;--paper-200:#F5EFEA;--paper-300:#F0EAE4;--paper-400:#E7DFD7;--ink-900:#1E1A18;--ink-800:#3A3331;--ink-600:#6B615C;--ink-500:#8F837C;--ink-400:#B5A89F;--rust-700:#7B5544;--rust-100:#EBDCD2;--rust-50:#F5EFEA;--moss-700:#5C6B4A;--amber-700:#A8804A;--oxblood-700:#8B3A2E;--hairline:rgba(30,26,24,0.08);--hairline-strong:rgba(30,26,24,0.14);--sans:'Red Hat Text',sans-serif;--serif:'EB Garamond',serif}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--paper-200);color:var(--ink-900);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  .gate{max-width:1440px;margin:0 auto;padding:56px 48px 32px}
+  .crumbs{font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:var(--ink-500);font-weight:500;margin-bottom:24px}
+  .crumbs a{color:var(--ink-500);text-decoration:none}
+  h1{font-family:var(--serif);font-weight:400;font-size:52px;line-height:1.06;letter-spacing:-0.02em;margin:0 0 16px;max-width:22ch}
+  h1 em{font-style:italic;color:var(--rust-700)}
+  .lead{font-family:var(--serif);font-style:italic;font-size:19px;line-height:1.5;color:var(--ink-800);max-width:62ch;margin:0 0 10px}
+  .meta{font-size:13px;color:var(--ink-600);line-height:1.55;max-width:68ch}
+
+  .row{max-width:1440px;margin:0 auto;padding:56px 48px 96px}
+  .row h2{font-family:var(--serif);font-weight:400;font-size:28px;letter-spacing:-0.01em;margin:0 0 6px}
+  .row h2 em{font-style:italic;color:var(--rust-700)}
+  .row p{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink-700);max-width:58ch;margin:0 0 36px}
+
+  .phones{display:grid;grid-template-columns:repeat(3,1fr);gap:32px 24px}
+  .phone-wrap{display:flex;flex-direction:column;gap:14px;align-items:center}
+  .phone{width:320px;background:var(--paper-100);border:1px solid var(--hairline);overflow:hidden;height:620px;position:relative}
+  .phone::after{content:'';position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(251,247,245,0) 76%, rgba(251,247,245,0.88))}
+  .phone-label{text-align:center;font-size:11.5px;color:var(--ink-600);letter-spacing:0.02em;line-height:1.45}
+  .phone-label b{display:block;font-size:10.5px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--rust-700);margin-bottom:3px}
+  .phone-label .thesis{font-family:var(--serif);font-style:italic;color:var(--ink-700);font-size:13px;line-height:1.4;margin-top:4px;max-width:24ch;margin-left:auto;margin-right:auto}
+
+  /* shared phone chrome */
+  .top{display:flex;justify-content:space-between;align-items:center;padding:12px 14px 9px;border-bottom:1px solid var(--hairline);font-size:10px}
+  .top .m{font-family:var(--serif);font-style:italic;font-weight:500;font-size:14px;color:var(--ink-900)}
+  .top .r{font-size:9px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-500)}
+  .top .i{width:18px;height:18px;border:1px solid var(--hairline-strong);border-radius:999px;display:grid;place-items:center;font-size:9px;font-weight:600;color:var(--ink-800)}
+
+  .sec{padding:8px 14px;border-bottom:1px solid var(--hairline)}
+  .eye{font-size:8px;font-weight:500;letter-spacing:0.18em;text-transform:uppercase;color:var(--ink-500);margin-bottom:4px}
+  .eye.rust{color:var(--rust-700)}
+
+  /* Plan A */
+  .pa-prompt{padding:16px 14px;background:var(--paper-50);border-bottom:1px solid var(--hairline)}
+  .pa-prompt h3{font-family:var(--serif);font-size:17px;line-height:1.2;margin:0 0 4px}
+  .pa-prompt h3 em{font-style:italic;color:var(--rust-700)}
+  .pa-prompt p{font-family:var(--serif);font-style:italic;font-size:11px;color:var(--ink-600);margin:0 0 10px;line-height:1.4}
+  .pa-input{padding:8px 10px;background:var(--paper-100);border:1px solid var(--hairline-strong);border-radius:4px;font-family:var(--serif);font-style:italic;font-size:11px;color:var(--ink-700)}
+  .pa-preview{margin:12px 14px;border:1px solid var(--hairline-strong);background:var(--paper-100);border-radius:6px;overflow:hidden}
+  .pa-preview .h{padding:8px 10px;border-bottom:1px solid var(--hairline);display:flex;justify-content:space-between;align-items:baseline}
+  .pa-preview .h .t{font-family:var(--serif);font-size:12px}
+  .pa-preview .h .t em{font-style:italic;color:var(--rust-700)}
+  .pa-preview .h .k{font-size:7.5px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-500)}
+  .pa-preview .b{padding:8px 10px;font-family:var(--serif);font-style:italic;font-size:11px;line-height:1.4;color:var(--ink-700)}
+  .pa-preview .btns{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--hairline);font-size:8px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase}
+  .pa-preview .btns button{padding:8px 4px;border:0;background:var(--paper-100);color:var(--ink-700);border-right:1px solid var(--hairline);font-family:var(--sans)}
+  .pa-preview .btns button:last-child{border-right:0;background:var(--rust-700);color:var(--paper-100)}
+
+  /* Plan B */
+  .pb-banner{padding:12px 14px;background:var(--paper-50);border-bottom:1px solid var(--hairline)}
+  .pb-banner h3{font-family:var(--serif);font-size:17px;line-height:1.15;margin:0 0 4px}
+  .pb-banner h3 em{font-style:italic;color:var(--rust-700)}
+  .pb-banner p{font-family:var(--serif);font-style:italic;font-size:10.5px;color:var(--ink-600);margin:0;line-height:1.4}
+  .pb-offer{padding:10px 14px;border-bottom:1px solid var(--hairline)}
+  .pb-offer .row1{display:flex;justify-content:space-between;font-size:8px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-500);margin-bottom:4px}
+  .pb-offer .row1 .w.r{color:var(--rust-700)}
+  .pb-offer .row1 .k{padding:1px 5px;border:1px solid var(--hairline);border-radius:2px;background:var(--paper-200);font-weight:600;font-size:7.5px}
+  .pb-offer h4{font-family:var(--serif);font-size:13px;line-height:1.2;margin:0 0 4px}
+  .pb-offer h4 em{font-style:italic;color:var(--rust-700)}
+  .pb-offer .b{font-family:var(--serif);font-style:italic;font-size:10px;line-height:1.4;color:var(--ink-600);margin:0 0 6px}
+  .pb-offer .chips{display:flex;gap:3px}
+  .pb-offer .chip{flex:1;padding:4px;text-align:center;font-size:7.5px;letter-spacing:0.06em;text-transform:uppercase;border:1px solid var(--hairline);border-radius:2px;font-weight:500}
+  .pb-offer .chip.y{color:var(--moss-700);font-weight:600}
+  .pb-offer .chip.n{color:var(--oxblood-700)}
+
+  /* Plan C */
+  .pc-thesis{padding:14px 14px 14px;border-bottom:1px solid var(--hairline)}
+  .pc-thesis .s{font-family:var(--serif);font-size:15px;line-height:1.22;margin:0}
+  .pc-thesis .s em{font-style:italic;color:var(--rust-700)}
+  .pc-live{padding:8px 14px;border-bottom:1px solid var(--hairline);font-size:10px;display:grid;grid-template-columns:1fr auto;gap:4px 8px}
+  .pc-live .k{color:var(--ink-600);font-family:var(--serif);font-size:11px}
+  .pc-live .k em{font-style:italic}
+  .pc-live .v{color:var(--ink-900);font-variant-numeric:tabular-nums;text-align:right;font-size:10.5px}
+  .pc-live .v small{color:var(--ink-500)}
+  .pc-offer{padding:14px 14px;background:var(--rust-50);border-bottom:1px solid var(--hairline)}
+  .pc-offer .lbl{display:flex;align-items:center;gap:5px;font-size:8px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--rust-700);margin-bottom:8px}
+  .pc-offer .lbl .d{width:4px;height:4px;border-radius:999px;background:var(--rust-700)}
+  .pc-offer .card{background:var(--paper-100);border:1px solid var(--hairline-strong);border-radius:6px;overflow:hidden}
+  .pc-offer .card .ch{padding:8px 10px;border-bottom:1px solid var(--hairline);display:flex;justify-content:space-between;font-family:var(--serif)}
+  .pc-offer .card .ch h4{font-size:13px;line-height:1.2;margin:0}
+  .pc-offer .card .ch h4 em{font-style:italic;color:var(--rust-700)}
+  .pc-offer .card .ch .k{font-size:7.5px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-500);font-family:var(--sans)}
+  .pc-offer .card .cb{padding:8px 10px;font-family:var(--serif);font-style:italic;font-size:10.5px;line-height:1.4;color:var(--ink-700)}
+  .pc-offer .card .cg{display:grid;grid-template-columns:1fr 1fr 1fr;border-top:1px solid var(--hairline);font-size:8px;font-weight:600;letter-spacing:0.08em;text-transform:uppercase}
+  .pc-offer .card .cg button{padding:7px 3px;border:0;background:var(--paper-100);color:var(--ink-700);border-right:1px solid var(--hairline);font-family:var(--sans)}
+  .pc-offer .card .cg button:last-child{border-right:0;background:var(--rust-700);color:var(--paper-100)}
+
+  /* Plan D */
+  .pd-tabs{display:flex;gap:1px;padding:10px 14px;border-bottom:1px solid var(--hairline)}
+  .pd-tabs .t{font-size:8.5px;font-weight:500;letter-spacing:0.12em;text-transform:uppercase;color:var(--ink-500);padding:4px 7px;border-radius:3px}
+  .pd-tabs .t.on{background:var(--paper-300);color:var(--ink-900);font-weight:600}
+  .pd-tabs .t .b{display:inline-block;min-width:14px;padding:0 4px;line-height:13px;font-size:8px;font-weight:600;letter-spacing:0;text-transform:none;color:var(--paper-100);background:var(--rust-700);border-radius:999px;margin-left:3px;text-align:center}
+  .pd-blk{padding:10px 14px;border-bottom:1px solid var(--hairline)}
+  .pd-blk .hd{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+  .pd-blk .hd .t{font-family:var(--serif);font-size:12.5px;line-height:1.2;margin:0}
+  .pd-blk .hd .t em{font-style:italic;color:var(--rust-700)}
+  .pd-blk .hd .k{font-size:7.5px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-500)}
+  .pd-blk .b{font-family:var(--serif);font-size:11px;line-height:1.45;color:var(--ink-700);margin:0}
+  .pd-blk .b em{font-style:italic;color:var(--rust-700)}
+  .pd-tally{display:flex;justify-content:space-between;align-items:flex-end;gap:10px;padding-top:2px}
+  .pd-tally .n{font-family:var(--serif);font-size:28px;line-height:1;font-variant-numeric:tabular-nums;color:var(--ink-900)}
+  .pd-tally .s{font-family:var(--serif);font-style:italic;font-size:10.5px;color:var(--ink-600);max-width:58%}
+
+  /* Plan E */
+  .pe-band{padding:6px 14px;display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);font-size:8px;font-weight:600;letter-spacing:0.16em;text-transform:uppercase}
+  .pe-band.liv{color:var(--ink-600)}
+  .pe-band.live{color:var(--ink-900)}
+  .pe-band.off{background:var(--rust-50);color:var(--rust-700)}
+  .pe-band.sh{background:var(--paper-300);color:var(--ink-500)}
+  .pe-band .n{color:var(--ink-500);font-weight:500;font-variant-numeric:tabular-nums}
+  .pe-row{padding:6px 14px;border-bottom:1px solid var(--hairline);display:grid;grid-template-columns:8px 1fr auto;gap:7px;align-items:flex-start;font-size:10.5px}
+  .pe-row .dot{width:6px;height:6px;border-radius:999px;margin-top:4px}
+  .pe-row.live .dot{background:var(--ink-900)}
+  .pe-row.off .dot{background:var(--rust-700);box-shadow:0 0 0 2px var(--rust-50)}
+  .pe-row.sh .dot{background:var(--ink-400);border:1px dashed var(--ink-500);box-sizing:border-box}
+  .pe-row .n{font-family:var(--serif);font-size:11.5px;line-height:1.2;margin:0}
+  .pe-row .n em{font-style:italic;color:var(--rust-700)}
+  .pe-row .w{font-family:var(--serif);font-style:italic;font-size:9.5px;color:var(--ink-500);margin:0}
+  .pe-row .m{font-size:7.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-500);text-align:right;white-space:nowrap}
+  .pe-liv{padding:6px 14px;display:flex;justify-content:space-between;font-size:10px;border-bottom:1px dashed var(--hairline)}
+  .pe-liv .k{color:var(--ink-500);font-size:8px;letter-spacing:0.14em;text-transform:uppercase;font-weight:500}
+  .pe-liv .v{font-family:var(--serif);color:var(--ink-900);font-size:11px}
+  .pe-liv .v em{font-style:italic;color:var(--rust-700)}
+
+  /* Plan F */
+  .pf-open{padding:20px 18px 16px;text-align:center;border-bottom:1px solid var(--hairline)}
+  .pf-open .k{font-size:8.5px;font-weight:600;letter-spacing:0.2em;text-transform:uppercase;color:var(--rust-700);margin-bottom:8px}
+  .pf-open h3{font-family:var(--serif);font-size:19px;line-height:1.15;margin:0 0 6px;letter-spacing:-0.01em}
+  .pf-open h3 em{font-style:italic;color:var(--rust-700)}
+  .pf-open p{font-family:var(--serif);font-style:italic;font-size:10.5px;color:var(--ink-600);margin:0}
+  .pf-card{padding:12px 14px;border-bottom:1px solid var(--hairline)}
+  .pf-card .n{font-size:8px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--rust-700);margin-bottom:4px;display:flex;gap:6px;align-items:center}
+  .pf-card .n .k{font-size:7.5px;color:var(--ink-500);padding:1px 4px;border:1px solid var(--hairline);border-radius:2px;background:var(--paper-200)}
+  .pf-card h4{font-family:var(--serif);font-size:14px;line-height:1.18;margin:0 0 4px}
+  .pf-card h4 em{font-style:italic;color:var(--rust-700)}
+  .pf-card .b{font-family:var(--serif);font-style:italic;font-size:10.5px;line-height:1.45;color:var(--ink-700);margin:0 0 8px}
+  .pf-card .ch{display:grid;grid-template-columns:1fr 1fr;gap:4px;font-size:8.5px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase}
+  .pf-card .ch button{padding:7px;border:1px solid var(--hairline-strong);border-radius:3px;background:var(--paper-100);color:var(--ink-600);font-family:var(--sans)}
+  .pf-card .ch button.y{background:var(--ink-900);color:var(--paper-100);border-color:var(--ink-900)}
+
+  /* decision panel */
+  .decide{max-width:1440px;margin:0 auto;padding:40px 48px 96px;border-top:1px solid var(--hairline)}
+  .decide h2{font-family:var(--serif);font-weight:400;font-size:28px;letter-spacing:-0.01em;margin:0 0 24px}
+  .decide h2 em{font-style:italic;color:var(--rust-700)}
+  .matrix{width:100%;border-collapse:collapse;font-size:12.5px}
+  .matrix th{text-align:left;font-size:10.5px;font-weight:600;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-500);padding:10px 12px;border-bottom:1px solid var(--hairline-strong)}
+  .matrix td{padding:11px 12px;border-bottom:1px solid var(--hairline);vertical-align:top;line-height:1.45;color:var(--ink-800)}
+  .matrix td.p{font-family:var(--serif);font-weight:500;font-style:italic;color:var(--ink-900);font-size:14px;white-space:nowrap}
+  .matrix td em{font-style:italic;color:var(--rust-700)}
+  .matrix td .s{display:inline-block;padding:2px 7px;font-size:9.5px;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-600);background:var(--paper-300);border-radius:3px;font-weight:500}
+  .matrix td .s.hi{color:var(--rust-700);background:var(--rust-50);font-weight:600}
+
+  .nav{max-width:1440px;margin:0 auto;padding:24px 48px 72px;border-top:1px solid var(--hairline);display:flex;justify-content:space-between;font-size:12px;color:var(--ink-500)}
+  .nav a{color:var(--ink-500);text-decoration:none}
+  .nav a:hover{color:var(--ink-900)}
+</style>
+</head>
+<body>
+
+<div class="gate">
+  <div class="crumbs"><a href="action-plans-index.html">Action plans</a> &nbsp;/&nbsp; Side by side</div>
+  <h1>Six plans, one <em>scan.</em></h1>
+  <p class="lead">Each phone is the signature moment of its plan, scaled to fit in one glance. Tap any tile to open the full prototype with rationale. The matrix at the bottom is the decision tool.</p>
+  <p class="meta">All six share the same AttentionSpec vocabulary and design system. What differs is the <em>policy</em>: when shadow runs, when offers surface, and how the four surfaces (Living, Today, Offer, Machinery) are mixed on screen.</p>
+</div>
+
+<div class="row">
+  <h2>All six, together.</h2>
+  <p>Read left-to-right as a spectrum: least autonomy on the left (Plan A, user authors everything), most autonomy on the right (Plan F, Donna curates a morning ritual).</p>
+
+  <div class="phones">
+
+    <!-- Plan A -->
+    <a class="phone-wrap" href="plan-a-invitation.html" style="text-decoration:none;color:inherit">
+      <div class="phone">
+        <div class="top"><div class="m">donna</div><div class="i">A</div></div>
+        <div class="sec"><div class="eye">what i know</div><div style="font-family:var(--serif);font-size:11.5px;line-height:1.4;color:var(--ink-800)">aarav · mumbai · 28 · founder, <i style="color:var(--rust-700)">antler quarter.</i></div></div>
+        <div class="sec"><div class="eye rust">today</div><div style="font-family:var(--serif);font-size:14px;line-height:1.22">today is about priya before it gets weirder.</div></div>
+        <div class="pa-prompt">
+          <h3>ask me to <em>watch</em> something.</h3>
+          <p>tell me what to keep an eye on. i won't start anything without you.</p>
+          <div class="pa-input">keep an eye on|</div>
+        </div>
+        <div style="padding:8px 14px;font-size:8px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--rust-700)">· dry-run awaiting you</div>
+        <div class="pa-preview">
+          <div class="h"><div class="t">keep an eye on <em>luca</em></div><div class="k">event_stream</div></div>
+          <div class="b">daily at 07:30. sources: email · calendar · chat.</div>
+          <div class="btns"><button>tweak</button><button>not yet</button><button>live</button></div>
+        </div>
+      </div>
+      <div class="phone-label"><b>Plan A</b>Invitation<div class="thesis">she waits to be asked</div></div>
+    </a>
+
+    <!-- Plan B -->
+    <a class="phone-wrap" href="plan-b-quiet-garden.html" style="text-decoration:none;color:inherit">
+      <div class="phone">
+        <div class="top"><div class="r">sun · 27 apr · 20:04</div><div class="i">A</div></div>
+        <div class="pb-banner">
+          <h3>your week in <em>shadow.</em></h3>
+          <p>i watched seven things quietly. before monday, which are real?</p>
+          <div style="display:flex;justify-content:space-between;align-items:baseline;padding-top:6px;border-top:1px dashed var(--hairline);margin-top:8px">
+            <div style="font-family:var(--serif);font-size:22px;line-height:1;font-variant-numeric:tabular-nums">7</div>
+            <div style="font-size:8.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-500)">proposals · 4 min</div>
+          </div>
+        </div>
+        <div class="pb-offer"><div class="row1"><span class="w r">a pattern</span><span class="k">tally</span></div><h4>track <em>skipped lunches</em></h4><p class="b">four of five weekdays. you said tuesday you'd eat better.</p><div class="chips"><span class="chip y">yes</span><span class="chip">tweak</span><span class="chip n">not me</span></div></div>
+        <div class="pb-offer"><div class="row1"><span class="w">heard 3×</span><span class="k">event_stream</span></div><h4>keep an eye on <em>luca</em></h4><p class="b">antler deck mentioned tue/wed/fri.</p><div class="chips"><span class="chip y">yes</span><span class="chip">tweak</span><span class="chip n">not me</span></div></div>
+        <div class="pb-offer"><div class="row1"><span class="w">you asked</span><span class="k">brief</span></div><h4><em>friday</em> wind&#8209;down</h4><p class="b">three-paragraph read of your week at 18:30.</p><div class="chips"><span class="chip y">yes</span><span class="chip">tweak</span><span class="chip n">not me</span></div></div>
+      </div>
+      <div class="phone-label"><b>Plan B</b>Quiet Garden<div class="thesis">harvest once a week</div></div>
+    </a>
+
+    <!-- Plan C -->
+    <a class="phone-wrap" href="plan-c-daily-offer.html" style="text-decoration:none;color:inherit">
+      <div class="phone">
+        <div class="top"><div class="m">donna</div><div class="i">A</div></div>
+        <div class="sec"><div class="eye">what i know</div><div style="font-family:var(--serif);font-size:11px;line-height:1.4;color:var(--ink-800)">aarav · mumbai · 28 · <i style="color:var(--rust-700)">antler quarter.</i></div></div>
+        <div class="pc-thesis"><div class="eye rust" style="margin-bottom:4px">today</div><p class="s">luca's been waiting since tuesday. <em>today is about the deck.</em></p></div>
+        <div class="pc-live">
+          <div class="k">calories</div><div class="v">820<small>/2,200</small></div>
+          <div class="k">water</div><div class="v">3<small>/8</small></div>
+          <div class="k">open loops</div><div class="v">2</div>
+        </div>
+        <div class="pc-offer">
+          <div class="lbl"><span class="d"></span>one thing today</div>
+          <div class="card">
+            <div class="ch"><h4>brief me before every <em>priya 1:1</em></h4><div class="k">prep_doc</div></div>
+            <div class="cb">thursdays at ten. a short read on what she was last working on and the one thing you promised her.</div>
+            <div class="cg"><button>not me</button><button>tweak</button><button>live</button></div>
+          </div>
+        </div>
+        <div style="padding:10px 14px;font-size:10px;color:var(--ink-500);font-family:var(--serif);font-style:italic">12 things running · 3 paused · machinery →</div>
+      </div>
+      <div class="phone-label"><b>Plan C</b>Daily Offer<div class="thesis">one per day, never more</div></div>
+    </a>
+
+    <!-- Plan D -->
+    <a class="phone-wrap" href="plan-d-live-today.html" style="text-decoration:none;color:inherit">
+      <div class="phone">
+        <div class="top">
+          <div class="m">donna</div>
+          <div class="pd-tabs" style="padding:0;border:0;gap:1px"><span class="t on">today</span><span class="t">offers<span class="b">7</span></span><span class="t">mach</span></div>
+        </div>
+        <div class="sec" style="background:var(--paper-50)"><div class="eye">what i know</div><div style="font-family:var(--serif);font-size:10.5px;line-height:1.4;color:var(--ink-800)">aarav · <i style="color:var(--rust-700)">antler quarter.</i></div></div>
+        <div class="sec"><div class="eye rust">thursday · 24 apr</div><div style="font-family:var(--serif);font-size:13.5px;line-height:1.22">luca's been waiting since tuesday. <i style="color:var(--rust-700)">today is about the deck.</i></div></div>
+        <div class="pd-blk">
+          <div class="hd"><p class="t">watching <em>luca</em></p><span class="k">event_stream</span></div>
+          <p class="b">replied at <em>22:11 last night.</em> tone <em>tired.</em></p>
+        </div>
+        <div class="pd-blk">
+          <div class="hd"><p class="t">before <em>priya 1:1</em></p><span class="k">prep_doc</span></div>
+          <p class="b">10:00 — in 42 min</p>
+        </div>
+        <div class="pd-blk">
+          <div class="hd"><p class="t"><em>lunches</em> skipped</p><span class="k">tally</span></div>
+          <div class="pd-tally"><div class="n">3</div><div class="s">mon, tue, wed.</div></div>
+        </div>
+        <div class="pd-blk">
+          <div class="hd"><p class="t">still <em>open</em></p><span class="k">open_loop</span></div>
+          <div style="font-size:10.5px;color:var(--ink-700);font-family:var(--serif)">call dad · 6d &nbsp; frame · 2d</div>
+        </div>
+      </div>
+      <div class="phone-label"><b>Plan D</b>Live Today<div class="thesis">home is living, offers are elsewhere</div></div>
+    </a>
+
+    <!-- Plan E -->
+    <a class="phone-wrap" href="plan-e-unified-lifecycle.html" style="text-decoration:none;color:inherit">
+      <div class="phone">
+        <div class="top"><div class="m">donna</div><div class="i">A</div></div>
+        <div class="pe-band liv"><span>What i know</span><span class="n">12 facts</span></div>
+        <div class="pe-liv"><span class="k">place</span><span class="v">mumbai — bandra</span></div>
+        <div class="pe-liv"><span class="k">season</span><span class="v"><em>antler quarter</em></span></div>
+        <div class="pe-liv"><span class="k">people</span><span class="v">priya · luca · dad</span></div>
+        <div class="pe-band live"><span>Live · running</span><span class="n">8</span></div>
+        <div class="pe-row live"><div class="dot"></div><div><p class="n">watching <em>luca</em></p><p class="w">replied 22:11, tone <em>tired</em></p></div><div class="m">11d</div></div>
+        <div class="pe-row live"><div class="dot"></div><div><p class="n">before <em>priya 1:1</em></p><p class="w">in 42 min</p></div><div class="m">4d</div></div>
+        <div class="pe-row live"><div class="dot"></div><div><p class="n"><em>lunches</em> skipped</p><p class="w">3 this week</p></div><div class="m">22d</div></div>
+        <div class="pe-band off"><span>Awaiting you</span><span class="n">2</span></div>
+        <div class="pe-row off"><div class="dot"></div><div><p class="n">track <em>caffeine after 2pm</em></p><p class="w">3 afternoons this week</p></div><div class="m">2d</div></div>
+        <div class="pe-band sh"><span>I'm still deciding</span><span class="n">5</span></div>
+        <div class="pe-row sh"><div class="dot"></div><div><p class="n">watching <em>mom</em></p><p class="w">not enough signal</p></div><div class="m">3/7</div></div>
+      </div>
+      <div class="phone-label"><b>Plan E</b>Unified Lifecycle<div class="thesis">everything visible</div></div>
+    </a>
+
+    <!-- Plan F · highlighted -->
+    <a class="phone-wrap" href="plan-f-promotion-ritual.html" style="text-decoration:none;color:inherit">
+      <div class="phone" style="border-color:var(--rust-700);box-shadow:0 0 0 1px var(--rust-700)">
+        <div class="top"><div class="r" style="font-family:var(--serif);font-style:italic;text-transform:none;letter-spacing:0;font-size:11px;color:var(--ink-600)">thursday · 24 apr · 06:58</div><div class="m">donna</div></div>
+        <div class="pf-open">
+          <div class="k">morning review · 2 min</div>
+          <h3>three things i've been <em>watching.</em></h3>
+          <p>tell me which are real.</p>
+        </div>
+        <div class="pf-card">
+          <div class="n">01<span class="k">tally</span>4/5 days</div>
+          <h4>you skipped <em>lunch</em> four of five days.</h4>
+          <p class="b">you said tuesday you'd eat better. should i count this?</p>
+          <div class="ch"><button>not me</button><button class="y">yes</button></div>
+        </div>
+        <div class="pf-card">
+          <div class="n">02<span class="k">event_stream</span>3 days</div>
+          <h4>watch <em>luca.</em></h4>
+          <p class="b">tue/wed/fri — mostly antler deck, once in hindi.</p>
+          <div class="ch"><button>not yet</button><button class="y">yes</button></div>
+        </div>
+      </div>
+      <div class="phone-label" style="color:var(--rust-700)"><b>Plan F · recommended</b>Promotion Ritual<div class="thesis">three, every morning</div></div>
+    </a>
+
+  </div>
+</div>
+
+<div class="decide">
+  <h2>The decision <em>matrix.</em></h2>
+  <table class="matrix">
+    <thead>
+      <tr>
+        <th>Plan</th>
+        <th>Shadow</th>
+        <th>Offers</th>
+        <th>Cold start</th>
+        <th>Template count</th>
+        <th>Best for</th>
+        <th>Risk</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="p">A · Invitation</td>
+        <td><span class="s">off</span></td>
+        <td>user authors only</td>
+        <td>dashboard is a big prompt; teach via examples</td>
+        <td>12 (6 dry-run · 6 live)</td>
+        <td>control-forward users</td>
+        <td>empty if unasked</td>
+      </tr>
+      <tr>
+        <td class="p">B · Quiet Garden</td>
+        <td><span class="s">aggressive</span></td>
+        <td>weekly batch of 7</td>
+        <td>14-day silent accumulation + "give me a week" card</td>
+        <td>~10 (harvest + 6 offer rows + weekday home)</td>
+        <td>weekly-review ritual</td>
+        <td>Mon–Sat feels static</td>
+      </tr>
+      <tr>
+        <td class="p">C · Daily Offer</td>
+        <td><span class="s">moderate</span></td>
+        <td>1/day, hard cap</td>
+        <td>offer slot holds a write-prompt</td>
+        <td>~8 (one template · 6 card variants · machinery)</td>
+        <td>mid-adoption trust</td>
+        <td>backlog of 9 good-but-waiting candidates</td>
+      </tr>
+      <tr>
+        <td class="p">D · Live Today</td>
+        <td><span class="s">aggressive</span></td>
+        <td>backlog at /offers</td>
+        <td>empty home; onboarding on tabs</td>
+        <td>~18 (6 live blocks + 6 inbox rows + 6 machinery)</td>
+        <td>live-first users</td>
+        <td>offers page gets ignored</td>
+      </tr>
+      <tr>
+        <td class="p">E · Unified Lifecycle</td>
+        <td><span class="s hi">aggressive &amp; visible</span></td>
+        <td>ambient row in the scroll</td>
+        <td>Living band is the teaching surface</td>
+        <td>~24 (6 cards × 4 states)</td>
+        <td>power users, legibility</td>
+        <td>shadow rows feel intrusive</td>
+      </tr>
+      <tr>
+        <td class="p">F · Promotion Ritual</td>
+        <td><span class="s hi">aggressive, silent</span></td>
+        <td>3 per morning, user-triggered</td>
+        <td>micro-interview prompts in the 3 slots</td>
+        <td>~12 (ritual page + 6 offer bodies + 3 prompts + 6 today blocks)</td>
+        <td>high-agency mornings</td>
+        <td>missed mornings stall urgent attentions</td>
+      </tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="nav">
+  <a href="action-plans-index.html">← Index</a>
+  <span>Side by side · 6 plans</span>
+  <a href="plan-f-promotion-ritual.html">Plan F · recommended →</a>
+</div>
+
+</body>
+</html>

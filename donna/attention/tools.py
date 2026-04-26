@@ -6,6 +6,7 @@ call identical code.
 """
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from uuid import UUID, uuid4
@@ -23,6 +24,109 @@ class CreateResult:
     authored_via: str
     authored_confidence: float
     preview: DryRunResult
+    # True when the request matched an existing LIVE PING with the same
+    # normalised subject created in the last ``_PING_DEDUP_WINDOW_S``
+    # seconds. The returned ``attention`` is the EXISTING row, not a
+    # newly-saved one. Callers should NOT re-materialise schedule fires
+    # in this case — the existing attention's fire is already queued.
+    reused: bool = False
+
+
+# Two PINGs for the same subject within this window collapse to one.
+# 30 minutes is wide enough to catch "remind me in 15 min to sleep" /
+# "remind me in 30 min to sleep" said back-to-back; tight enough that
+# a deliberate refresh hours later still creates a fresh row.
+_PING_DEDUP_WINDOW_S = 30 * 60
+
+# Stopwords + time-words stripped before comparing PING subjects.
+# The author often writes the whole user sentence into ``subject.name``
+# ("remind me in 30 minutes to sleep"), so naive equality misses
+# obvious dupes. After stripping these, what's left is the topic
+# the user actually cares about ("sleep").
+_PING_SUBJECT_STOPWORDS: frozenset[str] = frozenset(
+    {
+        "a", "about", "after", "all", "an", "and", "any", "around", "as", "at",
+        "before", "by", "for", "from", "in", "into", "it", "later", "me", "my",
+        "now", "of", "on", "or", "over", "remind", "reminder", "send",
+        "should", "soon", "the", "then", "there", "these", "this", "those",
+        "to", "today", "tomorrow", "tonight", "tongiht", "until", "us",
+        "with", "you", "your",
+        # time words
+        "am", "pm", "second", "seconds", "sec", "secs",
+        "minute", "minutes", "min", "mins",
+        "hour", "hours", "hr", "hrs",
+        "morning", "afternoon", "evening", "night",
+        "monday", "tuesday", "wednesday", "thursday", "friday",
+        "saturday", "sunday",
+    }
+)
+_NUMBER_TOKEN_RE = re.compile(r"^\d+$")
+
+
+def _ping_subject_tokens(text: str) -> set[str]:
+    """Distinctive tokens left over after stripping numbers and the
+    boilerplate words people use to phrase reminders. Used by PING
+    near-match dedup so two "sleep" reminders collapse regardless of
+    how the user phrased the time delta.
+    """
+    if not text:
+        return set()
+    cleaned = re.sub(r"[^\w\s]", " ", text.lower())
+    tokens: set[str] = set()
+    for raw in cleaned.split():
+        token = raw.strip()
+        if not token:
+            continue
+        if _NUMBER_TOKEN_RE.match(token):
+            continue
+        if token in _PING_SUBJECT_STOPWORDS:
+            continue
+        tokens.add(token)
+    return tokens
+
+
+def _find_recent_ping_match(
+    *,
+    store: AttentionStore,
+    user_id: str,
+    subject_name: str,
+) -> Attention | None:
+    """Look for an existing LIVE PING within the dedup window whose
+    subject overlaps in distinctive tokens with ``subject_name``.
+
+    User-id matching uses the same UUID coercion as ``create_attention``
+    so CLI handles like ``"cli-user"`` agree with stored UUID values.
+    Returns the most recent match.
+    """
+    from donna.attention.vocabulary import CardType
+
+    target_tokens = _ping_subject_tokens(subject_name)
+    if not target_tokens:
+        return None
+
+    canonical_user_id = str(_coerce_uuid(user_id))
+    now = datetime.now(timezone.utc)
+    candidates: list[Attention] = []
+    for a in store.list(user_id=canonical_user_id, status=AttentionStatus.LIVE):
+        if a.spec.card is not CardType.PING:
+            continue
+        existing_subj = (
+            getattr(getattr(a.spec, "subject", None), "name", "") or ""
+        )
+        existing_tokens = _ping_subject_tokens(existing_subj)
+        if not existing_tokens or not (existing_tokens & target_tokens):
+            continue
+        created = a.created_at
+        if created is None:
+            continue
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        delta = (now - created).total_seconds()
+        if 0 <= delta <= _PING_DEDUP_WINDOW_S:
+            candidates.append(a)
+    if not candidates:
+        return None
+    return sorted(candidates, key=lambda a: a.created_at, reverse=True)[0]
 
 
 async def create_attention(
@@ -32,16 +136,45 @@ async def create_attention(
     store: AttentionStore | None = None,
     auto_live: bool = True,
 ) -> CreateResult:
-    """Run the full pipeline and persist the resulting Attention."""
+    """Run the full pipeline and persist the resulting Attention.
+
+    For PING cards we do a near-match dedup against existing LIVE
+    PINGs with the same normalised subject created in the last
+    ``_PING_DEDUP_WINDOW_S`` seconds. When a match is found we return
+    the EXISTING attention with ``reused=True`` instead of saving a
+    duplicate. Caller is responsible for NOT re-materialising the
+    schedule fire in that case.
+    """
     store = store or AttentionStore()
     tz = await load_user_timezone(user_id)
     ctx = UserContext(user_id=user_id, user_tz=tz) if tz else UserContext(user_id=user_id)
     pipeline = await run_attention_pipeline(raw_intent, ctx)
+    spec = pipeline.authored.spec
+
+    # PING dedup — only after authoring so we know the canonical
+    # subject the LLM picked. Non-PING cards skip this branch.
+    from donna.attention.vocabulary import CardType
+
+    if spec.card is CardType.PING:
+        subject_name = (
+            getattr(getattr(spec, "subject", None), "name", "") or ""
+        )
+        match = _find_recent_ping_match(
+            store=store, user_id=user_id, subject_name=subject_name
+        )
+        if match is not None:
+            return CreateResult(
+                attention=match,
+                authored_via=pipeline.authored.via,
+                authored_confidence=pipeline.authored.confidence,
+                preview=pipeline.preview,
+                reused=True,
+            )
 
     user_uuid = _coerce_uuid(user_id)
     attention = Attention(
         user_id=user_uuid,
-        spec=pipeline.authored.spec,
+        spec=spec,
         origin=AttentionOrigin.USER_EXPLICIT,
         status=AttentionStatus.LIVE if auto_live else AttentionStatus.SPEC_DRAFTED,
         created_at=datetime.now(timezone.utc),

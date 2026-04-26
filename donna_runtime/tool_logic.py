@@ -17,8 +17,10 @@ from delivery.messages import (
     OutboundMessage,
     Section,
     TextMessage,
+    VoiceResponseMarker,
 )
 
+from .config import IMAGE_LOCKED_STYLE
 from .hooks import _CURRENT_USER_ID, _OUTBOUND_BUFFER
 from .voice_filter import filter_burst_items
 
@@ -174,10 +176,15 @@ def _build_outbound(item: Any) -> OutboundMessage | Delay | None:
         return ListMessage(body=body, button_label=button_label, sections=sections)
 
     if item_type == "image":
+        media_id = str(item.get("media_id", "")).strip()
         url = str(item.get("url", "")).strip()
-        if not url:
+        if not media_id and not url:
             return None
         caption = str(item.get("caption", "")).strip()
+        if media_id:
+            return ImageMessage(
+                media_id=media_id, caption=caption, reply_to_message_id=reply_to
+            )
         return ImageMessage(url=url, caption=caption, reply_to_message_id=reply_to)
 
     if item_type == "delay":
@@ -187,6 +194,9 @@ def _build_outbound(item: Any) -> OutboundMessage | Delay | None:
             return None
         # Schema enforces 0.5–4.0; clamp defensively.
         return Delay(seconds=max(0.0, min(seconds, 10.0)))
+
+    if item_type == "voice_response":
+        return VoiceResponseMarker()
 
     return None
 
@@ -234,7 +244,7 @@ def render_burst_items_text(items: Any) -> list[str]:
         if not isinstance(item, Mapping):
             continue
         t = str(item.get("type", "")).lower()
-        if t in ("delay", ""):
+        if t in ("delay", "voice_response", ""):
             continue
         body = str(item.get("body", "")).strip()
         if t == "text":
@@ -281,3 +291,117 @@ async def send_burst_result(args: Mapping[str, Any]) -> dict[str, list[dict[str,
     if buffer is not None:
         buffer.extend(constructed)
     return text_content(send_burst_text(constructed))
+
+
+# ── image prompt composer ────────────────────────────────────────────────────
+
+_IMAGE_HARD_NEGATIVES = (
+    "no embedded text in the image, no photorealistic faces, no brand logos"
+)
+
+# Soft grounding slots — values are surfaced anonymously as background color,
+# never as identity. `preferred_name` is deliberately excluded: we don't want
+# names rendered into images.
+_IMAGE_GROUNDING_KEYS: tuple[str, ...] = (
+    "current_city",
+    "home_city",
+    "life_stage",
+    "profession",
+)
+
+_MAX_INTENT_CHARS = 300
+_MAX_FACT_CHARS = 60
+_MAX_GROUNDING_SLOTS = 3
+
+
+def _clean_intent(intent: str) -> str:
+    text = " ".join((intent or "").split())
+    if len(text) > _MAX_INTENT_CHARS:
+        text = text[:_MAX_INTENT_CHARS].rstrip() + "…"
+    return text
+
+
+def _extract_fact_value(fact: Any) -> str:
+    """UserFact is a TypedDict with `value`; tolerate plain strings too."""
+    if isinstance(fact, Mapping):
+        value = fact.get("value", "")
+    else:
+        value = fact or ""
+    text = " ".join(str(value).split())
+    if len(text) > _MAX_FACT_CHARS:
+        text = text[:_MAX_FACT_CHARS].rstrip() + "…"
+    return text
+
+
+def _grounding_clause(facts: Mapping[str, Any]) -> str:
+    """Pull up to 3 soft anchors from known fact slots. Empty string if none.
+
+    Uses deterministic priority order from `_IMAGE_GROUNDING_KEYS` so unit tests
+    are stable. `preferred_name` is intentionally skipped. `current_city`
+    wins over `home_city` — once a city slot fires, the other is skipped so
+    we never emit "set in delhi, set in bangalore".
+    """
+    slots: list[str] = []
+    seen_values: set[str] = set()
+    categories_used: set[str] = set()
+    for key in _IMAGE_GROUNDING_KEYS:
+        if len(slots) >= _MAX_GROUNDING_SLOTS:
+            break
+        raw = facts.get(key) if facts else None
+        value = _extract_fact_value(raw)
+        if not value or value in seen_values:
+            continue
+        category = "city" if key in ("current_city", "home_city") else key
+        if category in categories_used:
+            continue
+        seen_values.add(value)
+        categories_used.add(category)
+        if category == "city":
+            slots.append(f"set in {value}")
+        elif key == "life_stage":
+            slots.append(f"a {value} moment")
+        elif key == "profession":
+            slots.append(f"hints of a {value} life")
+    if not slots:
+        return ""
+    return "background: " + ", ".join(slots)
+
+
+def _compose_image_prompt(intent: str, facts: Mapping[str, Any] | None = None) -> str:
+    """Deterministic template composer for the fal.ai Flux prompt.
+
+    Shape:  "<STYLE>. <INTENT>. [<GROUNDING>. ]<HARD_NEGATIVES>."
+
+    Pure function — no network, no LLM, no user_id lookup. The async wrapper
+    `compose_image_prompt` handles the DB fetch and then delegates here so the
+    template is unit-testable without a DB.
+    """
+    scene = _clean_intent(intent)
+    if not scene:
+        raise ValueError("intent is empty")
+    grounding = _grounding_clause(facts or {})
+    parts = [IMAGE_LOCKED_STYLE.rstrip("."), scene.rstrip(".")]
+    if grounding:
+        parts.append(grounding)
+    parts.append(_IMAGE_HARD_NEGATIVES)
+    return ". ".join(parts) + "."
+
+
+async def compose_image_prompt(user_id: str | None, intent: str) -> str:
+    """Async wrapper that resolves `user_id` → facts, then composes.
+
+    Fail-soft: if the DB read fails or user is unknown, we still produce a
+    useful prompt from the intent alone (grounding is empty).
+    """
+    facts: Mapping[str, Any] = {}
+    if user_id:
+        try:
+            from backend.memory.user_facts.api import get_user_facts
+
+            facts = await get_user_facts(user_id) or {}
+        except Exception:
+            logger.exception(
+                "compose_image_prompt: get_user_facts failed; composing without grounding"
+            )
+            facts = {}
+    return _compose_image_prompt(intent, facts)

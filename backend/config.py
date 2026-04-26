@@ -26,6 +26,7 @@ class Settings:
     supermemory_api_key: str
     anthropic_api_key: str
     openai_api_key: str
+    fal_key: str
     falkordb_host: str
     falkordb_port: int
     falkordb_username: str
@@ -46,6 +47,7 @@ def get_settings() -> Settings:
         supermemory_api_key=_get("SUPERMEMORY_API_KEY"),
         anthropic_api_key=_get("ANTHROPIC_API_KEY"),
         openai_api_key=_get("OPENAI_API_KEY"),
+        fal_key=_get("FAL_KEY"),
         falkordb_host=_get("FALKORDB_HOST", "localhost"),
         falkordb_port=int(_get("FALKORDB_PORT", "6379")),
         falkordb_username=_get("FALKORDB_USERNAME", ""),

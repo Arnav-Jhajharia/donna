@@ -1,12 +1,19 @@
 """CRUD for the integrations table — source of truth for [INTEGRATIONS]."""
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Sequence
 
 from sqlalchemy import select
 
 from db.models import Integration
+
+# How long an issued OAuth redirect URL stays "fresh" — re-asks within this
+# window get the cached URL back instead of a fresh chain-initiation.
+# Composio's short-link endpoints expire fast; 4 minutes is safely under
+# their typical TTL and long enough to cover the user re-asking after
+# tapping nothing for a few seconds.
+REDIRECT_URL_FRESHNESS_SECONDS = 4 * 60
 
 
 def _utcnow() -> datetime:
@@ -21,8 +28,27 @@ def _session_factory():
     return async_session
 
 
-async def upsert_pending(user_id: str, provider: str, product: str) -> None:
-    """Create a pending integration row if missing; no-op if already exists."""
+def is_redirect_url_fresh(row: Integration | None) -> bool:
+    """Returns True if the row has a cached URL issued within the freshness
+    window. Stale or missing URLs return False so the caller knows to
+    re-issue the chain."""
+    if row is None or not row.redirect_url or row.redirect_url_issued_at is None:
+        return False
+    age = _utcnow() - row.redirect_url_issued_at
+    return age <= timedelta(seconds=REDIRECT_URL_FRESHNESS_SECONDS)
+
+
+async def upsert_pending(
+    user_id: str,
+    provider: str,
+    product: str,
+    *,
+    redirect_url: str | None = None,
+) -> None:
+    """Mark a pending integration. Creates the row if missing; refreshes
+    redirect_url + redirect_url_issued_at when a new URL is supplied so
+    later turns can reuse the in-flight URL instead of re-initiating the
+    Composio chain."""
     async with _session_factory()() as session:
         existing = (
             await session.execute(
@@ -32,16 +58,48 @@ async def upsert_pending(user_id: str, provider: str, product: str) -> None:
                 .where(Integration.product == product)
             )
         ).scalar_one_or_none()
-        if existing is not None:
-            return
-        session.add(
-            Integration(
-                user_id=user_id,
-                provider=provider,
-                product=product,
-                status="pending",
+        now = _utcnow()
+        if existing is None:
+            session.add(
+                Integration(
+                    user_id=user_id,
+                    provider=provider,
+                    product=product,
+                    status="pending",
+                    redirect_url=redirect_url,
+                    redirect_url_issued_at=now if redirect_url else None,
+                )
             )
-        )
+            await session.commit()
+            return
+        if redirect_url is None:
+            return
+        # Always refresh the cached URL when a new one is supplied — the
+        # caller has just successfully initiated a (possibly fresh) chain
+        # and the new URL is the one we want to hand back next time.
+        existing.redirect_url = redirect_url
+        existing.redirect_url_issued_at = now
+        existing.updated_at = now
+        await session.commit()
+
+
+async def clear_redirect_url(user_id: str, provider: str, product: str) -> None:
+    """Wipe the cached redirect URL — used when a row flips connected or
+    when an admin force-resets a pending row."""
+    async with _session_factory()() as session:
+        row = (
+            await session.execute(
+                select(Integration)
+                .where(Integration.user_id == user_id)
+                .where(Integration.provider == provider)
+                .where(Integration.product == product)
+            )
+        ).scalar_one_or_none()
+        if row is None:
+            return
+        row.redirect_url = None
+        row.redirect_url_issued_at = None
+        row.updated_at = _utcnow()
         await session.commit()
 
 
@@ -67,6 +125,9 @@ async def mark_connected(
         row.connected_at = _utcnow()
         row.updated_at = _utcnow()
         row.last_error = None
+        # Connected rows have no in-flight URL — drop the cached one.
+        row.redirect_url = None
+        row.redirect_url_issued_at = None
         await session.commit()
 
 

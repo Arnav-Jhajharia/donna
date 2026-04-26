@@ -55,8 +55,45 @@ from api.composio_webhook import router as _composio_router  # noqa: E402
 
 app.include_router(_composio_router)
 
+# Dashboard read surface — the Next.js renderer polls this endpoint.
+from api.dashboard_routes import router as _dashboard_router  # noqa: E402
+
+app.include_router(_dashboard_router)
+
+# Auth — magic-link redemption + OTP verification. Issues the session cookie.
+from api.auth_routes import router as _auth_router  # noqa: E402
+
+app.include_router(_auth_router)
+
+# Voice surface — OpenAI-compatible streaming chat-completions for the
+# LiveKit voice agent. Mounts both the new /voice/* surface and a
+# /vapi/* legacy alias so older clients keep working during the rename.
+from api.voice_routes import (  # noqa: E402
+    router as _voice_router,
+    legacy_router as _voice_legacy_router,
+)
+
+app.include_router(_voice_router)
+app.include_router(_voice_legacy_router)
+
+# Local browser test client — mints LiveKit join tokens using the keys
+# in .env and serves a single-page client at /voice/test. Lets us
+# bypass agents-playground entirely.
+from api.voice_test_routes import router as _voice_test_router  # noqa: E402
+
+app.include_router(_voice_test_router)
+
+# Admin observability surface — read-only, HTTP-Basic-gated against
+# ADMIN_USER/ADMIN_PASSWORD env vars. Drives the Next.js /admin pages.
+from api.admin_routes import router as _admin_router  # noqa: E402
+
+app.include_router(_admin_router)
+
 _wa = WhatsAppChannel()
 _brief_refresh_task: asyncio.Task | None = None
+_living_profile_task: asyncio.Task | None = None
+_attention_worker_task: asyncio.Task | None = None
+_spawner_worker_task: asyncio.Task | None = None
 
 
 # ── Per-phone pipeline coordination ──────────────────────────────────────────
@@ -279,9 +316,22 @@ async def _replay_queued_inbox() -> None:
             await _dispatch(payload, row.id)
 
 
+def _api_owns_inprocess_workers() -> bool:
+    """Should the API process spawn synthesis/attention worker tasks itself?
+
+    True when ``DONNA_PROCESS_ROLE`` is unset or ``api`` — the dev / single-pod
+    convention where one process does everything. False when the role is
+    explicitly one of the worker roles (``synthesis``, ``attention``,
+    ``reminders``) — in production those run as standalone scripts via
+    ``scripts/run_*_worker.py`` and the API must NOT double-spawn them.
+    """
+    role = (os.environ.get("DONNA_PROCESS_ROLE") or "").strip().lower()
+    return role in ("", "api")
+
+
 @app.on_event("startup")
 async def _startup() -> None:
-    global _brief_refresh_task
+    global _brief_refresh_task, _living_profile_task, _attention_worker_task, _spawner_worker_task
     try:
         await create_tables()
     except Exception:
@@ -290,7 +340,17 @@ async def _startup() -> None:
         await _replay_queued_inbox()
     except Exception:
         logger.exception("startup: inbox replay failed — continuing")
-    if os.environ.get("DONNA_BRIEF_REFRESH") == "1":
+
+    api_owns_workers = _api_owns_inprocess_workers()
+    if not api_owns_workers:
+        role = os.environ.get("DONNA_PROCESS_ROLE")
+        logger.info(
+            "startup: DONNA_PROCESS_ROLE=%s → API will NOT spawn synthesis/attention workers; "
+            "they run as standalone scripts/run_*_worker.py processes",
+            role,
+        )
+
+    if os.environ.get("DONNA_BRIEF_REFRESH") == "1" and api_owns_workers:
         try:
             from backend.memory.jobs.temporal_refresh import run_forever as brief_run_forever
 
@@ -309,12 +369,97 @@ async def _startup() -> None:
             )
         except Exception:
             logger.exception("startup: failed to start brief refresh")
+    if os.environ.get("DONNA_LIVING_PROFILE_REFRESH") == "1" and api_owns_workers:
+        try:
+            from backend.memory.jobs.synthesis_worker import (
+                DEFAULT_POLL_INTERVAL_S,
+                run_forever as synthesis_run_forever,
+            )
+
+            interval_s = float(
+                os.environ.get("DONNA_LIVING_PROFILE_INTERVAL_S")
+                or DEFAULT_POLL_INTERVAL_S
+            )
+            _living_profile_task = asyncio.create_task(
+                synthesis_run_forever(poll_interval_s=interval_s),
+                name="living_profile_refresh",
+            )
+            logger.info(
+                "startup: living profile refresh enabled (interval=%.0fs)",
+                interval_s,
+            )
+        except Exception:
+            logger.exception("startup: failed to start living profile refresh")
+    if os.environ.get("DONNA_ATTENTION_SCHEDULER") == "1" and api_owns_workers:
+        try:
+            from backend.memory.jobs.attention_worker import (
+                DEFAULT_POLL_INTERVAL_S as ATTENTION_POLL_DEFAULT,
+                PROMOTE_INTERVAL_SEC,
+                PROPOSE_INTERVAL_SEC,
+                run_forever as attention_run_forever,
+            )
+
+            poll_s = float(
+                os.environ.get("DONNA_ATTENTION_POLL_S") or ATTENTION_POLL_DEFAULT
+            )
+            propose_s = float(
+                os.environ.get("DONNA_ATTENTION_PROPOSE_S")
+                or PROPOSE_INTERVAL_SEC
+            )
+            promote_s = float(
+                os.environ.get("DONNA_ATTENTION_PROMOTE_S")
+                or PROMOTE_INTERVAL_SEC
+            )
+            _attention_worker_task = asyncio.create_task(
+                attention_run_forever(
+                    poll_interval_s=poll_s,
+                    propose_interval_s=propose_s,
+                    promote_interval_s=promote_s,
+                ),
+                name="attention_worker",
+            )
+            logger.info(
+                "startup: attention scheduler enabled (poll=%.0fs, propose=%.0fs, promote=%.0fs)",
+                poll_s,
+                propose_s,
+                promote_s,
+            )
+        except Exception:
+            logger.exception("startup: failed to start attention scheduler")
+    if os.environ.get("DONNA_SPAWNERS") == "1" and api_owns_workers:
+        try:
+            from backend.memory.jobs.spawner_worker import (
+                DEFAULT_POLL_INTERVAL_S as SPAWNER_POLL_DEFAULT,
+                SWEEP_INTERVAL_SEC,
+                run_forever as spawner_run_forever,
+            )
+
+            poll_s = float(
+                os.environ.get("DONNA_SPAWNER_POLL_S") or SPAWNER_POLL_DEFAULT
+            )
+            sweep_s = float(
+                os.environ.get("DONNA_SPAWNER_SWEEP_S") or SWEEP_INTERVAL_SEC
+            )
+            _spawner_worker_task = asyncio.create_task(
+                spawner_run_forever(
+                    poll_interval_s=poll_s,
+                    sweep_interval_s=sweep_s,
+                ),
+                name="spawner_worker",
+            )
+            logger.info(
+                "startup: spawner worker enabled (sweep=%.0fs, poll=%.0fs)",
+                sweep_s,
+                poll_s,
+            )
+        except Exception:
+            logger.exception("startup: failed to start spawner worker")
     logger.info("donna (claw-code) started")
 
 
 @app.on_event("shutdown")
 async def _shutdown() -> None:
-    global _brief_refresh_task
+    global _brief_refresh_task, _living_profile_task, _attention_worker_task, _spawner_worker_task
     if _brief_refresh_task is not None:
         _brief_refresh_task.cancel()
         try:
@@ -322,6 +467,27 @@ async def _shutdown() -> None:
         except Exception:
             pass
         _brief_refresh_task = None
+    if _living_profile_task is not None:
+        _living_profile_task.cancel()
+        try:
+            await _living_profile_task
+        except Exception:
+            pass
+        _living_profile_task = None
+    if _attention_worker_task is not None:
+        _attention_worker_task.cancel()
+        try:
+            await _attention_worker_task
+        except Exception:
+            pass
+        _attention_worker_task = None
+    if _spawner_worker_task is not None:
+        _spawner_worker_task.cancel()
+        try:
+            await _spawner_worker_task
+        except Exception:
+            pass
+        _spawner_worker_task = None
 
 
 @app.get("/health")

@@ -5,10 +5,10 @@ WhatsApp-native personal AI. She/her. Thinking partner with persistent memory an
 ## Non-negotiables
 
 - Single tool-use loop via Claude Agent SDK. No LangGraph. No Perceive-Act. No pre-computed situational briefs.
-- Main model: Haiku 4.5. Sonnet only for specific upgrade cases. Opus only inside justified subagents.
-- Living Profile lives in the cached system prompt. Never auto-reloaded mid-turn.
+- Main model: Sonnet 4.6 across all slots (reactive, proactive, upgrade). Haiku 4.5 only for offline eval/awareness scoring. Opus only inside justified subagents.
+- Living Profile is rendered into the system prompt at the start of every turn from `backend.memory.user_facts.rendering.load_and_render`. It is not auto-reloaded mid-turn.
 - Every capability is a tool. Every deterministic side-effect is a hook. Integrations via MCP.
-- No chained LLM calls outside the BRAIN loop unless inside a declared subagent.
+- LLM calls outside the BRAIN loop are only allowed in (a) declared subagents or (b) async post-turn hooks (e.g. user-facts extraction). Anything else is drift — flag it.
 
 ## Voice
 
@@ -24,7 +24,7 @@ WhatsApp-native personal AI. She/her. Thinking partner with persistent memory an
 
 WhatsApp inbound → Ingress (deterministic)
 → BRAIN loop (SDK tool-use loop)
-→ tools: retrieval | action | dashboard | terminators | subagent
+→ tools: retrieval | action | dashboard | terminators | meta | web | media
 → hooks: PreToolUse guards | PostToolUse side-effects
 → Egress (WhatsApp out + memory writes)
 
@@ -32,15 +32,18 @@ Proactive triggers invoke the same loop with `mode="proactive"`.
 
 ## Tool categories
 
-1. Retrieval — recall_*, read_*, list_*
-2. Action — update_*, schedule_*, track, log_*
-3. Dashboard — add_insight_card, flag_attention, update_living_profile
-4. Terminators — send_burst, stay_silent, offer
-5. Meta / subagent — dig_deeper, compile_brief, draft_high_stakes_message
+1. Retrieval — `recall`, `recall_episodic`, `recall_graph`, `read_tracker`, `read_situation_brief`, `list_open_loops`, `list_calendar`, `check_calendar`
+2. Action — `log_observation`, `track_open_loop`, `close_open_loop`, `schedule_reminder`, `schedule`, `remember`, `set_timezone`, `resolve_time_expression`, `watch`
+3. Terminators — `send_burst`, `stay_silent`, `offer`
+4. Meta / subagent — `dig_deeper`, `compile_brief`, `draft_high_stakes_message`
+5. Web / research — `web_search`, `agentic_web_search`, `research`
+6. Media — `image`, voice (`voice_synth`, `voice_intent`)
 
-Every tool description includes when-to-use AND when-NOT-to-use clauses.
+Every tool description must include when-to-use AND when-NOT-to-use clauses. Audit periodically — drift here is silent.
 
-## Memory layers (nine backends, all active)
+## Memory layers
+
+Active backends:
 
 1. Graphiti (entities + graph, FalkorDB)
 2. Supermemory (episodic)
@@ -51,15 +54,26 @@ Every tool description includes when-to-use AND when-NOT-to-use clauses.
 7. User facts / Living Profile (Postgres JSONB)
 8. Chat messages (Postgres)
 9. Calendar (Postgres synced from Google)
+10. Web (Exa-backed search + research pipeline)
+
+Unified read surface: `recall(query, purpose=auto)` fans out across observations, open_loops, Graphiti, and Supermemory episodic with RRF rerank. Use `purpose=observations|open_loops|situation_brief` to force a lane. Use specific `recall_*` only when the backend matters.
+
+Unified write surface: `remember(kind=observation|open_loop|...)`. Profile facts and preferences are off-limits to `remember` — those are written by the post-turn extractor hook.
 
 ## Directory layout
 
-- `donna_runtime/` — BRAIN loop, tools, hooks, context builder
+- `donna_runtime/` — BRAIN loop, tools, hooks, context builder, prompt assembly
+- `donna/` — subsystems (e.g. `attention/`)
+- `backend/` — memory backends, retrieval pipeline, synthesis jobs, web pipeline
+- `db/` — SQLAlchemy models and migrations
+- `ingress/` — WhatsApp inbound + deterministic preprocessing
+- `delivery/` — WhatsApp outbound, message formatting
+- `api/` — HTTP surface
 - `dashboard/` — Next.js web + design system
+- `donna-design-system/` — design tokens / shared primitives
 - `docs/` — specs and design docs
+- `scripts/` — operational scripts
 - `tests/` — pytest suite
-- `archive/` — historical; DO NOT read or import from here
-- `.port_sessions/` — session work product; DO NOT read from here
 
 ## Never do
 
@@ -67,16 +81,15 @@ Every tool description includes when-to-use AND when-NOT-to-use clauses.
 - Never add LangGraph or LangChain.
 - Never wrap the SDK in a second framework.
 - Never pre-generate a situational brief before the loop.
-- Never inject memory into context without a tool call.
+- Never inject memory into context without a tool call (the only exceptions are USER MODEL, SITUATION BRIEF, TODAY block, and RECENT CHAT — all assembled by the context builder).
 - Never call Donna an "AI assistant."
 - Never use em dashes in her voice.
 - Never ship a tool without when-NOT-to-use in its description.
 - Never merge without running evals.
-- Never read or import from archive/.
 
 ## Cost discipline
 
-Per-turn cost on Haiku with caching should be under $0.01 for reactive turns. If higher: wrong model, tool_search on small catalog, loop hitting max_turns, or bloated descriptions. Diagnose the cause.
+Per-turn cost on Sonnet 4.6 with prompt caching should stay in the low single-digit cents for reactive turns. If higher: bloated context (oversized USER MODEL, RECENT CHAT too long), loop hitting max_turns, redundant tool calls, or `recall` being invoked when USER MODEL/SITUATION BRIEF already had the answer. Diagnose the cause; do not paper over with a smaller model.
 
 ## How to work here
 
@@ -84,9 +97,9 @@ When adding a tool:
 1. Write the tool description first (when-to-use + when-NOT-to-use + schema)
 2. Decide agency level (L0 / L1 / L2)
 3. Decide render target (WhatsApp / dashboard / internal state)
-4. Implement in donna_runtime/tools.py (or tool_logic.py for pure logic)
+4. Implement in `donna_runtime/tools.py` (or `tool_logic.py` for pure logic)
 5. Add a unit test
-6. Update primitives.md
+6. Update `primitives.md`
 
 When fixing a behavior:
 1. Diagnose: tool-description problem, system-prompt problem, or missing-tool problem
@@ -94,24 +107,12 @@ When fixing a behavior:
 
 When unsure: stop and ask. Do not invent framework abstractions.
 
+## graphify
 
-## Cost discipline
+This project has a graphify knowledge graph at graphify-out/.
 
-Per-turn cost on Haiku with caching should be under $0.01 for reactive turns. If higher: wrong model, tool_search on small catalog, loop hitting max_turns, or bloated descriptions. Diagnose the cause.
-
-## How to work here
-
-When adding a tool:
-1. Write the tool description first (when-to-use + when-NOT-to-use + schema)
-2. Decide agency level (L0 / L1 / L2)
-3. Decide render target (WhatsApp / dashboard / internal state)
-4. Implement in donna_runtime/tools.py (or tool_logic.py for pure logic)
-5. Add a unit test
-6. Update primitives.md
-
-When fixing a behavior:
-1. Diagnose: tool-description problem, system-prompt problem, or missing-tool problem
-2. Fix at the diagnosed layer. Do not add a pipeline stage.
-
-When unsure: stop and ask. Do not invent framework abstractions.
-EOF
+Rules:
+- Before answering architecture or codebase questions, read graphify-out/GRAPH_REPORT.md for god nodes and community structure
+- If graphify-out/wiki/index.md exists, navigate it instead of reading raw files
+- For cross-module "how does X relate to Y" questions, prefer `graphify query "<question>"`, `graphify path "<A>" "<B>"`, or `graphify explain "<concept>"` over grep — these traverse the graph's EXTRACTED + INFERRED edges instead of scanning files
+- After modifying code files in this session, run `graphify update .` to keep the graph current (AST-only, no API cost)

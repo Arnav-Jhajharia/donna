@@ -69,6 +69,15 @@ class TurnTrace:
         self.result_text: str | None = None
         self.result_is_error: bool | None = None
         self.runtime_error: str | None = None
+        self.system_prompt: str | None = None
+        self.wrapped_user_prompt: str | None = None
+        self.prompt_metadata: dict[str, Any] = {}
+        # Channel handles for deterministic side-effects from hooks
+        # (e.g., PreToolUse "drawing this..." ack on the image tool).
+        # `user_phone` is the user's WA phone; distinct from
+        # config.target_phone which controls runner delivery semantics.
+        self.user_phone: str | None = None
+        self.inbound_wa_message_id: str | None = None
         self._start = time.time()
         self._tool_call_index: dict[str, dict[str, Any]] = {}
         self._tool_result_index: dict[str, dict[str, Any]] = {}
@@ -165,6 +174,17 @@ class TurnTrace:
         if self.duration_ms == 0:
             self.duration_ms = self._elapsed_ms()
 
+    def record_prompts(
+        self,
+        *,
+        system_prompt: str,
+        wrapped_user_prompt: str,
+        metadata: dict[str, Any] | None = None,
+    ) -> None:
+        self.system_prompt = system_prompt
+        self.wrapped_user_prompt = wrapped_user_prompt
+        self.prompt_metadata = dict(metadata or {})
+
     def has_terminal_tool_call(self) -> bool:
         return bool(self.tool_calls and self.tool_calls[-1]["tool"].endswith(TERMINATOR_TOOL_SUFFIXES))
 
@@ -181,6 +201,9 @@ class TurnTrace:
             "result_text": self.result_text,
             "result_is_error": self.result_is_error,
             "runtime_error": self.runtime_error,
+            "system_prompt": self.system_prompt,
+            "wrapped_user_prompt": self.wrapped_user_prompt,
+            "prompt_metadata": self.prompt_metadata,
             "total_cost_usd": self.total_cost_usd,
             "usage": self.usage,
             "cache_creation_input_tokens": self.cache_creation_input_tokens,

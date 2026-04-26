@@ -296,19 +296,9 @@ async def close_open_loop(args):
     return text_content(f"closed loop {lid}.")
 
 
-@tool(
-    "schedule_reminder",
-    (
-        "Schedule a one-shot reminder. Returns confirmation with time. "
-        "USE WHEN: the user wants a timed nudge ('remind me tomorrow at 9'). "
-        "DO NOT USE: for open-ended commitments without a time (use track_open_loop)."
-    ),
-    {"when": str, "text": str},
-)
-async def schedule_reminder(args):
-    when = str(args.get("when", "")).strip() or "unspecified"
-    txt = str(args.get("text", "")).strip() or "(empty)"
-    return text_content(f"scheduled '{txt}' for {when}.")
+async def _fake_attend_text(intent: str) -> str:
+    aid = f"att_{uuid.uuid4().hex[:6]}"
+    return f"attention created: '{intent or 'reminder'}' (attention_id={aid})"
 
 
 # ---------------------------------------------------------------------------
@@ -318,6 +308,267 @@ async def schedule_reminder(args):
 from .tool_logic import send_burst_result  # noqa: E402
 from .hooks import _CURRENT_TRACE, _fire_memory_hooks  # noqa: E402
 from .langsmith_tracing import traceable  # noqa: E402
+
+
+@tool(
+    "recall",
+    "Fake affordance wrapper for recall. Returns canned memory, observations, loops, or brief-like context.",
+    {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+            "query": {"type": "string"},
+            "purpose": {"type": "string"},
+            "observation_type": {"type": "string"},
+            "period": {"type": "string"},
+            "limit": {"type": "integer"},
+        },
+    },
+)
+async def recall(args):
+    purpose = str(args.get("purpose") or "auto").strip().lower()
+    if purpose in {"observations", "tracker"} or args.get("observation_type") or args.get("period"):
+        return await read_tracker({"name": args.get("observation_type") or "expense"})
+    if purpose in {"open_loops", "loops"}:
+        return await list_open_loops({})
+    if purpose in {"situation_brief", "brief"}:
+        return text_content(
+            "this week: antler pitch pressure, deck polish, donna launch work. watch: luca, deck slide 4, sleep debt."
+        )
+    return await smart_recall({"message": args.get("query") or ""})
+
+
+@tool(
+    "remember",
+    (
+        "Fake affordance wrapper for private memory writes. Routes to canned "
+        "observation/open-loop confirmations. Use only when the current user "
+        "message introduced or confirmed the memory; do not re-save USER MODEL, "
+        "SITUATION BRIEF, runtime context, or recall results."
+    ),
+    {
+        "type": "object",
+        "required": ["kind", "content"],
+        "properties": {
+            "kind": {"type": "string"},
+            "content": {"type": "string"},
+            "observation_type": {"type": "string"},
+            "fields": {"type": "object"},
+            "loop_id": {"type": "string"},
+            "fact_key": {"type": "string"},
+            "timezone": {"type": "string"},
+            "confidence": {"type": "string"},
+        },
+    },
+)
+async def remember(args):
+    kind = str(args.get("kind") or "").strip().lower()
+    content = str(args.get("content") or "").strip()
+    if kind == "observation":
+        return await log_observation(
+            {
+                "type": args.get("observation_type") or "note",
+                "value": str(args.get("fields") or content),
+                "note": content,
+            }
+        )
+    if kind in {"open_loop", "commitment"}:
+        return await track_open_loop({"title": content})
+    if kind == "loop_closed":
+        return await close_open_loop({"id": args.get("loop_id") or "ol_001"})
+    if kind == "timezone":
+        return text_content(f"remembered timezone: {args.get('timezone') or content}")
+    return text_content(f"remembered {kind or 'note'}: {content}")
+
+
+@tool(
+    "attend",
+    (
+        "Fake affordance wrapper for the unified attention creation primitive. "
+        "Mirrors the real `attend` tool: any timed reminder, recurring nudge, "
+        "or standing watch. Returns a canned attention_id."
+    ),
+    {
+        "type": "object",
+        "required": ["intent"],
+        "properties": {
+            "intent": {"type": "string"},
+            "origin": {"type": "string", "enum": ["user", "donna"]},
+        },
+    },
+)
+async def attend(args):
+    intent = str(args.get("intent") or "").strip()
+    return text_content(await _fake_attend_text(intent))
+
+
+@tool(
+    "list_attentions",
+    "Fake affordance wrapper for listing pending attentions.",
+    {"type": "object", "properties": {}},
+)
+async def list_attentions(args):
+    return text_content("No attentions.")
+
+
+@tool(
+    "cancel_attention",
+    "Fake affordance wrapper for cancelling an attention by id.",
+    {
+        "type": "object",
+        "required": ["attention_id"],
+        "properties": {"attention_id": {"type": "string"}},
+    },
+)
+async def cancel_attention(args):
+    aid = str(args.get("attention_id") or "").strip() or "?"
+    return text_content(f"Cancelled attention_id={aid}.")
+
+
+@tool(
+    "snooze_attention",
+    "Fake affordance wrapper for snoozing an attention by N minutes.",
+    {
+        "type": "object",
+        "required": ["attention_id", "minutes"],
+        "properties": {
+            "attention_id": {"type": "string"},
+            "minutes": {"type": "integer"},
+        },
+    },
+)
+async def snooze_attention(args):
+    aid = str(args.get("attention_id") or "").strip() or "?"
+    minutes = int(args.get("minutes") or 0)
+    return text_content(f"snoozed attention_id={aid} by {minutes} min.")
+
+
+@tool(
+    "check_calendar",
+    "Fake affordance wrapper for upcoming calendar context.",
+    {
+        "type": "object",
+        "properties": {"purpose": {"type": "string"}, "within_days": {"type": "integer"}, "limit": {"type": "integer"}},
+        "required": [],
+    },
+)
+async def check_calendar(args):
+    return await list_calendar({})
+
+
+@tool(
+    "image",
+    (
+        "Fake affordance wrapper for the image tool. Returns a deterministic "
+        "placeholder media_id so smoke evals can exercise image turns without "
+        "hitting fal.ai or Meta."
+    ),
+    {
+        "type": "object",
+        "required": ["intent", "caption"],
+        "properties": {
+            "intent": {"type": "string"},
+            "caption": {"type": "string"},
+        },
+    },
+)
+async def image(args):
+    intent = (args.get("intent") or "").strip() if isinstance(args, dict) else ""
+    caption = (args.get("caption") or "").strip() if isinstance(args, dict) else ""
+    if not intent or not caption:
+        return text_content(
+            "image unavailable: intent and caption are both required. go text."
+        )
+    fake_id = f"fake_media_{uuid.uuid4().hex[:8]}"
+    return text_content(
+        f"image ready: {fake_id}. use it in send_burst as an image item "
+        f"with media_id={fake_id}, caption unchanged."
+    )
+
+
+@tool(
+    "web_search",
+    (
+        "Fake single-shot web search. Returns two canned hits so smoke evals "
+        "can exercise a web-lookup turn without live HTTP."
+    ),
+    {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+            "query": {"type": "string"},
+            "max_results": {"type": "integer"},
+            "recency": {"type": "string"},
+        },
+    },
+)
+async def web_search(args):
+    query = str(args.get("query") or "").strip() if isinstance(args, dict) else ""
+    if not query:
+        return text_content("web_search: query is required.")
+    hits = [
+        f"- example reference on '{query}' (https://example.test/a) — canned snippet one.",
+        f"- background on '{query}' (https://example.test/b) — canned snippet two.",
+    ]
+    return text_content("\n".join(hits))
+
+
+@tool(
+    "agentic_web_search",
+    (
+        "Fake agentic web search. Returns a canned synthesized answer and "
+        "two canned sources so smoke evals can exercise deep-research turns."
+    ),
+    {
+        "type": "object",
+        "required": ["question"],
+        "properties": {
+            "question": {"type": "string"},
+            "max_results": {"type": "integer"},
+        },
+    },
+)
+async def agentic_web_search(args):
+    question = str(args.get("question") or "").strip() if isinstance(args, dict) else ""
+    if not question:
+        return text_content("agentic_web_search: question is required.")
+    lines = [
+        f"answer: canned synthesis for '{question}'. two sources agree on the headline.",
+        "sources:",
+        "- example primary source (https://example.test/a)",
+        "- example secondary source (https://example.test/b)",
+    ]
+    return text_content("\n".join(lines))
+
+
+@tool(
+    "research",
+    (
+        "Fake deep research. Returns a canned synthesis with two sources and "
+        "a low confidence score so smoke evals can exercise research turns."
+    ),
+    {
+        "type": "object",
+        "required": ["question"],
+        "properties": {
+            "question": {"type": "string"},
+            "top_k": {"type": "integer"},
+            "seed_url": {"type": "string"},
+        },
+    },
+)
+async def research(args):
+    question = str(args.get("question") or "").strip() if isinstance(args, dict) else ""
+    if not question:
+        return text_content("research: question is required.")
+    lines = [
+        f"answer (merged, confidence=0.42): canned deep-research synthesis for '{question}'.",
+        "dissent: an alternate read flags a caveat.",
+        "sources:",
+        "- canned primary source (https://example.test/primary)",
+        "- canned secondary source (https://example.test/secondary)",
+    ]
+    return text_content("\n".join(lines))
 
 
 @tool(
@@ -334,17 +585,17 @@ async def send_burst(args):
 
 
 FAKE_DONNA_TOOLS = (
-    recall_episodic,
-    recall_graph,
-    smart_recall,
-    read_tracker,
-    list_observations,
-    list_open_loops,
-    list_calendar,
-    log_observation,
-    track_open_loop,
-    close_open_loop,
-    schedule_reminder,
+    recall,
+    remember,
+    attend,
+    list_attentions,
+    cancel_attention,
+    snooze_attention,
+    check_calendar,
+    image,
+    web_search,
+    agentic_web_search,
+    research,
     send_burst,
 )
 
@@ -352,17 +603,17 @@ FAKE_DONNA_TOOLS = (
 FAKE_ALLOWED_TOOLS = tuple(
     f"mcp__donna__{name}"
     for name in (
-        "recall_episodic",
-        "recall_graph",
-        "smart_recall",
-        "read_tracker",
-        "list_observations",
-        "list_open_loops",
-        "list_calendar",
-        "log_observation",
-        "track_open_loop",
-        "close_open_loop",
-        "schedule_reminder",
+        "recall",
+        "remember",
+        "attend",
+        "list_attentions",
+        "cancel_attention",
+        "snooze_attention",
+        "check_calendar",
+        "image",
+        "web_search",
+        "agentic_web_search",
+        "research",
         "send_burst",
     )
 )

@@ -6,8 +6,14 @@ from backend.memory.tools._shape import ToolResult, degraded, no_hits, ok
 from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
-    "Search chunks of the user's uploaded documents. Use for doc Q&A "
-    "('what does the contract say about X?'). Optional doc_id scopes to one doc."
+    "Search chunks of the user's uploaded documents. "
+    "Use when the user references a doc they previously sent — by name "
+    "('what was in the term sheet'), by topic ('the part about vesting'), "
+    "or by content quote — and you need text from inside that doc rather "
+    "than just the fact that it exists. Optional doc_id scopes to one doc. "
+    "Do NOT use to check whether a doc exists at all (TODAY block + recall "
+    "already surface document_received observations). Do NOT use for the "
+    "user's own past chat or memory — that is what recall is for."
 )
 
 INPUT_SCHEMA = {

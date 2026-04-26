@@ -1,0 +1,228 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Donna — Plan E · Unified Lifecycle</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root{--paper-50:#FDFAF8;--paper-100:#FBF7F5;--paper-200:#F5EFEA;--paper-300:#F0EAE4;--paper-400:#E7DFD7;--ink-900:#1E1A18;--ink-800:#3A3331;--ink-600:#6B615C;--ink-500:#8F837C;--ink-400:#B5A89F;--ink-300:#D9CEC5;--rust-900:#4A2F23;--rust-700:#7B5544;--rust-100:#EBDCD2;--rust-50:#F5EFEA;--moss-700:#5C6B4A;--moss-100:#EEF1E7;--amber-700:#A8804A;--amber-100:#F5EBD9;--oxblood-700:#8B3A2E;--oxblood-100:#F3E0DC;--hairline:rgba(30,26,24,0.08);--hairline-strong:rgba(30,26,24,0.14);--sans:'Red Hat Text',sans-serif;--serif:'EB Garamond',serif}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--paper-200);color:var(--ink-900);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  .gate{max-width:1240px;margin:0 auto;padding:56px 48px 32px}
+  .crumbs{font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:var(--ink-500);font-weight:500;margin-bottom:24px}
+  .crumbs a{color:var(--ink-500);text-decoration:none}
+  .tag{font-size:10px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--rust-700);margin-bottom:10px}
+  h1{font-family:var(--serif);font-weight:400;font-size:44px;line-height:1.06;letter-spacing:-0.02em;margin:0 0 14px;max-width:20ch}
+  h1 em{font-style:italic;color:var(--rust-700)}
+  .lead{font-family:var(--serif);font-style:italic;font-size:19px;line-height:1.5;color:var(--ink-800);max-width:60ch;margin:0 0 10px}
+  .meta{font-size:13px;color:var(--ink-600);line-height:1.55;max-width:68ch}
+  .stage{max-width:1240px;margin:0 auto;padding:32px 48px 48px;display:grid;grid-template-columns:440px 1fr;gap:56px;align-items:start}
+  .phone{width:440px;background:var(--paper-100);border-left:1px solid var(--hairline);border-right:1px solid var(--hairline);min-height:920px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 24px 14px;border-bottom:1px solid var(--hairline)}
+  .mark{font-family:var(--serif);font-style:italic;font-weight:500;font-size:20px;color:var(--ink-900)}
+  .initial{width:28px;height:28px;border:1px solid var(--hairline-strong);border-radius:999px;display:grid;place-items:center;font-size:11.5px;font-weight:600;color:var(--ink-800)}
+  /* band headers */
+  .band-h{padding:14px 24px 10px;display:flex;justify-content:space-between;align-items:baseline;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline)}
+  .band-h .lbl{font-size:10px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase}
+  .band-h .n{font-size:10.5px;color:var(--ink-500);font-variant-numeric:tabular-nums}
+  .band-h.living .lbl{color:var(--ink-600)}
+  .band-h.today .lbl{color:var(--ink-900)}
+  .band-h.offer{background:var(--rust-50)}
+  .band-h.offer .lbl{color:var(--rust-700)}
+  .band-h.shadow{background:var(--paper-300)}
+  .band-h.shadow .lbl{color:var(--ink-500)}
+  .band-h.archive{background:var(--paper-300)}
+  .band-h.archive .lbl{color:var(--ink-400)}
+  /* attention row - the unifying primitive */
+  .a{padding:14px 24px 14px;border-bottom:1px solid var(--hairline);display:grid;grid-template-columns:14px 1fr auto;gap:12px;align-items:flex-start}
+  .a .tick{width:9px;height:9px;border-radius:999px;margin-top:6px}
+  .a.shadow .tick{background:var(--ink-400);border:1px dashed var(--ink-500);box-sizing:border-box}
+  .a.live .tick{background:var(--ink-900)}
+  .a.offer .tick{background:var(--rust-700);box-shadow:0 0 0 3px var(--rust-50)}
+  .a.paused .tick{background:var(--amber-700)}
+  .a.archive .tick{background:none;border:1px solid var(--ink-400);box-sizing:border-box}
+  .a.resolved .tick{background:var(--moss-700)}
+  .a .body .n{font-family:var(--serif);font-weight:400;font-size:16px;line-height:1.28;margin:0 0 2px;letter-spacing:-0.005em;color:var(--ink-900)}
+  .a .body .n em{font-style:italic;color:var(--rust-700)}
+  .a .body .w{font-family:var(--serif);font-style:italic;font-size:13.5px;line-height:1.45;color:var(--ink-600);margin:0}
+  .a .body .w em{font-style:italic;color:var(--rust-700)}
+  .a.archive .body .n{color:var(--ink-500)}
+  .a.archive .body .w{color:var(--ink-400)}
+  .a .meta{font-size:9.5px;letter-spacing:0.14em;text-transform:uppercase;color:var(--ink-500);white-space:nowrap;font-weight:500;padding-top:3px;text-align:right}
+  .a .meta b{display:block;font-weight:600;color:var(--ink-800);font-variant-numeric:tabular-nums;font-size:10.5px;margin-bottom:2px}
+  .a.offer .meta b{color:var(--rust-700)}
+  .a.offer{background:var(--rust-50)}
+  .a.shadow{background:var(--paper-300)}
+  .a.archive{background:var(--paper-300)}
+  /* living row variant -- different shape */
+  .liv-row{padding:10px 24px;display:flex;justify-content:space-between;font-size:13.5px;border-bottom:1px dashed var(--hairline)}
+  .liv-row .k{color:var(--ink-500);letter-spacing:0.06em;text-transform:uppercase;font-size:10px;font-weight:500}
+  .liv-row .v{font-family:var(--serif);color:var(--ink-900);font-size:14.5px;max-width:70%;text-align:right}
+  .liv-row .v em{font-style:italic;color:var(--rust-700)}
+  .thesis-band{padding:22px 24px 22px;background:var(--paper-50);border-bottom:1px solid var(--hairline)}
+  .thesis-band .eye{font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--rust-700);margin-bottom:6px}
+  .thesis-band .s{font-family:var(--serif);font-size:22px;line-height:1.25;letter-spacing:-0.005em;color:var(--ink-900);margin:0}
+  .thesis-band .s em{font-style:italic;color:var(--rust-700)}
+  /* legend */
+  .legend{padding:18px 24px 24px;display:grid;grid-template-columns:repeat(3,1fr);gap:8px 14px;font-size:10.5px;color:var(--ink-500)}
+  .legend .item{display:flex;align-items:center;gap:6px}
+  .legend .dot{width:8px;height:8px;border-radius:999px}
+  /* rationale */
+  .rationale{padding:8px 0}
+  .rationale h3{font-family:var(--serif);font-weight:400;font-size:24px;line-height:1.18;margin:0 0 14px;letter-spacing:-0.01em}
+  .rationale h3 em{font-style:italic;color:var(--rust-700)}
+  .rationale p{font-size:14.5px;line-height:1.7;color:var(--ink-800);margin:0 0 14px;max-width:56ch}
+  .rationale p.q{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink-600)}
+  .rationale .pair{display:grid;grid-template-columns:130px 1fr;gap:16px;padding:8px 0;border-bottom:1px dashed var(--hairline);font-size:13.5px;line-height:1.5}
+  .rationale .pair:last-of-type{border-bottom:0}
+  .rationale .pair .k{color:var(--ink-500);letter-spacing:0.1em;text-transform:uppercase;font-size:10.5px;font-weight:500;padding-top:3px}
+  .rationale .blk{margin-top:28px;padding-top:18px;border-top:1px solid var(--hairline)}
+  .nav{max-width:1240px;margin:0 auto;padding:24px 48px 72px;border-top:1px solid var(--hairline);display:flex;justify-content:space-between;font-size:12px;color:var(--ink-500)}
+  .nav a{color:var(--ink-500);text-decoration:none}
+  .nav a:hover{color:var(--ink-900)}
+  code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;background:var(--paper-300);padding:1px 5px;border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="gate">
+  <div class="crumbs"><a href="action-plans-index.html">Action plans</a> &nbsp;/&nbsp; Plan E</div>
+  <div class="tag">Plan E</div>
+  <h1>Unified Lifecycle — <em>everything</em>, visible.</h1>
+  <p class="lead">One long scroll, color&#8209;banded by lifecycle state. Living facts at top, today's thesis, live attentions, offers awaiting you, shadow attentions Donna is still deciding about, paused and retired at bottom. Nothing is hidden.</p>
+  <p class="meta">This is the power&#8209;user plan. A visible status dot is drawn next to every attention: live · offered · shadow · paused · resolved · archived. The dashboard is legible as a system, not just as a moment.</p>
+</div>
+
+<div class="stage">
+  <div class="column">
+    <div class="phone">
+
+      <div class="topbar">
+        <div class="mark">donna</div>
+        <div class="initial">A</div>
+      </div>
+
+      <!-- Living band -->
+      <div class="band-h living"><span class="lbl">What I know</span><span class="n">12 facts</span></div>
+      <div class="liv-row"><span class="k">name</span><span class="v">aarav · <em>28</em></span></div>
+      <div class="liv-row"><span class="k">place</span><span class="v">mumbai — bandra</span></div>
+      <div class="liv-row"><span class="k">season</span><span class="v"><em>antler quarter</em></span></div>
+      <div class="liv-row"><span class="k">people</span><span class="v">priya · luca · dad · oscar</span></div>
+      <div class="liv-row"><span class="k">pattern</span><span class="v">sleeps poorly when priya slips</span></div>
+
+      <!-- Thesis band -->
+      <div class="thesis-band">
+        <div class="eye">today · 24 apr</div>
+        <p class="s">luca's been waiting since tuesday. <em>today is about the deck.</em></p>
+      </div>
+
+      <!-- Live band -->
+      <div class="band-h today"><span class="lbl">Live · running</span><span class="n">8</span></div>
+      <div class="a live">
+        <div class="tick"></div>
+        <div class="body"><p class="n">watching <em>luca</em></p><p class="w">replied at 22:11 last night. tone <em>tired.</em></p></div>
+        <div class="meta"><b>event_stream</b>11d live</div>
+      </div>
+      <div class="a live">
+        <div class="tick"></div>
+        <div class="body"><p class="n">before <em>priya 1:1</em></p><p class="w">thursday 10:00 — landing in 42 min</p></div>
+        <div class="meta"><b>prep_doc</b>4d live</div>
+      </div>
+      <div class="a live">
+        <div class="tick"></div>
+        <div class="body"><p class="n"><em>lunches</em> skipped</p><p class="w">3 this week. mon / tue / wed.</p></div>
+        <div class="meta"><b>tally</b>22d live</div>
+      </div>
+      <div class="a live">
+        <div class="tick"></div>
+        <div class="body"><p class="n">call <em>dad</em></p><p class="w">6 days open. you said tuesday.</p></div>
+        <div class="meta"><b>open_loop</b>6d live</div>
+      </div>
+      <div class="a live">
+        <div class="tick"></div>
+        <div class="body"><p class="n">friday <em>wind&#8209;down brief</em></p><p class="w">lands in 30h</p></div>
+        <div class="meta"><b>brief</b>3w live</div>
+      </div>
+
+      <!-- Offer band -->
+      <div class="band-h offer"><span class="lbl">Awaiting you</span><span class="n">2 offered</span></div>
+      <div class="a offer">
+        <div class="tick"></div>
+        <div class="body"><p class="n">track <em>caffeine after 2pm</em></p><p class="w">i noticed 3 afternoons this week. might explain the sleep.</p></div>
+        <div class="meta"><b>tally</b>offered 2d</div>
+      </div>
+      <div class="a offer">
+        <div class="tick"></div>
+        <div class="body"><p class="n">nudge at <em>22:00</em> on weeknights</p><p class="w">you keep closing laptop at 00:48.</p></div>
+        <div class="meta"><b>ping</b>offered 14h</div>
+      </div>
+
+      <!-- Shadow band -->
+      <div class="band-h shadow"><span class="lbl">I'm still deciding</span><span class="n">5 shadow</span></div>
+      <div class="a shadow">
+        <div class="tick"></div>
+        <div class="body"><p class="n">watching <em>mom</em></p><p class="w">you mentioned her twice this month. not enough signal yet.</p></div>
+        <div class="meta"><b>event_stream</b>3/7 ticks</div>
+      </div>
+      <div class="a shadow">
+        <div class="tick"></div>
+        <div class="body"><p class="n">sunday <em>planning session</em></p><p class="w">you said it once. i'm watching for a second ask.</p></div>
+        <div class="meta"><b>brief</b>1/7 ticks</div>
+      </div>
+      <div class="a shadow">
+        <div class="tick"></div>
+        <div class="body"><p class="n">track <em>spend on coffee</em></p><p class="w">three days of auto&#8209;debit. might be nothing.</p></div>
+        <div class="meta"><b>tally</b>2/7 ticks</div>
+      </div>
+
+      <!-- Archive band -->
+      <div class="band-h archive"><span class="lbl">Retired</span><span class="n">14 archived</span></div>
+      <div class="a archive">
+        <div class="tick"></div>
+        <div class="body"><p class="n">track <em>breakfast</em></p><p class="w">you asked me to drop it on 12 apr.</p></div>
+        <div class="meta"><b>tally</b>retired</div>
+      </div>
+      <div class="a resolved">
+        <div class="tick"></div>
+        <div class="body"><p class="n">the <em>dad call</em></p><p class="w">resolved · you called on sunday.</p></div>
+        <div class="meta"><b>open_loop</b>✓ 3d ago</div>
+      </div>
+
+      <div class="legend">
+        <div class="item"><span class="dot" style="background:var(--ink-900)"></span>live</div>
+        <div class="item"><span class="dot" style="background:var(--rust-700);box-shadow:0 0 0 2px var(--rust-50)"></span>offered</div>
+        <div class="item"><span class="dot" style="background:var(--ink-400);border:1px dashed var(--ink-500);box-sizing:border-box"></span>shadow</div>
+        <div class="item"><span class="dot" style="background:var(--amber-700)"></span>paused</div>
+        <div class="item"><span class="dot" style="background:var(--moss-700)"></span>resolved</div>
+        <div class="item"><span class="dot" style="border:1px solid var(--ink-400);box-sizing:border-box"></span>retired</div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="rationale">
+    <h3>Why <em>Unified Lifecycle</em> is a serious option.</h3>
+    <p>This is the most legible Donna can be. A user who wants to understand Donna as a system — not only as a voice — sees the whole shape at once. Shadow attentions are visible, which changes the emotional texture: there's no hidden brain. She's deciding where you can watch.</p>
+    <p class="q">It's also the riskiest in a specific way: shadowing is uncomfortable to look at. "Why is she watching my mom without asking?" is a reasonable reaction. This plan has to earn that visibility with tone.</p>
+    <div class="blk">
+      <div class="pair"><span class="k">Shadow</span><span class="v">Aggressive <em>and</em> visible. The shadow band is a real UI object, not hidden state.</span></div>
+      <div class="pair"><span class="k">Promotion</span><span class="v">Ambient. Each shadow ticks toward promotion visibly (<code>3/7 ticks</code>). User can promote early or archive early from the row itself.</span></div>
+      <div class="pair"><span class="k">Cold start</span><span class="v">First few days show an empty Live band and a full Living band that's mostly blanks the user fills in. Shadow band is empty. Teaching surface is the Living band itself.</span></div>
+      <div class="pair"><span class="k">Templates</span><span class="v">One row template per AttentionStatus × AttentionCard = 6 cards × 4 states = ~24 combinations. Most collapse because Living has its own shape and Thesis is singular.</span></div>
+      <div class="pair"><span class="k">Wins when</span><span class="v">User is curious, high-agency, wants the system to be legible. Dashboard reads like Day One crossed with a ledger.</span></div>
+      <div class="pair"><span class="k">Loses when</span><span class="v">Overwhelming for novices. Also: showing shadow rows can feel like "why are you watching that?" — needs careful tone.</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="nav">
+  <a href="plan-d-live-today.html">← Plan D</a>
+  <span>Plan E · Unified Lifecycle</span>
+  <a href="plan-f-promotion-ritual.html">Plan F · Promotion Ritual →</a>
+</div>
+
+</body>
+</html>

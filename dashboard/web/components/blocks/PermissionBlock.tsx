@@ -1,15 +1,39 @@
+'use client';
+
+import { motion } from 'framer-motion';
 import { LeafIcon } from '../icons';
+import { useAction } from '@/lib/action-context';
 import type { PermissionBlock as PermissionBlockSpec } from '@/lib/plan';
 
 export default function PermissionBlock({ spec }: { spec: PermissionBlockSpec }) {
+  const fire = useAction();
+  const tappable = Boolean(spec.action);
+  const onTap = () => {
+    if (spec.action) void fire(spec.action);
+  };
   return (
-    <div
+    <motion.div
+      whileTap={tappable ? { scale: 0.99 } : undefined}
+      role={tappable ? 'button' : undefined}
+      tabIndex={tappable ? 0 : undefined}
+      onClick={tappable ? onTap : undefined}
+      onKeyDown={
+        tappable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onTap();
+              }
+            }
+          : undefined
+      }
       style={{
         margin: '14px 16px 0',
         padding: '16px 18px',
         background: 'var(--paper-50)',
         border: '1px dashed var(--border-strong)',
         borderRadius: 12,
+        cursor: tappable ? 'pointer' : 'default',
       }}
     >
       <div
@@ -50,6 +74,6 @@ export default function PermissionBlock({ spec }: { spec: PermissionBlockSpec })
       <div style={{ fontSize: 13, lineHeight: 1.55, color: 'var(--fg-secondary)' }}>
         {spec.body}
       </div>
-    </div>
+    </motion.div>
   );
 }

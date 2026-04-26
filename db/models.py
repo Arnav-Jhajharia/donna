@@ -119,7 +119,13 @@ class SchemaRegistry(Base):
 
 
 class OpenLoop(Base):
-    """Unresolved threads from past conversations."""
+    """Unresolved threads from past conversations.
+
+    ``due_at`` (optional, naive UTC) is parsed from natural-language
+    deadlines on the inbound side ("by Friday", "before noon",
+    "tomorrow morning"). Used by the DeadlineProposer to fire a PING
+    when a loop is approaching its deadline without acknowledgement.
+    """
     __tablename__ = "open_loops"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
@@ -128,6 +134,7 @@ class OpenLoop(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     status: Mapped[str] = mapped_column(String, default="active")
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    due_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class Fact(Base):
@@ -233,11 +240,14 @@ class DonnaSchedule(Base):
     locked_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     locked_by: Mapped[str | None] = mapped_column(String, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    attention_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    recurrence_meta: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (
         Index("idx_schedule_fire", "fire_at", "fired"),
         Index("idx_schedule_status_fire", "status", "fire_at"),
+        Index("idx_schedule_attention_unfired", "attention_id", "fired"),
     )
 
 
@@ -394,6 +404,13 @@ class Integration(Base):
     connected_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Cached OAuth redirect URL (chain-head). Lets connect_integration
+    # return the same in-flight URL on a re-ask instead of burning credits
+    # re-initiating the chain. issued_at gates freshness.
+    redirect_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    redirect_url_issued_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, onupdate=utcnow, nullable=False
@@ -449,21 +466,200 @@ class EmailMessage(Base):
     )
 
 
+class DashboardManifest(Base):
+    """Latest brain-emitted DashboardPlan for a user.
+
+    One row per user; ``compose_manifest`` upserts on user_id. The plan
+    JSONB is the wire format the frontend reads — TS camelCase keys,
+    full DashboardPlan shape (intro + rows[] + legacy blocks[]).
+    Older versions are not retained; if we need history later we add
+    a sibling ``dashboard_manifest_history`` table.
+    """
+    __tablename__ = "dashboard_manifests"
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), primary_key=True
+    )
+    plan_jsonb: Mapped[dict] = mapped_column(JSONB, nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, onupdate=utcnow, nullable=False
+    )
+    trigger: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
+class AttentionRow(Base):
+    """Durable mirror of the in-memory ``donna.attention.schema.Attention``.
+
+    Renamed from ``Attention`` to ``AttentionRow`` so it does not shadow the
+    pydantic ``Attention`` type when both are imported in the same module.
+
+    The pydantic ``Attention`` is the runtime contract; this row is its
+    cross-process fingerprint. The full spec + runtime metadata live in
+    ``payload`` (JSONB) so the schema can evolve without migrations.
+    Top-level columns are denormalized for efficient filtering: status
+    transitions on cancel/snooze, user_id for list-per-user, card +
+    cadence_type for "what kinds of attentions does this user have".
+
+    Source of truth split:
+      - ``donna_schedule`` rows = the future-fire queue (already in postgres)
+      - ``attentions`` rows     = the spec + lifecycle (this table)
+      - file-JSON store         = dev/cli fallback only
+
+    Conceptually adjacent to ``donna_instances`` (the legacy track / watch /
+    schedule primitive) but deliberately separate: DonnaInstance models a
+    verb + connector + label, Attention models card + cadence + sources.
+    A future cleanup may merge them; today they coexist.
+
+    Fires linked back via ``donna_schedule.attention_id``; we deliberately
+    do not enforce the FK at the DB level so legacy rows without an
+    attention keep working unchanged.
+    """
+
+    __tablename__ = "attentions"
+    id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), nullable=False
+    )
+    title: Mapped[str] = mapped_column(String, nullable=False)
+    card: Mapped[str] = mapped_column(String, nullable=False)
+    cadence_type: Mapped[str] = mapped_column(String, nullable=False)
+    origin: Mapped[str] = mapped_column(String, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="live")
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    last_surfaced_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("idx_attentions_user_status", "user_id", "status"),
+        Index("idx_attentions_user_card", "user_id", "card"),
+    )
+
+
+class AttentionTickRow(Base):
+    """Append-only history of an attention's evaluations / fires.
+
+    One row per worker delivery (PING attentions) or per dry-run evaluation
+    (richer cards). Mirrors the in-memory ``donna.attention.store.AttentionTick``
+    dataclass; suffixed ``Row`` to avoid shadowing the dataclass on import.
+    A cap on retention is a follow-up problem (the worker doesn't read past
+    ticks today).
+    """
+
+    __tablename__ = "attention_ticks"
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=generate_uuid
+    )
+    attention_id: Mapped[str] = mapped_column(
+        String, ForeignKey("attentions.id"), nullable=False
+    )
+    at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    rendered_markdown: Mapped[str | None] = mapped_column(Text, nullable=True)
+    warnings: Mapped[list | None] = mapped_column(JSONB, nullable=True)
+    source_counts: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+
+    __table_args__ = (
+        Index("idx_attention_ticks_attention_at", "attention_id", "at"),
+    )
+
+
 class ProactivePing(Base):
     """One row per proactive ping fired. Drives rate limiting + cooldowns.
 
     source values: 'email' | (future) 'open_loop_age' | 'world_delta' | ...
     suppressed_reason is null when actually fired; set when this row recorded
     a suppression decision instead.
+
+    topic_key — per-source dedup key (gmail thread_id, attention_id, etc.).
+    Nullable for legacy rows; populated by the unified proactive dispatcher
+    so per-topic cooldowns can suppress repeats on the same thread.
     """
     __tablename__ = "proactive_pings"
     id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
     user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
     source: Mapped[str] = mapped_column(String, nullable=False)
     message_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    topic_key: Mapped[str | None] = mapped_column(String, nullable=True)
     fired_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     suppressed_reason: Mapped[str | None] = mapped_column(String, nullable=True)
 
     __table_args__ = (
         Index("idx_pings_user_fired", "user_id", "fired_at"),
+        Index(
+            "idx_pings_user_topic_fired",
+            "user_id", "topic_key", "fired_at",
+            postgresql_where=sa.text("topic_key IS NOT NULL"),
+        ),
+    )
+
+
+class PendingProactiveNote(Base):
+    """Hold lane for Tier 2 judgments that drafted a message but chose not to
+    interrupt the user. Surfaced into the next reactive turn as PENDING NOTES.
+
+    status transitions: pending -> delivered | irrelevant | superseded | expired
+    expires_at defaults to created_at + 12 hours; a sweeper marks expired rows.
+    The brain dismisses a note via the ``clear_pending_note`` tool when the
+    burst it sends addresses (or supersedes) the note.
+    """
+
+    __tablename__ = "pending_proactive_notes"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    source_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    topic_key: Mapped[str | None] = mapped_column(String, nullable=True)
+    draft: Mapped[str] = mapped_column(Text, nullable=False)
+    tie_in: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    reasoning: Mapped[str | None] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+
+    __table_args__ = (
+        Index(
+            "idx_pending_user_status_created",
+            "user_id", "status", "created_at",
+        ),
+        Index(
+            "idx_pending_user_topic",
+            "user_id", "topic_key",
+            postgresql_where=sa.text("status = 'pending'"),
+        ),
+    )
+
+
+class AuthOTP(Base):
+    """Single-use OTP code for the WhatsApp → dashboard login fallback.
+
+    Codes are 6-digit numeric, stored as ``sha256(code).hexdigest()``. Rows
+    are deleted on successful verify (single-use) and on expiry. Cap of 3
+    active rows per user enforced at insert time. The plaintext code is
+    only ever in the brain's tool result + the WhatsApp message — never
+    written to the table or logged.
+    """
+
+    __tablename__ = "auth_otps"
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=generate_uuid
+    )
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), nullable=False
+    )
+    code_hash: Mapped[str] = mapped_column(String, nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("idx_auth_otps_user_expires", "user_id", "expires_at"),
     )

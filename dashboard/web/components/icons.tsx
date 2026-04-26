@@ -123,6 +123,59 @@ export function HourglassIcon({ size = 16, color = 'var(--fg-tertiary)' }: IconP
   );
 }
 
+export function BellIcon({ size = 16, color = 'var(--fg-tertiary)' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M6 16V11a6 6 0 1112 0v5l1 2H5l1-2z" stroke={color} strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M10 20a2 2 0 004 0" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function PlugIcon({ size = 16, color = 'var(--fg-tertiary)' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M9 3v5M15 3v5M7 8h10v3a5 5 0 11-10 0V8z" stroke={color} strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M12 16v5" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function SparklesIcon({ size = 16, color = 'var(--fg-tertiary)' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M12 3l1.6 4.4L18 9l-4.4 1.6L12 15l-1.6-4.4L6 9l4.4-1.6L12 3z" stroke={color} strokeWidth="1.2" strokeLinejoin="round" />
+      <path d="M18 16l.8 2.2L21 19l-2.2.8L18 22l-.8-2.2L15 19l2.2-.8L18 16z" stroke={color} strokeWidth="1.1" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
+export function PencilIcon({ size = 16, color = 'var(--fg-tertiary)' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <path d="M4 20l4-1 11-11-3-3L5 16l-1 4z" stroke={color} strokeWidth="1.4" strokeLinejoin="round" />
+      <path d="M14 5l3 3" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function MicIcon({ size = 16, color = 'var(--fg-tertiary)' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden>
+      <rect x="9" y="3" width="6" height="11" rx="3" stroke={color} strokeWidth="1.4" />
+      <path d="M5 11a7 7 0 0014 0M12 18v3" stroke={color} strokeWidth="1.4" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+export function XIcon({ size = 14, color = 'var(--fg-tertiary)' }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" aria-hidden>
+      <path d="M3 3l10 10M13 3L3 13" stroke={color} strokeWidth="1.6" strokeLinecap="round" />
+    </svg>
+  );
+}
+
 import type { IconName } from '@/lib/plan';
 
 export const ICONS: Record<IconName, (p: IconProps) => React.ReactElement> = {
@@ -138,4 +191,11 @@ export const ICONS: Record<IconName, (p: IconProps) => React.ReactElement> = {
   leaf: LeafIcon,
   eye: EyeIcon,
   hourglass: HourglassIcon,
+  bell: BellIcon,
+  plug: PlugIcon,
+  sparkles: SparklesIcon,
+  pencil: PencilIcon,
+  mic: MicIcon,
+  check: CheckIcon,
+  x: XIcon,
 };

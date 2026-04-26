@@ -1,15 +1,19 @@
-"""connect_integration — get a SINGLE OAuth URL for an external provider.
+"""connect_integration — get a SINGLE OAuth URL for any Composio toolkit(s).
 
 Builds a Composio redirect chain so the user only taps once even when we
-need multiple google services (gmail + calendar + drive). Each toolkit's
-``callback_url`` points to the next toolkit's ``redirect_url`` so the
-browser walks the chain after a single OAuth approval. Backed by
-``composio_meta.resolve_auth_configs`` (auto-provisions managed toolkits
-like googledrive when missing) and ``composio_meta.initiate_oauth_chain``.
+need multiple toolkits at the same time (e.g. gmail + calendar + drive,
+or slack + notion). Each toolkit's ``callback_url`` points to the next
+toolkit's ``redirect_url`` so the browser walks the chain after a single
+OAuth approval. Backed by ``composio_meta.resolve_auth_configs``
+(auto-provisions managed toolkits on first use) and
+``composio_meta.initiate_oauth_chain``.
 
-We keep our own pending/connected mirror in the integrations table so
-the [INTEGRATIONS] context block stays informative without polling
-Composio.
+Mirror state in our own ``integrations`` table so the [INTEGRATIONS]
+context block stays informative without polling Composio. Google
+toolkits keep their friendly ``provider="google"`` rows so the existing
+[INTEGRATIONS] line-format and downstream typed tools (gmail / calendar)
+stay readable; everything else lands as ``provider="composio"`` with
+the toolkit slug as the product.
 """
 from __future__ import annotations
 
@@ -19,56 +23,115 @@ from backend.integrations import composio_meta, state
 from donna_runtime.observability import instrument_memory_op
 
 DESCRIPTION = (
-    "Generate a connect link for an external provider (currently: google, "
-    "covering gmail, calendar, and drive). Use when:\n"
-    "  - the [INTEGRATIONS] context block shows the integration as not_connected\n"
+    "Generate a one-tap connect link for one or more Composio toolkits. "
+    "Pass any toolkit slug(s): google's are gmail, googlecalendar, "
+    "googledrive; others include slack, notion, linear, github, asana, "
+    "hubspot, salesforce, intercom, etc. Use when:\n"
+    "  - the [INTEGRATIONS] context block shows a needed toolkit as not_connected\n"
     "  - the user asks for something requiring an integration that is not connected\n"
-    "  - the user explicitly asks to connect a provider\n"
+    "  - the user explicitly asks to connect a service\n"
     "Do NOT use when:\n"
-    "  - the integration is already connected (check [INTEGRATIONS] first)\n"
+    "  - the toolkit is already connected (check [INTEGRATIONS] first)\n"
     "  - status is 'pending' — a link is already in flight; do not nag\n"
     "  - the user is mid-task and a connect prompt would derail them\n"
-    "Returns a one-line consent message containing a SINGLE URL — the chain "
-    "covers every requested product. Forward verbatim."
+    "Returns a one-line consent message containing a SINGLE URL — the "
+    "redirect chain covers every requested toolkit. Forward verbatim."
 )
 
 INPUT_SCHEMA = {
     "type": "object",
     "properties": {
-        "provider": {"type": "string", "enum": ["google"]},
-        "products": {
+        "toolkits": {
             "type": "array",
-            "items": {"type": "string", "enum": ["calendar", "gmail", "drive"]},
+            "items": {"type": "string"},
             "minItems": 1,
+            "description": (
+                "Composio toolkit slug(s). Examples: gmail, googlecalendar, "
+                "googledrive, slack, notion, linear, github, asana."
+            ),
         },
     },
-    "required": ["provider", "products"],
+    "required": ["toolkits"],
 }
 
-_PRODUCT_TO_TOOLKIT = {
+# Friendly product alias -> Composio toolkit slug. Lets the model pass
+# "calendar" or "drive" and still get the right google toolkit. All other
+# toolkits use their composio slug verbatim.
+_ALIAS_TO_TOOLKIT: dict[str, str] = {
     "gmail": "gmail",
     "calendar": "googlecalendar",
+    "googlecalendar": "googlecalendar",
     "drive": "googledrive",
+    "googledrive": "googledrive",
 }
-_TOOLKIT_TO_PRODUCT = {v: k for k, v in _PRODUCT_TO_TOOLKIT.items()}
-_PRODUCT_LABEL = {"gmail": "gmail", "calendar": "calendar", "drive": "drive"}
+
+# The reverse mapping lets us label google rows with friendly product names
+# in the integrations table so the [INTEGRATIONS] block stays clean
+# (google_gmail, google_calendar, google_drive).
+_GOOGLE_TOOLKIT_TO_PRODUCT: dict[str, str] = {
+    "gmail": "gmail",
+    "googlecalendar": "calendar",
+    "googledrive": "drive",
+}
+
+_LABELS: dict[str, str] = {
+    "gmail": "gmail",
+    "googlecalendar": "calendar",
+    "googledrive": "drive",
+    "slack": "slack",
+    "notion": "notion",
+    "linear": "linear",
+    "github": "github",
+    "asana": "asana",
+    "hubspot": "hubspot",
+    "salesforce": "salesforce",
+}
 
 
-def _consent_message(product_links: list[tuple[str, str]]) -> str:
+def _normalize_toolkits(raw: list[str]) -> list[str]:
+    """De-duplicate while preserving order, applying friendly aliases."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for item in raw:
+        slug = _ALIAS_TO_TOOLKIT.get(item, item)
+        if slug in seen:
+            continue
+        seen.add(slug)
+        out.append(slug)
+    return out
+
+
+def _provider_product(toolkit: str) -> tuple[str, str]:
+    """Map a toolkit slug to (provider, product) for the integrations table.
+
+    Google toolkits keep ``provider="google"`` so the existing [INTEGRATIONS]
+    block + downstream typed tools (list_gmail_recent, list_calendar) stay
+    coherent. Everything else lands under ``provider="composio"``.
+    """
+    if toolkit in _GOOGLE_TOOLKIT_TO_PRODUCT:
+        return "google", _GOOGLE_TOOLKIT_TO_PRODUCT[toolkit]
+    return "composio", toolkit
+
+
+def _label(toolkit: str) -> str:
+    return _LABELS.get(toolkit, toolkit)
+
+
+def _consent_message(toolkit_links: list[tuple[str, str]]) -> str:
     """Build the consent message.
 
-    Single product: classic 'tap: <url>' phrasing.
-    Multi product: only the FIRST URL is exposed because the redirect
+    Single toolkit: classic 'tap: <url>' phrasing.
+    Multi toolkit: only the FIRST URL is exposed because the redirect
     chain walks the rest after a single tap.
     """
-    if len(product_links) == 1:
-        product, url = product_links[0]
+    if len(toolkit_links) == 1:
+        toolkit, url = toolkit_links[0]
         return (
-            f"need {_PRODUCT_LABEL[product]} to be useful. one-time read "
+            f"need {_label(toolkit)} to be useful. one-time read "
             f"so i learn who matters to you. tap: {url}"
         )
-    products = " + ".join(_PRODUCT_LABEL[p] for p, _ in product_links)
-    first_url = product_links[0][1]
+    products = " + ".join(_label(t) for t, _ in toolkit_links)
+    first_url = toolkit_links[0][1]
     return (
         f"need {products} to be useful. one tap covers all of them: {first_url}"
     )
@@ -76,59 +139,106 @@ def _consent_message(product_links: list[tuple[str, str]]) -> str:
 
 @instrument_memory_op("integrations.connect")
 async def connect_integration(
-    user_id: str, provider: str, products: list[str]
+    user_id: str,
+    toolkits: list[str] | None = None,
+    *,
+    provider: str | None = None,
+    products: list[str] | None = None,
 ) -> dict[str, Any]:
-    if provider != "google":
+    """Build a one-tap OAuth chain for the given toolkit(s).
+
+    Accepts either ``toolkits=[...]`` (preferred, generic) or the legacy
+    ``provider="google", products=[...]`` shape (still callable from older
+    code paths and tests).
+    """
+    raw: list[str] = []
+    if toolkits:
+        raw = list(toolkits)
+    elif products:
+        raw = list(products)
+
+    requested = _normalize_toolkits([str(t).strip() for t in raw if str(t).strip()])
+    if not requested:
         return {
             "status": "error",
             "url": None,
-            "message": f"provider {provider!r} not supported yet",
+            "message": "no toolkits specified",
         }
 
-    existing: list[tuple[str, str]] = []
-    for product in products:
-        row = await state.get_integration_status(user_id, provider, product)
-        existing.append((product, row.status if row else "absent"))
+    # Read existing rows for the requested toolkits in one pass so we can
+    # decide between cached-URL reuse, fresh issuance, and short-circuit.
+    rows: dict[str, object] = {}
+    statuses: list[tuple[str, str]] = []
+    for tk in requested:
+        prov, prod = _provider_product(tk)
+        row = await state.get_integration_status(user_id, prov, prod)
+        rows[tk] = row
+        statuses.append((tk, row.status if row else "absent"))
 
-    if all(s == "connected" for _, s in existing):
+    if all(s == "connected" for _, s in statuses):
         return {
             "status": "already_connected",
             "url": None,
             "message": "already connected",
         }
 
-    pending_products = [p for p, s in existing if s != "connected"]
-    toolkits = [_PRODUCT_TO_TOOLKIT[p] for p in pending_products]
+    # If every NOT-yet-connected toolkit has a fresh cached URL pointing
+    # at the same chain head, hand back the same URL. The chain walks the
+    # remaining toolkits after the user taps once.
+    pending_rows = [rows[tk] for tk, s in statuses if s != "connected"]
+    if pending_rows and all(state.is_redirect_url_fresh(r) for r in pending_rows):
+        urls = {tk: rows[tk].redirect_url for tk, s in statuses if s != "connected"}
+        # Defensive: if the rows happen to disagree on URL (shouldn't,
+        # since we wrote them in the same call), fall through and re-issue.
+        head_url = next(iter(urls.values()))
+        if all(u == head_url for u in urls.values()):
+            ordered = [(tk, urls[tk]) for tk in requested if tk in urls]
+            return {
+                "status": "url_sent",
+                "url": head_url,
+                "toolkits": [t for t, _ in ordered],
+                "urls": {t: u for t, u in ordered},
+                "message": _consent_message(ordered),
+                "cached": True,
+            }
+
+    pending_toolkits = [tk for tk, s in statuses if s != "connected"]
 
     toolkit_to_ac = await composio_meta.resolve_auth_configs(
-        toolkits=toolkits, user_id=user_id
+        toolkits=pending_toolkits, user_id=user_id
     )
     chain = await composio_meta.initiate_oauth_chain(
         user_id=user_id,
         toolkit_to_auth_config=toolkit_to_ac,
     )
 
-    # chain["chain"] preserves toolkit order from toolkit_to_ac, which we
-    # built from pending_products, so this re-projection lines up.
-    product_links: list[tuple[str, str]] = []
+    toolkit_links: list[tuple[str, str]] = []
     for entry in chain["chain"]:
-        product = _TOOLKIT_TO_PRODUCT.get(entry["toolkit"])
-        if product:
-            product_links.append((product, entry["redirect_url"]))
+        toolkit_links.append((entry["toolkit"], entry["redirect_url"]))
 
-    for product in products:
-        await state.upsert_pending(user_id, provider, product)
-
-    if not product_links:
+    if not toolkit_links:
         return {
             "status": "error",
             "url": None,
             "message": "composio returned no redirect urls",
         }
 
+    # Cache the chain HEAD URL on every requested-toolkit row so any
+    # follow-up call within the freshness window returns the same URL.
+    head_url = toolkit_links[0][1]
+    for tk in requested:
+        prov, prod = _provider_product(tk)
+        await state.upsert_pending(
+            user_id, prov, prod, redirect_url=head_url
+        )
+
     return {
         "status": "url_sent",
-        "url": product_links[0][1],
-        "urls": {p: u for p, u in product_links},
-        "message": _consent_message(product_links),
+        "url": head_url,
+        "toolkits": [t for t, _ in toolkit_links],
+        # Keep "urls" keyed by toolkit slug for downstream consumers.
+        # Watcher + post-tool hook now consume slugs directly.
+        "urls": {t: u for t, u in toolkit_links},
+        "message": _consent_message(toolkit_links),
+        "cached": False,
     }

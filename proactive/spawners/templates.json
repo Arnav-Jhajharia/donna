@@ -1,0 +1,131 @@
+{
+  "calendar": {
+    "exam": {
+      "category_keywords": ["exam", "test", "midterm", "final", "quiz", "interview"],
+      "templates": [
+        {
+          "id": "exam_wakeup",
+          "confidence": "high",
+          "offset_minutes_before": 180,
+          "wake_floor": true,
+          "intent": "remind me {when} at {time_local}: get up, shower, breakfast"
+        },
+        {
+          "id": "exam_prep",
+          "confidence": "high",
+          "offset_minutes_before": 60,
+          "intent": "remind me {when} at {time_local}: {title} kicks off in one hour"
+        }
+      ]
+    },
+    "flight": {
+      "category_keywords": ["flight", "boarding", "departure", "airport"],
+      "templates": [
+        {
+          "id": "flight_prep",
+          "confidence": "high",
+          "offset_minutes_before": 180,
+          "intent": "remind me {when} at {time_local}: pack and confirm before departure"
+        },
+        {
+          "id": "flight_wakeup",
+          "confidence": "high",
+          "offset_minutes_before": 240,
+          "wake_floor": true,
+          "wake_only_if_before_normal": true,
+          "intent": "remind me {when} at {time_local}: get up, you fly soon"
+        }
+      ]
+    },
+    "medical": {
+      "category_keywords": [
+        "doctor", "dentist", "physio", "physiotherapy", "surgery",
+        "appointment", "clinic", "hospital", "checkup", "check-up"
+      ],
+      "templates": [
+        {
+          "id": "medical_day_before",
+          "confidence": "high",
+          "offset_minutes_before": 1440,
+          "intent": "remind me {when} at {time_local}: {title} is tomorrow"
+        },
+        {
+          "id": "medical_prep",
+          "confidence": "high",
+          "offset_minutes_before": 60,
+          "intent": "remind me {when} at {time_local}: leave soon for the appointment"
+        }
+      ]
+    },
+    "one_on_one_biography": {
+      "category_keywords": [],
+      "templates": [
+        {
+          "id": "one_on_one_prep",
+          "confidence": "high",
+          "offset_minutes_before": 30,
+          "intent": "prep me 30 minutes before {title} with a quick read on recent threads"
+        }
+      ]
+    },
+    "stakes_meeting": {
+      "category_keywords": [],
+      "templates": [
+        {
+          "id": "stakes_meeting_prep",
+          "confidence": "medium",
+          "offset_minutes_before": 15,
+          "intent": "prep me 15 minutes before {title}"
+        }
+      ]
+    }
+  },
+  "observation": {
+    "drinking_event": {
+      "templates": [
+        {
+          "id": "drinking_hydration",
+          "confidence": "high",
+          "fire_local_hour": 9,
+          "fire_local_minute": 0,
+          "next_day": true,
+          "evening_window_start_hour": 18,
+          "evening_window_end_hour": 3,
+          "intent": "remind me tomorrow at 9am to drink water, was rough last night"
+        }
+      ]
+    },
+    "sleep_regression": {
+      "obs_types": ["sleep"],
+      "trigger": {
+        "min_short_nights": 2,
+        "lookback_nights": 3,
+        "max_hours": 6.0
+      },
+      "templates": [
+        {
+          "id": "sleep_lights_out",
+          "confidence": "high",
+          "fallback_local_hour": 23,
+          "fallback_local_minute": 0,
+          "intent": "remind me tonight at {time_local} to wind down, third short night this week"
+        }
+      ]
+    },
+    "mood_low": {
+      "markers": ["low", "down", "bad", "trash", "rough", "shit", "garbage"],
+      "templates": [
+        {
+          "id": "mood_low_checkin",
+          "confidence": "medium",
+          "offset_hours_after": 24,
+          "intent": "check in with me tomorrow about how today landed"
+        }
+      ]
+    },
+    "skipped_meal": {
+      "markers": [],
+      "templates": []
+    }
+  }
+}

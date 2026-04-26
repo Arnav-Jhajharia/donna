@@ -107,7 +107,12 @@ class AuthorResult:
 
 
 _BARE_REMINDER_PATTERNS = [
-    r"remind me (to|that|about)\b",
+    # Any "remind me" phrasing — author's _parse_reminder handles every
+    # supported time/recurrence shape. If parsing fails it raises
+    # UnparseableReminderError and we fall through to the LLM. The
+    # narrower (to|that|about) gate previously here missed common forms
+    # like "remind me in 1 minute to ..." and "remind me at 5pm to ...".
+    r"\bremind me\b",
     r"^ping me\b",
     r"^set (a )?reminder\b",
     r"don'?t let me forget\b",
@@ -161,13 +166,37 @@ def _parse_time_hhmm(raw: str) -> tuple[int, int] | None:
     return _to_24h(hour, minute, meridiem)
 
 
-def _parse_reminder(raw: str, user_tz: str) -> Cadence:
+class ReminderInPastError(ValueError):
+    """Raised when a bare reminder explicitly names 'today' but the time has already passed.
+
+    Callers should treat this as a signal to fall through to the LLM author path,
+    which can elicit a clarification via user_elicitation.
+    """
+
+
+class UnparseableReminderError(ValueError):
+    """Raised when a bare reminder has no recognizable time/recurrence signal.
+
+    Callers should fall through to the LLM path so the model can elicit the
+    missing detail rather than defaulting to an arbitrary trigger time.
+    """
+
+
+def _parse_reminder(
+    raw: str, user_tz: str, *, now: datetime | None = None
+) -> Cadence:
     """Parse a bare reminder into a Cadence honoring user_tz.
 
     Priority: interval > weekly > monthly-day > daily > in-N > at-time > fallback.
+    ``now`` is injectable for tests; defaults to ``datetime.now(tz)``.
     """
     tz = ZoneInfo(user_tz)
-    now = datetime.now(tz=tz)
+    if now is None:
+        now = datetime.now(tz=tz)
+    elif now.tzinfo is None:
+        now = now.replace(tzinfo=tz)
+    else:
+        now = now.astimezone(tz)
     low = raw.lower()
 
     # every N minutes/hours
@@ -187,6 +216,24 @@ def _parse_reminder(raw: str, user_tz: str) -> Cadence:
             params={"interval_seconds": n * 86400},
         )
 
+    # every weekday [at HH(:MM)]  → cron Mon..Fri
+    m = re.search(r"\bevery\s+weekday(?:s)?\b", low)
+    if m:
+        t = _parse_time_hhmm(raw) or (9, 0)
+        return Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"cron": f"{t[1]} {t[0]} * * 1-5"},
+        )
+
+    # every weekend [at HH(:MM)]  → cron Sat,Sun
+    m = re.search(r"\bevery\s+weekend(?:s)?\b", low)
+    if m:
+        t = _parse_time_hhmm(raw) or (9, 0)
+        return Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"cron": f"{t[1]} {t[0]} * * 0,6"},
+        )
+
     # every <dow> [at HH(:MM) (am|pm)?]
     dow_re = r"\bevery\s+(" + "|".join(_DOW_MAP.keys()) + r")\b"
     m = re.search(dow_re, low)
@@ -198,6 +245,17 @@ def _parse_reminder(raw: str, user_tz: str) -> Cadence:
             params={"cron": f"{t[1]} {t[0]} * * {dow}"},
         )
 
+    # "last of every month" / "last day of each month" — clamps to month's last day
+    m = re.search(r"\bon the last (?:day )?of (?:every|each|the) month\b", low)
+    if not m:
+        m = re.search(r"\blast day of (?:every|each|the) month\b", low)
+    if m:
+        t = _parse_time_hhmm(raw) or (9, 0)
+        return Cadence(
+            type=CadenceType.SCHEDULED,
+            params={"monthly_day": "last", "hour": t[0], "minute": t[1]},
+        )
+
     # on the Nth (of every month | each month | every month | of the month) with optional time
     m = re.search(
         r"\bon the (\d{1,2})(?:st|nd|rd|th)?\b.*?\b(of every month|of each month|every month|each month|of the month)\b",
@@ -206,18 +264,29 @@ def _parse_reminder(raw: str, user_tz: str) -> Cadence:
     if m:
         day = int(m.group(1))
         t = _parse_time_hhmm(raw) or (9, 0)
+        if 1 <= day <= 28:
+            return Cadence(
+                type=CadenceType.SCHEDULED,
+                params={"cron": f"{t[1]} {t[0]} {day} * *"},
+            )
+        # 29..31: raw cron silently skips short months; monthly_day shape clamps to last
         return Cadence(
             type=CadenceType.SCHEDULED,
-            params={"cron": f"{t[1]} {t[0]} {day} * *"},
+            params={"monthly_day": day, "hour": t[0], "minute": t[1]},
         )
     # "on the 5th every month" (order variant)
     m = re.search(r"\bon the (\d{1,2})(?:st|nd|rd|th)?\s+every month\b", low)
     if m:
         day = int(m.group(1))
         t = _parse_time_hhmm(raw) or (9, 0)
+        if 1 <= day <= 28:
+            return Cadence(
+                type=CadenceType.SCHEDULED,
+                params={"cron": f"{t[1]} {t[0]} {day} * *"},
+            )
         return Cadence(
             type=CadenceType.SCHEDULED,
-            params={"cron": f"{t[1]} {t[0]} {day} * *"},
+            params={"monthly_day": day, "hour": t[0], "minute": t[1]},
         )
 
     # every day at HH(:MM)
@@ -263,15 +332,24 @@ def _parse_reminder(raw: str, user_tz: str) -> Cadence:
     t = _parse_time_hhmm(raw)
     if t is not None:
         target = now.replace(hour=t[0], minute=t[1], second=0, microsecond=0)
-        if "tomorrow" in low:
+        said_today = re.search(r"\btoday\b", low) is not None
+        said_tomorrow = "tomorrow" in low
+        if said_tomorrow:
             target = target + timedelta(days=1)
+        elif said_today:
+            if target <= now:
+                raise ReminderInPastError(
+                    f"intent names 'today' but {t[0]:02d}:{t[1]:02d} has already passed in {user_tz}"
+                )
         elif target <= now:
+            # No day-token and time has passed — pragmatic default is next day.
             target = target + timedelta(days=1)
         return Cadence(type=CadenceType.ONE_SHOT, params={"trigger_at": target.isoformat()})
 
-    # fallback: now + 1h in user_tz
-    target = now + timedelta(hours=1)
-    return Cadence(type=CadenceType.ONE_SHOT, params={"trigger_at": target.isoformat()})
+    # No branch matched: refuse to invent a trigger time. Caller should elicit.
+    raise UnparseableReminderError(
+        f"could not extract a time or recurrence from reminder text: {raw!r}"
+    )
 
 
 def _ping_spec(
@@ -407,6 +485,14 @@ async def author_spec(
                 reasoning="Bare reminder → Ping short-circuit (no LLM call).",
                 retrieved_ids=(),
                 via="ping_shortcircuit",
+            )
+        except ReminderInPastError:
+            logger.info(
+                "ping short-circuit: 'today' time already past — falling through to LLM for clarification"
+            )
+        except UnparseableReminderError:
+            logger.info(
+                "ping short-circuit: no time signal in reminder — falling through to LLM for elicitation"
             )
         except ValidationError:
             logger.warning("ping short-circuit failed validation; falling through")

@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Donna — Plan A · Invitation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root{--paper-50:#FDFAF8;--paper-100:#FBF7F5;--paper-200:#F5EFEA;--paper-300:#F0EAE4;--paper-400:#E7DFD7;--ink-900:#1E1A18;--ink-800:#3A3331;--ink-600:#6B615C;--ink-500:#8F837C;--ink-400:#B5A89F;--ink-300:#D9CEC5;--rust-900:#4A2F23;--rust-700:#7B5544;--rust-100:#EBDCD2;--rust-50:#F5EFEA;--moss-700:#5C6B4A;--moss-100:#EEF1E7;--amber-700:#A8804A;--amber-100:#F5EBD9;--hairline:rgba(30,26,24,0.08);--hairline-strong:rgba(30,26,24,0.14);--sans:'Red Hat Text',sans-serif;--serif:'EB Garamond',serif}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--paper-200);color:var(--ink-900);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  .gate{max-width:1240px;margin:0 auto;padding:56px 48px 32px}
+  .crumbs{font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:var(--ink-500);font-weight:500;margin-bottom:24px}
+  .crumbs a{color:var(--ink-500);text-decoration:none}
+  .tag{font-size:10px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--rust-700);margin-bottom:10px}
+  h1{font-family:var(--serif);font-weight:400;font-size:44px;line-height:1.06;letter-spacing:-0.02em;margin:0 0 14px;max-width:18ch}
+  h1 em{font-style:italic;color:var(--rust-700)}
+  .lead{font-family:var(--serif);font-style:italic;font-size:19px;line-height:1.5;color:var(--ink-800);max-width:60ch;margin:0 0 10px}
+  .meta{font-size:13px;color:var(--ink-600);line-height:1.55;max-width:68ch}
+  .stage{max-width:1240px;margin:0 auto;padding:32px 48px 48px;display:grid;grid-template-columns:440px 1fr;gap:56px;align-items:start}
+  .column{width:440px}
+  /* phone column */
+  .phone{width:440px;background:var(--paper-100);border-left:1px solid var(--hairline);border-right:1px solid var(--hairline);min-height:920px;padding:0 0 56px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:22px 24px 18px;border-bottom:1px solid var(--hairline)}
+  .mark{font-family:var(--serif);font-style:italic;font-weight:500;font-size:22px;letter-spacing:-0.01em;color:var(--ink-900)}
+  .initial{width:30px;height:30px;border:1px solid var(--hairline-strong);border-radius:999px;display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--ink-800)}
+  .living{padding:18px 24px 22px;border-bottom:1px solid var(--hairline)}
+  .living .eye{font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-500);margin-bottom:10px}
+  .living .who{font-family:var(--serif);font-size:21px;line-height:1.3;letter-spacing:-0.005em;color:var(--ink-900);margin:0 0 4px}
+  .living .who em{font-style:italic;color:var(--rust-700)}
+  .living .facts{font-family:var(--serif);font-style:italic;font-size:14.5px;line-height:1.5;color:var(--ink-800);margin:0}
+  .thesis{padding:24px 24px 16px;border-bottom:1px solid var(--hairline)}
+  .thesis .eye{font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--rust-700);margin-bottom:6px}
+  .thesis .sentence{font-family:var(--serif);font-size:22px;line-height:1.28;letter-spacing:-0.005em;color:var(--ink-900);margin:0}
+  .prompt{padding:32px 24px 28px;border-bottom:1px solid var(--hairline);background:var(--paper-50)}
+  .prompt h2{font-family:var(--serif);font-weight:400;font-size:26px;line-height:1.18;letter-spacing:-0.01em;margin:0 0 6px}
+  .prompt h2 em{font-style:italic;color:var(--rust-700)}
+  .prompt p{font-family:var(--serif);font-style:italic;font-size:15px;line-height:1.5;color:var(--ink-700);margin:0 0 18px}
+  .input{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--paper-100);border:1px solid var(--hairline-strong);border-radius:8px;font-size:14.5px;color:var(--ink-800);font-family:var(--serif);font-style:italic}
+  .input .cursor{display:inline-block;width:1.5px;height:1.05em;background:var(--rust-700);animation:blink 1.1s step-end infinite;transform:translateY(1px)}
+  @keyframes blink{50%{opacity:0}}
+  .phrasings{padding:18px 24px 22px;border-bottom:1px solid var(--hairline)}
+  .phrasings .lbl{font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-500);margin-bottom:10px}
+  .phrasings ul{list-style:none;margin:0;padding:0}
+  .phrasings li{font-family:var(--serif);font-style:italic;font-size:14px;line-height:1.55;color:var(--ink-800);padding:6px 0;border-bottom:1px dashed var(--hairline)}
+  .phrasings li:last-child{border-bottom:0}
+  .phrasings li::before{content:'"';color:var(--rust-500);margin-right:4px;font-style:normal}
+  .phrasings li::after{content:'"';color:var(--rust-500);margin-left:2px;font-style:normal}
+  /* dry run preview card */
+  .preview-wrap{padding:28px 24px 32px}
+  .preview-wrap .lbl{font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--rust-700);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+  .preview-wrap .lbl .dot{width:6px;height:6px;border-radius:999px;background:var(--rust-700)}
+  .preview{border:1px solid var(--hairline-strong);background:var(--paper-100);border-radius:10px;overflow:hidden}
+  .preview-head{padding:16px 18px 12px;border-bottom:1px solid var(--hairline);display:flex;justify-content:space-between;align-items:baseline}
+  .preview-head .card{font-family:var(--serif);font-weight:400;font-size:19px;letter-spacing:-0.005em;color:var(--ink-900)}
+  .preview-head .card em{font-style:italic;color:var(--rust-700)}
+  .preview-head .kind{font-size:9.5px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--ink-500)}
+  .preview-body{padding:16px 18px}
+  .row{display:flex;justify-content:space-between;align-items:baseline;padding:7px 0;border-bottom:1px dashed var(--hairline);font-size:13px}
+  .row:last-child{border-bottom:0}
+  .row .k{color:var(--ink-500);letter-spacing:0.06em;text-transform:uppercase;font-size:10px;font-weight:500}
+  .row .v{color:var(--ink-800);font-family:var(--serif);font-style:italic;font-size:14.5px;text-align:right;max-width:64%}
+  .preview-preview{padding:14px 18px 16px;border-top:1px solid var(--hairline);background:var(--paper-50)}
+  .preview-preview .plbl{font-size:9.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-500);margin-bottom:6px}
+  .preview-preview .pbody{font-family:var(--serif);font-size:15px;line-height:1.45;color:var(--ink-900);margin:0}
+  .preview-preview .pbody em{font-style:italic;color:var(--rust-700)}
+  .actions{display:grid;grid-template-columns:1fr 1fr 1fr;gap:0;border-top:1px solid var(--hairline)}
+  .btn{padding:14px 10px;text-align:center;font-size:12px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:var(--ink-800);background:var(--paper-100);border-right:1px solid var(--hairline);cursor:pointer}
+  .btn.primary{background:var(--rust-700);color:var(--paper-100);font-weight:600}
+  .btn:last-child{border-right:0}
+  .btn.ghost{color:var(--ink-500)}
+  /* right rail — rationale */
+  .rationale{padding:8px 0 0 0}
+  .rationale h3{font-family:var(--serif);font-weight:400;font-size:24px;line-height:1.18;letter-spacing:-0.01em;margin:0 0 14px}
+  .rationale h3 em{font-style:italic;color:var(--rust-700)}
+  .rationale p{font-size:14.5px;line-height:1.7;color:var(--ink-800);margin:0 0 14px;max-width:56ch}
+  .rationale p.q{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink-600)}
+  .rationale .pair{display:grid;grid-template-columns:130px 1fr;gap:16px;padding:8px 0;border-bottom:1px dashed var(--hairline);font-size:13.5px;line-height:1.5}
+  .rationale .pair:last-of-type{border-bottom:0}
+  .rationale .pair .k{color:var(--ink-500);letter-spacing:0.1em;text-transform:uppercase;font-size:10.5px;font-weight:500;padding-top:3px}
+  .rationale .pair .v{color:var(--ink-800)}
+  .rationale .block{margin-top:28px;padding-top:18px;border-top:1px solid var(--hairline)}
+  .nav{max-width:1240px;margin:0 auto;padding:24px 48px 72px;border-top:1px solid var(--hairline);display:flex;justify-content:space-between;font-size:12px;color:var(--ink-500)}
+  .nav a{color:var(--ink-500);text-decoration:none}
+  .nav a:hover{color:var(--ink-900)}
+</style>
+</head>
+<body>
+
+<div class="gate">
+  <div class="crumbs"><a href="action-plans-index.html">Action plans</a> &nbsp;/&nbsp; Plan A</div>
+  <div class="tag">Plan A</div>
+  <h1>Invitation — she waits to be <em>asked.</em></h1>
+  <p class="lead">The dashboard is a quiet, predictable surface. Donna authors nothing without you starting the sentence. When you do, the dry&#8209;run spec lands here for your approval before anything goes live.</p>
+  <p class="meta">Shadow mode is off. All six attention cards (tally, event&#8209;stream, brief, prep&#8209;doc, open&#8209;loop, ping) arrive through the same pipeline: intent → normalize → retrieve → author → dry_run → approve.</p>
+</div>
+
+<div class="stage">
+  <div class="column">
+    <div class="phone">
+
+      <!-- top bar -->
+      <div class="topbar">
+        <div class="mark">donna</div>
+        <div class="initial">A</div>
+      </div>
+
+      <!-- living surface -->
+      <div class="living">
+        <div class="eye">what i know about you</div>
+        <div class="who">aarav · <em>mumbai</em> · 28</div>
+        <p class="facts">founder, antler quarter. lives alone in bandra. sleeps poorly when priya is slipping. loves his dad but forgets to call.</p>
+      </div>
+
+      <!-- thesis -->
+      <div class="thesis">
+        <div class="eye">today</div>
+        <p class="sentence">today is about priya before it gets weirder.</p>
+      </div>
+
+      <!-- the author prompt -->
+      <div class="prompt">
+        <h2>ask me to <em>watch</em> something.</h2>
+        <p>tell me what you want me to keep an eye on. i won't start anything without you.</p>
+        <div class="input">keep an eye on <span class="cursor"></span></div>
+      </div>
+
+      <!-- phrasings -->
+      <div class="phrasings">
+        <div class="lbl">people start here</div>
+        <ul>
+          <li>keep an eye on luca — he always goes quiet before the deck slips</li>
+          <li>remind me 2 hours before any flight</li>
+          <li>summarize my week every friday evening</li>
+          <li>brief me before any 1:1 with priya</li>
+          <li>track how often i skip lunch</li>
+        </ul>
+      </div>
+
+      <!-- dry run preview -->
+      <div class="preview-wrap">
+        <div class="lbl"><span class="dot"></span> dry&#8209;run · awaiting you</div>
+        <div class="preview">
+          <div class="preview-head">
+            <div class="card">keep an eye on <em>luca</em></div>
+            <div class="kind">event_stream</div>
+          </div>
+          <div class="preview-body">
+            <div class="row"><span class="k">subject</span><span class="v">luca — antler, backer</span></div>
+            <div class="row"><span class="k">sources</span><span class="v">email · calendar · chat mentions</span></div>
+            <div class="row"><span class="k">cadence</span><span class="v">daily at 07:30 IST</span></div>
+            <div class="row"><span class="k">surface</span><span class="v">quiet — dashboard only, no WhatsApp</span></div>
+          </div>
+          <div class="preview-preview">
+            <div class="plbl">what it'll look like</div>
+            <p class="pbody">luca replied to the friday thread at 22:11. tone reads <em>tired</em>. he asked about the deck twice this week.</p>
+          </div>
+          <div class="actions">
+            <button class="btn ghost">tweak</button>
+            <button class="btn ghost">not yet</button>
+            <button class="btn primary">make it live</button>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="rationale">
+    <h3>Why <em>Invitation</em> is a serious option.</h3>
+    <p>This is the plan with the highest trust floor. Donna never surprises you. Every attention on the dashboard came from a sentence you said out loud. When she renders a dry run, it's because you started it.</p>
+
+    <p class="q">It is also the least ambitious. If you expect Donna to notice things you can't, this plan trains her to never try.</p>
+
+    <div class="block">
+      <div class="pair"><span class="k">Shadow</span><span class="v">Disabled globally. <code>propose_and_shadow</code> never runs. No silent inference.</span></div>
+      <div class="pair"><span class="k">Pipeline</span><span class="v">User intent (via WhatsApp or the dashboard prompt) → <code>normalize</code> → <code>retrieve</code> → <code>author</code> → <code>dry_run_pending</code> on dashboard → you approve → <code>LIVE</code>.</span></div>
+      <div class="pair"><span class="k">Cold start</span><span class="v">The intent prompt is the whole page. The phrasings list is the teaching surface — five gold examples, one per card, rotating.</span></div>
+      <div class="pair"><span class="k">Known user</span><span class="v">Thesis + Living surface top the screen. Dry&#8209;run card appears only when a new intent is in flight. Machinery lives one tap deeper.</span></div>
+      <div class="pair"><span class="k">Templates needed</span><span class="v">Six dry&#8209;run card previews (one per AttentionSpec card) + today blocks per live card. Twelve total.</span></div>
+      <div class="pair"><span class="k">Wins when</span><span class="v">User is control&#8209;forward. Product needs to establish trust before earning shadow privilege.</span></div>
+      <div class="pair"><span class="k">Loses when</span><span class="v">User doesn't know what to ask for. Dashboard feels empty. Donna's voice never speaks first.</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="nav">
+  <a href="action-plans-index.html">← All plans</a>
+  <span>Plan A · Invitation</span>
+  <a href="plan-b-quiet-garden.html">Plan B · Quiet Garden →</a>
+</div>
+
+</body>
+</html>

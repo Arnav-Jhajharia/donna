@@ -1,0 +1,236 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Donna — Plan B · Quiet Garden</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400;0,500;1,400;1,500&family=Red+Hat+Text:wght@400;500;600&display=swap" rel="stylesheet"/>
+<style>
+  :root{--paper-50:#FDFAF8;--paper-100:#FBF7F5;--paper-200:#F5EFEA;--paper-300:#F0EAE4;--paper-400:#E7DFD7;--ink-900:#1E1A18;--ink-800:#3A3331;--ink-600:#6B615C;--ink-500:#8F837C;--ink-400:#B5A89F;--ink-300:#D9CEC5;--rust-900:#4A2F23;--rust-700:#7B5544;--rust-100:#EBDCD2;--rust-50:#F5EFEA;--moss-700:#5C6B4A;--moss-100:#EEF1E7;--amber-700:#A8804A;--amber-100:#F5EBD9;--oxblood-700:#8B3A2E;--oxblood-100:#F3E0DC;--hairline:rgba(30,26,24,0.08);--hairline-strong:rgba(30,26,24,0.14);--sans:'Red Hat Text',sans-serif;--serif:'EB Garamond',serif}
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0;background:var(--paper-200);color:var(--ink-900);font-family:var(--sans);-webkit-font-smoothing:antialiased}
+  .gate{max-width:1240px;margin:0 auto;padding:56px 48px 32px}
+  .crumbs{font-size:11px;text-transform:uppercase;letter-spacing:0.14em;color:var(--ink-500);font-weight:500;margin-bottom:24px}
+  .crumbs a{color:var(--ink-500);text-decoration:none}
+  .tag{font-size:10px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--rust-700);margin-bottom:10px}
+  h1{font-family:var(--serif);font-weight:400;font-size:44px;line-height:1.06;letter-spacing:-0.02em;margin:0 0 14px;max-width:20ch}
+  h1 em{font-style:italic;color:var(--rust-700)}
+  .lead{font-family:var(--serif);font-style:italic;font-size:19px;line-height:1.5;color:var(--ink-800);max-width:60ch;margin:0 0 10px}
+  .meta{font-size:13px;color:var(--ink-600);line-height:1.55;max-width:68ch}
+  .stage{max-width:1240px;margin:0 auto;padding:32px 48px 48px;display:grid;grid-template-columns:440px 1fr;gap:56px;align-items:start}
+  .phone{width:440px;background:var(--paper-100);border-left:1px solid var(--hairline);border-right:1px solid var(--hairline);min-height:920px}
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:22px 24px 16px}
+  .date{font-size:10px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--rust-700)}
+  .initial{width:30px;height:30px;border:1px solid var(--hairline-strong);border-radius:999px;display:grid;place-items:center;font-size:12px;font-weight:600;color:var(--ink-800)}
+  .banner{padding:28px 24px 26px;border-top:1px solid var(--hairline);border-bottom:1px solid var(--hairline);background:var(--paper-50)}
+  .banner h2{font-family:var(--serif);font-weight:400;font-size:28px;line-height:1.15;letter-spacing:-0.01em;margin:0 0 8px}
+  .banner h2 em{font-style:italic;color:var(--rust-700)}
+  .banner p{font-family:var(--serif);font-style:italic;font-size:15.5px;line-height:1.55;color:var(--ink-800);margin:0 0 14px}
+  .banner .count{display:flex;justify-content:space-between;align-items:baseline;padding-top:12px;border-top:1px dashed var(--hairline)}
+  .banner .count .n{font-family:var(--serif);font-size:30px;line-height:1;color:var(--ink-900);font-variant-numeric:tabular-nums}
+  .banner .count .l{font-size:10.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-500)}
+  /* offer rows */
+  .offer{padding:18px 24px 18px;border-bottom:1px solid var(--hairline);display:block}
+  .offer:last-of-type{border-bottom:1px solid var(--hairline)}
+  .offer .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px}
+  .offer .why{font-size:10.5px;font-weight:500;letter-spacing:0.16em;text-transform:uppercase;color:var(--ink-500)}
+  .offer .why.rust{color:var(--rust-700)}
+  .offer .kind{font-size:9.5px;font-weight:600;letter-spacing:0.18em;text-transform:uppercase;color:var(--ink-500);padding:2px 7px;border:1px solid var(--hairline-strong);border-radius:3px;background:var(--paper-200)}
+  .offer h3{font-family:var(--serif);font-weight:400;font-size:20px;line-height:1.22;margin:0 0 6px;letter-spacing:-0.005em;color:var(--ink-900)}
+  .offer h3 em{font-style:italic;color:var(--rust-700)}
+  .offer .because{font-family:var(--serif);font-style:italic;font-size:14px;line-height:1.5;color:var(--ink-700);margin:0 0 14px}
+  .chips{display:flex;gap:0;border:1px solid var(--hairline-strong);border-radius:5px;overflow:hidden}
+  .chip{flex:1;padding:10px 6px;text-align:center;font-size:11.5px;font-weight:500;letter-spacing:0.08em;text-transform:uppercase;color:var(--ink-700);background:var(--paper-100);border-right:1px solid var(--hairline);cursor:pointer}
+  .chip:last-child{border-right:0}
+  .chip.yes{color:var(--moss-700);font-weight:600}
+  .chip.no{color:var(--oxblood-700)}
+  .chip.ghost{color:var(--ink-500)}
+  /* footer commit strip */
+  .commit{padding:24px 24px 32px;background:var(--paper-300);border-top:1px solid var(--hairline-strong);display:flex;justify-content:space-between;align-items:center;gap:16px}
+  .commit .summary{font-family:var(--serif);font-style:italic;font-size:14.5px;line-height:1.4;color:var(--ink-800);margin:0}
+  .commit .go{padding:13px 20px;background:var(--rust-700);color:var(--paper-100);font-size:12px;font-weight:600;letter-spacing:0.1em;text-transform:uppercase;border:0;cursor:pointer;border-radius:4px;white-space:nowrap}
+  /* rationale */
+  .rationale{padding:8px 0}
+  .rationale h3{font-family:var(--serif);font-weight:400;font-size:24px;line-height:1.18;margin:0 0 14px;letter-spacing:-0.01em}
+  .rationale h3 em{font-style:italic;color:var(--rust-700)}
+  .rationale p{font-size:14.5px;line-height:1.7;color:var(--ink-800);margin:0 0 14px;max-width:56ch}
+  .rationale p.q{font-family:var(--serif);font-style:italic;font-size:16px;color:var(--ink-600)}
+  .rationale .pair{display:grid;grid-template-columns:130px 1fr;gap:16px;padding:8px 0;border-bottom:1px dashed var(--hairline);font-size:13.5px;line-height:1.5}
+  .rationale .pair:last-of-type{border-bottom:0}
+  .rationale .pair .k{color:var(--ink-500);letter-spacing:0.1em;text-transform:uppercase;font-size:10.5px;font-weight:500;padding-top:3px}
+  .rationale .block{margin-top:28px;padding-top:18px;border-top:1px solid var(--hairline)}
+  .nav{max-width:1240px;margin:0 auto;padding:24px 48px 72px;border-top:1px solid var(--hairline);display:flex;justify-content:space-between;font-size:12px;color:var(--ink-500)}
+  .nav a{color:var(--ink-500);text-decoration:none}
+  .nav a:hover{color:var(--ink-900)}
+  code{font-family:ui-monospace,SFMono-Regular,monospace;font-size:12px;background:var(--paper-300);padding:1px 5px;border-radius:3px}
+</style>
+</head>
+<body>
+
+<div class="gate">
+  <div class="crumbs"><a href="action-plans-index.html">Action plans</a> &nbsp;/&nbsp; Plan B</div>
+  <div class="tag">Plan B</div>
+  <h1>Quiet <em>Garden</em> — harvest on Sundays.</h1>
+  <p class="lead">Donna shadows all week, silently. Sunday evening the dashboard transforms into a harvest page with seven offers you batch&#8209;decide in one sitting. The rest of the week, nothing new arrives.</p>
+  <p class="meta">Shadow is aggressive. <code>propose_and_shadow</code> runs every six hours. Promotion is batched into a weekly cycle. Monday through Saturday, the dashboard shows live attentions only — no interruptions.</p>
+</div>
+
+<div class="stage">
+  <div class="column">
+    <div class="phone">
+
+      <div class="topbar">
+        <div class="date">sun · 27 apr · 20:04</div>
+        <div class="initial">A</div>
+      </div>
+
+      <div class="banner">
+        <h2>your week in <em>shadow.</em></h2>
+        <p>i watched seven things quietly this week. before monday, tell me which were real.</p>
+        <div class="count">
+          <div>
+            <div class="n">7</div>
+          </div>
+          <div class="l">proposals · ready in 4 min</div>
+        </div>
+      </div>
+
+      <!-- offer 1 · tally -->
+      <div class="offer">
+        <div class="top">
+          <div class="why rust">i noticed a pattern</div>
+          <div class="kind">tally</div>
+        </div>
+        <h3>track <em>skipped lunches.</em></h3>
+        <p class="because">you skipped lunch four out of the five weekdays i watched. you said on tuesday you'd "eat better this week." keep this count going?</p>
+        <div class="chips">
+          <button class="chip yes">yes, real</button>
+          <button class="chip ghost">tweak</button>
+          <button class="chip no">not me</button>
+        </div>
+      </div>
+
+      <!-- offer 2 · event_stream -->
+      <div class="offer">
+        <div class="top">
+          <div class="why">i heard a name three times</div>
+          <div class="kind">event_stream</div>
+        </div>
+        <h3>keep an eye on <em>luca.</em></h3>
+        <p class="because">luca mentioned in tuesday, wednesday, friday chats. mostly about the antler deck. i could watch his replies + the deck thread daily.</p>
+        <div class="chips">
+          <button class="chip yes">yes, real</button>
+          <button class="chip ghost">tweak</button>
+          <button class="chip no">not me</button>
+        </div>
+      </div>
+
+      <!-- offer 3 · brief -->
+      <div class="offer">
+        <div class="top">
+          <div class="why">you asked for this on thursday</div>
+          <div class="kind">brief</div>
+        </div>
+        <h3><em>friday evening</em> wind&#8209;down brief.</h3>
+        <p class="because">you said "i want to stop working at seven on fridays but i don't." i could write you a 3&#8209;paragraph read of your week every friday at 18:30, so the stop has a landing.</p>
+        <div class="chips">
+          <button class="chip yes">yes, real</button>
+          <button class="chip ghost">tweak</button>
+          <button class="chip no">not me</button>
+        </div>
+      </div>
+
+      <!-- offer 4 · prep_doc -->
+      <div class="offer">
+        <div class="top">
+          <div class="why">recurring 1:1 with priya detected</div>
+          <div class="kind">prep_doc</div>
+        </div>
+        <h3>brief before every <em>priya 1:1.</em></h3>
+        <p class="because">thursdays at 10:00. i'll pull what she was last working on, any slack friction this week, and the one thing you promised her.</p>
+        <div class="chips">
+          <button class="chip yes">yes, real</button>
+          <button class="chip ghost">tweak</button>
+          <button class="chip no">not me</button>
+        </div>
+      </div>
+
+      <!-- offer 5 · open_loop -->
+      <div class="offer">
+        <div class="top">
+          <div class="why">you said "this week" on tuesday</div>
+          <div class="kind">open_loop</div>
+        </div>
+        <h3>close the loop on <em>call dad.</em></h3>
+        <p class="because">you told me monday. you told me wednesday. i'd rather stop asking and start holding this until you actually do it.</p>
+        <div class="chips">
+          <button class="chip yes">yes, real</button>
+          <button class="chip ghost">tweak</button>
+          <button class="chip no">not me</button>
+        </div>
+      </div>
+
+      <!-- offer 6 · ping -->
+      <div class="offer">
+        <div class="top">
+          <div class="why">calendar rhythm</div>
+          <div class="kind">ping</div>
+        </div>
+        <h3>nudge at <em>22:00</em> on weeknights.</h3>
+        <p class="because">you keep closing laptop at 00:48. one quiet ping at ten: "stop working."</p>
+        <div class="chips">
+          <button class="chip yes">yes, real</button>
+          <button class="chip ghost">tweak</button>
+          <button class="chip no">not me</button>
+        </div>
+      </div>
+
+      <!-- offer 7 · tally -->
+      <div class="offer">
+        <div class="top">
+          <div class="why">health-curious signal</div>
+          <div class="kind">tally</div>
+        </div>
+        <h3>track <em>caffeine after 2pm.</em></h3>
+        <p class="because">three afternoons this week. you told me in march you wanted to sleep better. the two stories might be the same story.</p>
+        <div class="chips">
+          <button class="chip yes">yes, real</button>
+          <button class="chip ghost">tweak</button>
+          <button class="chip no">not me</button>
+        </div>
+      </div>
+
+      <div class="commit">
+        <p class="summary">decide each, or trust me once — i'll archive the ones you skip and remember not to offer them again.</p>
+        <button class="go">commit week</button>
+      </div>
+
+    </div>
+  </div>
+
+  <div class="rationale">
+    <h3>Why <em>Quiet Garden</em> is a serious option.</h3>
+    <p>Interruption is the tax; this plan pays it once a week. The rest of your week, Donna never surprises you with a proposal. That's very different from most AI surfaces, which pay the tax on every turn.</p>
+    <p class="q">The harvest page is also a rare moment in software where Donna speaks in one voice across seven things at once. It's her weekly read of you. That read is emotionally coherent or it isn't — and the user knows.</p>
+    <div class="block">
+      <div class="pair"><span class="k">Shadow</span><span class="v">Aggressive. <code>propose_and_shadow</code> runs every 6 hours, pulling from chat messages, calendar patterns, observation rollups.</span></div>
+      <div class="pair"><span class="k">Promotion</span><span class="v">Batched. Sunday 19:00 local triggers <code>run_shadow_cycle</code>, which promotes any SHADOW with <code>promotion_hits ≥ criteria</code> to OFFERED. Cap: 7 offers, ranked by priority.</span></div>
+      <div class="pair"><span class="k">Weekdays</span><span class="v">Dashboard shows thesis + Living + Today (live attentions) only. Offers count is hidden or quiet (no badge).</span></div>
+      <div class="pair"><span class="k">Cold start</span><span class="v">First 14 days: shadow accumulates silently. Home shows "i'm learning, give me a week" card plus a writes&#8209;to&#8209;Living intake (name, people, season). Sunday 2 is the first real harvest.</span></div>
+      <div class="pair"><span class="k">Templates</span><span class="v">One harvest&#8209;page template + six per&#8209;card offer rows + a batch&#8209;commit strip. Plus the weekday home template.</span></div>
+      <div class="pair"><span class="k">Wins when</span><span class="v">User values low interruption, ritual rhythm, weekly reviews. Feels like the Sunday paper.</span></div>
+      <div class="pair"><span class="k">Loses when</span><span class="v">User opens dashboard every day expecting novelty — Mon–Sat feels static. Also: a missed Sunday = 14 stale offers next week.</span></div>
+    </div>
+  </div>
+</div>
+
+<div class="nav">
+  <a href="plan-a-invitation.html">← Plan A</a>
+  <span>Plan B · Quiet Garden</span>
+  <a href="plan-c-daily-offer.html">Plan C · Daily Offer →</a>
+</div>
+
+</body>
+</html>

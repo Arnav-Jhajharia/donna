@@ -99,8 +99,24 @@ class Cadence(_StrictBase):
         p = self.params
         if t is CadenceType.ON_EVENT and "event_source" not in p:
             raise ValueError("ON_EVENT cadence requires event_source param")
-        if t is CadenceType.SCHEDULED and "cron" not in p and "interval_seconds" not in p:
-            raise ValueError("SCHEDULED cadence requires cron or interval_seconds")
+        if t is CadenceType.SCHEDULED:
+            has_cron = "cron" in p
+            has_interval = "interval_seconds" in p
+            has_monthly = "monthly_day" in p
+            if not (has_cron or has_interval or has_monthly):
+                raise ValueError(
+                    "SCHEDULED cadence requires cron, interval_seconds, or monthly_day"
+                )
+            if has_monthly:
+                day = p["monthly_day"]
+                if day != "last" and not (isinstance(day, int) and 1 <= day <= 31):
+                    raise ValueError("monthly_day must be int 1..31 or 'last'")
+                hour = p.get("hour")
+                if not isinstance(hour, int) or not (0 <= hour <= 23):
+                    raise ValueError("monthly_day cadence requires hour: int 0..23")
+                minute = p.get("minute", 0)
+                if not isinstance(minute, int) or not (0 <= minute <= 59):
+                    raise ValueError("monthly_day minute must be int 0..59")
         if t is CadenceType.ON_RELEVANCE and "related_entity" not in p:
             raise ValueError("ON_RELEVANCE cadence requires related_entity param")
         if t is CadenceType.ONE_SHOT and "trigger_at" not in p:

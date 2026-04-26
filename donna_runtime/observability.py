@@ -16,6 +16,7 @@ Env:
 
 Event types (schema_version = 1; keep stable — dashboards depend on shape):
     turn.start   — BRAIN turn entered
+    prompt.snapshot — exact SDK-facing prompts for this turn
     turn.end     — BRAIN turn finished
     tool.call    — model invoked a tool (from PreToolUse)
     hook.deny    — PreToolUse denied (duplicate write / double terminator)
@@ -132,6 +133,31 @@ def _arg_summary(kwargs: dict[str, Any]) -> dict[str, Any]:
     return summary
 
 
+def _preview_value(value: Any, *, max_chars: int = 4000) -> Any:
+    """Best-effort debug preview for local observability.
+
+    Unlike `_arg_summary`, this intentionally keeps values. The dashboard uses
+    it for drill-down. Cap aggressively so one huge memory result cannot wreck
+    the event log.
+    """
+    if value is None or isinstance(value, (int, float, bool)):
+        return value
+    if isinstance(value, str):
+        return value if len(value) <= max_chars else value[:max_chars] + " ... <truncated>"
+    if isinstance(value, dict):
+        return {
+            str(k): _preview_value(v, max_chars=max(200, max_chars // 2))
+            for k, v in list(value.items())[:30]
+        }
+    if isinstance(value, (list, tuple)):
+        return [_preview_value(v, max_chars=max(200, max_chars // 2)) for v in list(value)[:20]]
+    try:
+        text = json.dumps(value, default=str)
+    except Exception:
+        text = repr(value)
+    return text if len(text) <= max_chars else text[:max_chars] + " ... <truncated>"
+
+
 def _result_summary(result: Any) -> dict[str, Any]:
     if result is None:
         return {"kind": "none"}
@@ -170,8 +196,10 @@ def instrument_memory_op(backend: str) -> Callable:
                     op=op_name,
                     op_user_id=user_id,
                     args=arg_summary,
+                    args_preview=_preview_value(kwargs),
                     duration_ms=int((time.time() - start) * 1000),
                     result=_result_summary(result),
+                    result_preview=_preview_value(result),
                     ok=True,
                 )
                 return result
@@ -209,6 +237,36 @@ def emit_turn_start(
         resume_session_id=resume_session_id,
         model=model,
         thinking_enabled=thinking_enabled,
+    )
+
+
+def emit_prompt_snapshot(
+    *,
+    system_prompt: str,
+    wrapped_user_prompt: str,
+    model: str | None,
+    tool_mode: str | None,
+    resume_session_id: str | None,
+    fork_session: bool,
+    max_turns: int | None,
+) -> None:
+    """Emit exact prompt strings used for the SDK call.
+
+    This intentionally logs raw prompt text. Donna is a local single-user
+    system and this event exists specifically to debug "what did the model
+    actually see?" during WhatsApp testing.
+    """
+    emit(
+        "prompt.snapshot",
+        system_prompt=system_prompt,
+        wrapped_user_prompt=wrapped_user_prompt,
+        system_prompt_len=len(system_prompt or ""),
+        wrapped_user_prompt_len=len(wrapped_user_prompt or ""),
+        model=model,
+        tool_mode=tool_mode,
+        resume_session_id=resume_session_id,
+        fork_session=fork_session,
+        max_turns=max_turns,
     )
 
 

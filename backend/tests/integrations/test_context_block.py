@@ -3,7 +3,23 @@ from __future__ import annotations
 import pytest
 
 from backend.integrations import state
+from donna_runtime import context_builder
 from donna_runtime.context_builder import render_turn_context
+
+
+@pytest.fixture(autouse=True)
+def stub_reconcile(monkeypatch):
+    """Stop the per-turn reconcile from hitting the live Composio API in
+    tests — the env may have a real key, and the test fixture only
+    monkeypatches the DB. Prevents flips from real Composio truth
+    polluting the local-only assertions."""
+    async def _noop(user_id, toolkits=None):
+        return {}
+    monkeypatch.setattr(
+        "backend.memory.tools.check_integration_status.reconcile_with_composio",
+        _noop,
+    )
+    context_builder._LAST_INTEGRATIONS_RECONCILE.clear()
 
 
 @pytest.mark.asyncio

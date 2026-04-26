@@ -2,16 +2,18 @@
 # Role-switching entrypoint for the Donna container image.
 #
 # Railway (and anywhere else this image runs) selects the role via the
-# DONNA_PROCESS_ROLE env var. This is what lets the same image power both
-# the public API (webhook + dashboard backend) and the dedicated reminders
-# worker that fires DonnaSchedule rows on time.
+# DONNA_PROCESS_ROLE env var. The same image powers four distinct services:
 #
-#   DONNA_PROCESS_ROLE=api        → uvicorn api.main:app  (default)
-#   DONNA_PROCESS_ROLE=reminders  → python -m scripts.run_schedule_worker
+#   DONNA_PROCESS_ROLE=api         → uvicorn api.main:app  (default)
+#   DONNA_PROCESS_ROLE=reminders   → scripts/run_schedule_worker.py
+#   DONNA_PROCESS_ROLE=attention   → scripts/run_attention_worker.py
+#   DONNA_PROCESS_ROLE=synthesis   → scripts/run_synthesis_worker.py
 #
-# Reminders need only DB + WhatsApp + the BRAIN-free templated send path.
-# They MUST NOT be co-located with the API any more — the API is busy with
-# inbound webhooks and proactive turns and used to drop fires under load.
+# Workers MUST NOT be co-located with the API. The API is busy with inbound
+# webhooks and proactive turns; co-located workers used to drop fires and
+# silently die when uvicorn hot-reloaded incompletely. api/main.py guards
+# against double-spawn — when the role is anything but `api` (or unset),
+# the API process refuses to start the in-process worker tasks.
 
 set -e
 
@@ -26,8 +28,19 @@ case "$ROLE" in
             --poll "${DONNA_REMINDERS_POLL_S:-5.0}" \
             --batch "${DONNA_REMINDERS_BATCH:-25}"
         ;;
+    attention)
+        exec python scripts/run_attention_worker.py \
+            --poll "${DONNA_ATTENTION_POLL_S:-30.0}" \
+            --propose-interval "${DONNA_ATTENTION_PROPOSE_S:-3600.0}" \
+            --promote-interval "${DONNA_ATTENTION_PROMOTE_S:-300.0}"
+        ;;
+    synthesis)
+        exec python scripts/run_synthesis_worker.py \
+            --poll "${DONNA_LIVING_PROFILE_INTERVAL_S:-1800.0}"
+        ;;
     *)
-        echo "bin/start.sh: unknown DONNA_PROCESS_ROLE='$ROLE' (expected 'api' or 'reminders')" >&2
+        echo "bin/start.sh: unknown DONNA_PROCESS_ROLE='$ROLE'" >&2
+        echo "  expected one of: api, reminders, attention, synthesis" >&2
         exit 64
         ;;
 esac

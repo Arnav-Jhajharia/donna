@@ -3,6 +3,7 @@
 import { motion } from 'framer-motion';
 import { ICONS } from '../icons';
 import SectionHead from './SectionHead';
+import { useAction } from '@/lib/action-context';
 import type { SignalTone, TrackerGridBlock as TrackerGridSpec, TrackerItem } from '@/lib/plan';
 
 const TONE_VAR: Record<SignalTone, string> = {
@@ -45,9 +46,28 @@ function TrackerCard({ item }: { item: TrackerItem }) {
   const Icon = ICONS[item.icon];
   const tone = TONE_VAR[item.tone];
   const bg = TINT_VAR[item.tint];
+  const fire = useAction();
+  const tappable = Boolean(item.action);
+  const onTap = () => {
+    if (item.action) void fire(item.action);
+  };
 
   return (
-    <div
+    <motion.div
+      whileTap={tappable ? { scale: 0.98 } : undefined}
+      role={tappable ? 'button' : undefined}
+      tabIndex={tappable ? 0 : undefined}
+      onClick={tappable ? onTap : undefined}
+      onKeyDown={
+        tappable
+          ? (e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onTap();
+              }
+            }
+          : undefined
+      }
       style={{
         background: bg,
         border: '1px solid var(--border-hairline)',
@@ -56,6 +76,7 @@ function TrackerCard({ item }: { item: TrackerItem }) {
         display: 'flex',
         flexDirection: 'column',
         gap: 8,
+        cursor: tappable ? 'pointer' : 'default',
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -89,6 +110,6 @@ function TrackerCard({ item }: { item: TrackerItem }) {
         />
       </div>
       <div style={{ fontSize: 12, color: 'var(--fg-tertiary)', lineHeight: 1.4 }}>{item.sub}</div>
-    </div>
+    </motion.div>
   );
 }

@@ -28,8 +28,10 @@ IMAGE_WEEKLY_CAP = 3
 ALLOWED_TOOLS = (
     "mcp__donna__recall",
     "mcp__donna__remember",
-    "mcp__donna__watch",
-    "mcp__donna__schedule",
+    "mcp__donna__attend",
+    "mcp__donna__list_attentions",
+    "mcp__donna__cancel_attention",
+    "mcp__donna__snooze_attention",
     "mcp__donna__check_calendar",
     "mcp__donna__image",
     "mcp__donna__web_search",
@@ -37,6 +39,7 @@ ALLOWED_TOOLS = (
     "mcp__donna__research",
     "mcp__donna__send_burst",
     "mcp__donna__connect_integration",
+    "mcp__donna__check_integration_status",
     "mcp__donna__list_gmail_recent",
     "mcp__donna__read_gmail_thread",
     "mcp__donna__list_calendar",
@@ -44,6 +47,9 @@ ALLOWED_TOOLS = (
     "mcp__donna__composio_manage_connections",
     "mcp__donna__composio_wait_for_connections",
     "mcp__donna__composio_execute_tool",
+    "mcp__donna__update_dashboard",
+    "mcp__donna__send_dashboard_link",
+    "mcp__donna__send_login_otp",
 )
 
 DISALLOWED_TOOLS = (
