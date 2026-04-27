@@ -1453,6 +1453,10 @@ function TurnDetail({ turn }: { turn: Turn }) {
         userMessage={turn.user_message_preview}
         donnaMessages={burstCall?.send_burst_messages ?? null}
         burstCaptured={Boolean(burstCall && burstCall.input_preview_present)}
+        turnHadError={Boolean(
+          turn.runtime_error || turn.result_is_error,
+        )}
+        terminalTool={turn.terminal_tool}
       />
 
       {turn.hook_denies.length > 0 && <HookDeniesPanel denies={turn.hook_denies} />}
@@ -1483,10 +1487,14 @@ function Conversation({
   userMessage,
   donnaMessages,
   burstCaptured,
+  turnHadError,
+  terminalTool,
 }: {
   userMessage: string | null;
   donnaMessages: unknown;
   burstCaptured: boolean;
+  turnHadError: boolean;
+  terminalTool: string | null;
 }) {
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
@@ -1537,7 +1545,12 @@ function Conversation({
         >
           donna said
         </div>
-        <DonnaMessages messages={donnaMessages} burstCaptured={burstCaptured} />
+        <DonnaMessages
+          messages={donnaMessages}
+          burstCaptured={burstCaptured}
+          turnHadError={turnHadError}
+          terminalTool={terminalTool}
+        />
       </div>
     </div>
   );
@@ -1546,14 +1559,36 @@ function Conversation({
 function DonnaMessages({
   messages,
   burstCaptured,
+  turnHadError,
+  terminalTool,
 }: {
   messages: unknown;
   burstCaptured: boolean;
+  turnHadError: boolean;
+  terminalTool: string | null;
 }) {
   if (!burstCaptured || !Array.isArray(messages) || messages.length === 0) {
+    // Distinguish the three real reasons there's no rendered reply: the
+    // turn errored out before reply, the turn ended on a non-burst
+    // terminator (silent_exit / stay_silent), or the tracer truly
+    // missed the payload. The "tracer didn't capture" wording was
+    // misleading because send_burst capture works fine — most
+    // empty-detail cases are actually upstream failures.
+    let reason: string;
+    if (turnHadError) {
+      reason =
+        'turn errored before donna replied — see runtime_error above for the cause.';
+    } else if (terminalTool && terminalTool !== 'send_burst') {
+      reason = `turn ended on ${terminalTool} (no burst) — silent exit or stay_silent.`;
+    } else if (!terminalTool) {
+      reason = 'turn ended without a terminator — silent exit (see issues column).';
+    } else {
+      reason =
+        'send_burst was called but its payload didn’t carry a messages[] field.';
+    }
     return (
       <div style={{ fontSize: 12, color: 'var(--ink-500)' }}>
-        <em>(send_burst payload not captured by tracer — fix in donna_runtime/observability.py)</em>
+        <em>(no rendered reply: {reason})</em>
       </div>
     );
   }
