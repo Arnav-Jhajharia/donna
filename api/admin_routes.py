@@ -469,14 +469,17 @@ async def memory_open_loops(
             .where(OpenLoop.user_id == user_id)
             .order_by(desc(OpenLoop.created_at))
         )).scalars().all()
+    # OpenLoop columns: id, user_id, content, source_message, created_at,
+    # status, resolved_at, due_at — no updated_at column.
     return {"open_loops": [
         {
             "id": r.id,
             "content": r.content,
+            "source_message": r.source_message,
             "status": r.status,
             "due_at": _iso(getattr(r, "due_at", None)),
+            "resolved_at": _iso(getattr(r, "resolved_at", None)),
             "created_at": _iso(r.created_at),
-            "updated_at": _iso(r.updated_at),
         }
         for r in rows
     ]}
@@ -544,20 +547,33 @@ async def memory_user_facts(
     _admin: str = Depends(_require_admin),
     limit: int = Query(500, ge=1, le=2000),
 ):
-    """user_facts table if present (model name varies — be defensive)."""
-    try:
-        from db.models import UserFact  # type: ignore
-    except Exception:
-        return {"user_facts": [], "note": "UserFact model not present"}
+    """Bi-temporal facts table — what we believe about the user, with
+    valid-time + recorded-time + supersede chain. Newest first."""
+    from db.models import Fact
+
     async with async_session() as s:
         rows = (await s.execute(
-            select(UserFact)
-            .where(UserFact.user_id == user_id)
-            .order_by(desc(getattr(UserFact, "created_at", UserFact.id)))
+            select(Fact)
+            .where(Fact.user_id == user_id)
+            .where(Fact.t_recorded_to.is_(None))  # currently-believed only
+            .order_by(desc(Fact.created_at))
             .limit(limit)
         )).scalars().all()
-    return {"user_facts": [
-        {c.name: getattr(r, c.name, None) for c in UserFact.__table__.columns}
+    return {"facts": [
+        {
+            "id": r.id,
+            "subject": r.subject,
+            "predicate": r.predicate,
+            "object": r.object,
+            "object_json": r.object_json,
+            "confidence": r.confidence,
+            "source": r.source,
+            "t_valid_from": _iso(r.t_valid_from),
+            "t_valid_to": _iso(r.t_valid_to),
+            "t_recorded_from": _iso(r.t_recorded_from),
+            "superseded_by": r.superseded_by,
+            "created_at": _iso(r.created_at),
+        }
         for r in rows
     ]}
 
@@ -569,19 +585,69 @@ async def memory_supermemory(
     query: str = Query("", description="Optional substring to search for"),
     limit: int = Query(20, ge=1, le=100),
 ):
-    """Best-effort fetch from Supermemory. Surfaces what the unified
-    recall pipeline would see for this user."""
+    """Surfaces what the unified recall pipeline would see for this user
+    via Supermemory's hybrid memory + document-chunk indexes. Two
+    parallel queries — episodic memory (search_with_graph) and document
+    chunks (search_document_chunks)."""
     try:
-        from backend.memory.supermemory import client as sm_client  # type: ignore
+        from backend.memory.clients.supermemory import get_memory_client
     except Exception as e:
-        return {"supermemory": [], "error": f"client unavailable: {e}"}
+        return {
+            "memories": [],
+            "chunks": [],
+            "error": f"client import failed: {e}",
+        }
+    client = get_memory_client()
+    if not getattr(client, "available", True) is True and getattr(
+        client, "available", True
+    ) is False:
+        return {
+            "memories": [],
+            "chunks": [],
+            "error": "supermemory not configured (SUPERMEMORY_API_KEY missing)",
+        }
+    q = query or "donna"
+    memories: list[dict] = []
+    chunks: list[dict] = []
+    err: str | None = None
     try:
-        results = await sm_client.search(  # type: ignore
-            user_id=user_id, query=query or "*", limit=limit
+        mem_results = await client.search_with_graph(
+            user_id=user_id, query=q, limit=limit
         )
+        memories = [
+            {
+                "id": m.id,
+                "content": m.content[:1000],
+                "score": m.score,
+                "updated_at": m.updated_at,
+                "metadata": m.metadata,
+                "relations": m.relations[:5],
+            }
+            for m in mem_results
+        ]
     except Exception as e:
-        return {"supermemory": [], "error": str(e)[:300]}
-    return {"supermemory": results or []}
+        err = f"search_with_graph: {str(e)[:200]}"
+    try:
+        chunk_results = await client.search_document_chunks(
+            user_id=user_id, query=q, limit=limit
+        )
+        chunks = [
+            {
+                "content": c.content[:1000],
+                "score": c.score,
+                "doc_id": c.doc_id,
+                "metadata": c.metadata,
+            }
+            for c in chunk_results
+        ]
+    except Exception as e:
+        err = (err + " | " if err else "") + f"chunks: {str(e)[:200]}"
+    return {
+        "memories": memories,
+        "chunks": chunks,
+        "query": q,
+        "error": err,
+    }
 
 
 @router.get("/{user_id}/memory/graphiti")
@@ -591,19 +657,19 @@ async def memory_graphiti(
     query: str = Query(""),
     limit: int = Query(20, ge=1, le=100),
 ):
-    """Best-effort Graphiti probe — entities + edges if the client is
-    importable and the user has a graph."""
+    """Graphiti facts — relationships + episodes the entity-extraction
+    pipeline pulled out of the user's stream. Uses ``search_facts`` from
+    backend.memory.clients.graphiti."""
     try:
-        from backend.memory.graphiti import client as g_client  # type: ignore
+        from backend.memory.clients.graphiti import search_facts
     except Exception as e:
-        return {"graphiti": [], "error": f"client unavailable: {e}"}
+        return {"facts": [], "error": f"client import failed: {e}"}
+    q = query or "donna"
     try:
-        results = await g_client.search(  # type: ignore
-            user_id=user_id, query=query or "*", limit=limit
-        )
+        facts = await search_facts(user_id=user_id, query=q, limit=limit)
     except Exception as e:
-        return {"graphiti": [], "error": str(e)[:300]}
-    return {"graphiti": results or []}
+        return {"facts": [], "error": str(e)[:300]}
+    return {"facts": facts or [], "query": q}
 
 
 @router.get("/{user_id}/email")

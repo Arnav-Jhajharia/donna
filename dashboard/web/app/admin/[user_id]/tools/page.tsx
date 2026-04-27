@@ -107,7 +107,7 @@ export default async function ToolsPage({
                   </span>
                 )}
               </div>
-              {(e.input_preview || e.args_preview || e.result_preview) && (
+              {Boolean(e.input_preview || e.args_preview || e.result_preview) && (
                 <details style={{ marginTop: 6 }}>
                   <summary
                     style={{ cursor: 'pointer', color: '#888', fontSize: 11 }}

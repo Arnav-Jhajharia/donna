@@ -11,10 +11,11 @@ import {
 interface OpenLoop {
   id: string;
   content: string;
+  source_message: string | null;
   status: string;
   due_at: string | null;
+  resolved_at: string | null;
   created_at: string | null;
-  updated_at: string | null;
 }
 interface Observation {
   id: string;
@@ -48,9 +49,16 @@ export default async function MemoryPage({
       safeFetch<{ living_profile: Record<string, unknown> }>(`${enc}/memory/profile`),
       safeFetch<{ open_loops: OpenLoop[] }>(`${enc}/memory/open_loops`),
       safeFetch<{ observations: Observation[] }>(`${enc}/memory/observations`),
-      safeFetch<{ supermemory: unknown[]; error?: string }>(`${enc}/memory/supermemory`),
-      safeFetch<{ graphiti: unknown[]; error?: string }>(`${enc}/memory/graphiti`),
-      safeFetch<{ user_facts: unknown[]; note?: string }>(`${enc}/memory/user_facts`),
+      safeFetch<{
+        memories: unknown[];
+        chunks: unknown[];
+        query: string;
+        error?: string;
+      }>(`${enc}/memory/supermemory`),
+      safeFetch<{ facts: unknown[]; query?: string; error?: string }>(
+        `${enc}/memory/graphiti`,
+      ),
+      safeFetch<{ facts: unknown[] }>(`${enc}/memory/user_facts`),
     ]);
 
   const renderError = (r: unknown) =>
@@ -153,45 +161,76 @@ export default async function MemoryPage({
         )}
       </Section>
 
-      <Section title="Supermemory chunks">
-        {renderError(smRes) || (smRes as { error?: string }).error ? (
-          <ErrorBox
-            message={
-              renderError(smRes) || (smRes as { error?: string }).error || ''
-            }
-          />
+      <Section title="Supermemory — episodic memories + document chunks">
+        {renderError(smRes) ? (
+          <ErrorBox message={renderError(smRes)!} />
         ) : (
           <Card>
-            <Json value={(smRes as { supermemory: unknown[] }).supermemory} />
+            {(smRes as { error?: string }).error && (
+              <div style={{ color: '#fb6', fontSize: 11, marginBottom: 8 }}>
+                partial: {(smRes as { error: string }).error}
+              </div>
+            )}
+            <div
+              style={{
+                color: '#888',
+                fontSize: 11,
+                marginBottom: 8,
+              }}
+            >
+              query:{' '}
+              <code style={{ color: '#9bc' }}>
+                {(smRes as { query: string }).query}
+              </code>
+            </div>
+            <div style={{ color: '#aaa', fontSize: 12, marginBottom: 4 }}>
+              memories ({(smRes as { memories: unknown[] }).memories.length})
+            </div>
+            <Json value={(smRes as { memories: unknown[] }).memories} />
+            <div
+              style={{
+                color: '#aaa',
+                fontSize: 12,
+                marginTop: 12,
+                marginBottom: 4,
+              }}
+            >
+              chunks ({(smRes as { chunks: unknown[] }).chunks.length})
+            </div>
+            <Json value={(smRes as { chunks: unknown[] }).chunks} />
           </Card>
         )}
       </Section>
 
-      <Section title="Graphiti entities + edges">
-        {renderError(gRes) || (gRes as { error?: string }).error ? (
-          <ErrorBox
-            message={
-              renderError(gRes) || (gRes as { error?: string }).error || ''
-            }
-          />
+      <Section title="Graphiti facts">
+        {renderError(gRes) ? (
+          <ErrorBox message={renderError(gRes)!} />
         ) : (
           <Card>
-            <Json value={(gRes as { graphiti: unknown[] }).graphiti} />
+            {(gRes as { error?: string }).error && (
+              <div style={{ color: '#fb6', fontSize: 11, marginBottom: 8 }}>
+                {(gRes as { error: string }).error}
+              </div>
+            )}
+            {(gRes as { query?: string }).query && (
+              <div style={{ color: '#888', fontSize: 11, marginBottom: 8 }}>
+                query:{' '}
+                <code style={{ color: '#9bc' }}>
+                  {(gRes as { query: string }).query}
+                </code>
+              </div>
+            )}
+            <Json value={(gRes as { facts: unknown[] }).facts} />
           </Card>
         )}
       </Section>
 
-      <Section title="User facts">
+      <Section title="Bi-temporal facts (Postgres)">
         {renderError(factsRes) ? (
           <ErrorBox message={renderError(factsRes)!} />
         ) : (
           <Card>
-            <Json value={(factsRes as { user_facts: unknown[] }).user_facts} />
-            {(factsRes as { note?: string }).note && (
-              <div style={{ color: '#888', fontSize: 11, marginTop: 8 }}>
-                {(factsRes as { note: string }).note}
-              </div>
-            )}
+            <Json value={(factsRes as { facts: unknown[] }).facts} />
           </Card>
         )}
       </Section>
