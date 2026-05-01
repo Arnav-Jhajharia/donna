@@ -174,6 +174,16 @@ async def run_proactive_tick(
             elapsed_ms=_elapsed_ms(started),
         )
 
+    if daily_used == 0:
+        try:
+            local_date = datetime.now().strftime("%Y-%m-%d")
+            daily_used = await DailyCountRepo().get(user_id, local_date)
+        except Exception:
+            logger.warning(
+                "run_proactive_tick: daily_used lookup failed, defaulting to 0"
+            )
+            daily_used = 0
+
     outcome = await apply_gates(
         moves,
         user_id=user_id,

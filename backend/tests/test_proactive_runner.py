@@ -328,6 +328,46 @@ async def test_run_proactive_tick_bumps_daily_count_per_send(monkeypatch):
     assert bumps[0][2] == 1
 
 
+@pytest.mark.asyncio
+async def test_run_proactive_tick_respects_daily_budget_from_repo(monkeypatch):
+    """When DailyCountRepo.get returns >= per_day, no moves accepted."""
+    moves = [_move(dedup_key=f"watch:b{i}") for i in range(3)]
+
+    async def fake_create(ctx, **kw):
+        return moves
+
+    async def fake_exec(accepted):
+        return [_result(m) for m in accepted]
+
+    async def fake_judge(*, context, results):
+        return []
+
+    monkeypatch.setattr(runner_mod, "create_proactive_moves", fake_create)
+    monkeypatch.setattr(runner_mod, "execute_moves", fake_exec)
+    monkeypatch.setattr(runner_mod, "judge_results", fake_judge)
+
+    class FakeRepo:
+        async def get(self, user_id, local_date):
+            return 5
+
+        async def bump(self, user_id, local_date, *, by=1):
+            return 5
+
+    monkeypatch.setattr(runner_mod, "DailyCountRepo", lambda: FakeRepo())
+
+    ledger = InMemoryDedupStore()
+    out = await run_proactive_tick(
+        user_id="u_b",
+        ledger=ledger,
+        budget=CostBudget(per_turn=3, per_day=5),
+        load_blurb=_fake_blurb,
+    )
+    assert out.results == []
+    assert all(
+        "per-day budget exhausted" in d.reason for d in out.moves_dropped
+    )
+
+
 # ---------------------------------------------------------------------------
 # helper: run an awaitable with a non-coroutine return (lambda factories)
 # ---------------------------------------------------------------------------
