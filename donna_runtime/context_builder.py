@@ -748,6 +748,23 @@ def _render_url_context(url_contents: Any) -> str:
     return "\n".join(lines) if len(lines) > 1 else ""
 
 
+_POISONED_FALLBACK_BODIES = frozenset({"hm, one sec", "hm one sec"})
+
+
+def _is_poisoned_fallback(row: Any) -> bool:
+    """Drop brain-failure / generic-check-in rows from RECENT CHAT.
+
+    Past brain-failure fallbacks ("hm, one sec") and the same string the
+    model started parroting back via proactive fires are noise that
+    actively biases the next turn — the model sees them in chat history
+    and reproduces the pattern. These rows have no informational value
+    for the user OR the model; filter them out at render time so the
+    feedback loop dies even before the chat_messages cleanup SQL runs.
+    """
+    body = (getattr(row, "content", "") or "").strip().lower()
+    return body in _POISONED_FALLBACK_BODIES
+
+
 async def _safe_recent_chat(
     user_id: str | None, *, timezone_name: str | None = None
 ) -> list[str]:
@@ -759,6 +776,8 @@ async def _safe_recent_chat(
         from db.models import ChatMessage
         from db.session import async_session
 
+        # Pull a wider window than we'll render so filtering out poisoned
+        # rows still leaves a useful trailing context.
         async with async_session() as session:
             rows = (
                 await session.execute(
@@ -766,13 +785,15 @@ async def _safe_recent_chat(
                     .where(ChatMessage.user_id == user_id)
                     .where(ChatMessage.is_shadow.is_(False))
                     .order_by(ChatMessage.created_at.desc())
-                    .limit(_MAX_RECENT_CHAT)
+                    .limit(_MAX_RECENT_CHAT * 2)
                 )
             ).scalars().all()
     except Exception:
         logger.exception("render_turn_context: recent chat lookup failed")
         return []
-    return [_format_recent_chat_line(row, timezone_name) for row in reversed(rows) if row.content]
+    kept = [r for r in rows if r.content and not _is_poisoned_fallback(r)]
+    kept = kept[:_MAX_RECENT_CHAT]
+    return [_format_recent_chat_line(row, timezone_name) for row in reversed(kept)]
 
 
 def _format_recent_chat_line(row: Any, timezone_name: str | None) -> str:

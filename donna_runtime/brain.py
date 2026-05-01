@@ -97,7 +97,17 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
         _OUTBOUND_BUFFER.reset(token)
 
     if failed:
-        state["_outbound"] = [TextMessage(body="hm, one sec")]
+        # Reactive turns: ship a brief acknowledgment so the user knows we
+        # heard them and a retry is implied. Proactive turns: stay silent.
+        # The user wasn't expecting a message, so a fake "hm, one sec"
+        # confuses them AND poisons RECENT CHAT (the model sees the row,
+        # learns "this is what proactive looks like", and parrots it on
+        # subsequent fires). The brand promise is reliability, not noise.
+        if cfg.mode == "proactive":
+            state["_outbound"] = []
+        else:
+            state["_outbound"] = [TextMessage(body="hm, one sec")]
+        state["_brain_failed"] = True
         return state
 
     if trace.session_id and not stateless:
