@@ -105,7 +105,12 @@ async def test_ledger_partitioned_by_user():
 async def test_apply_gates_accepts_clean_moves():
     ledger = InMemoryDedupStore()
     moves = [_move(dedup_key="a"), _move(dedup_key="b")]
-    outcome = await apply_gates(moves, user_id="u", ledger=ledger)
+    outcome = await apply_gates(
+        moves,
+        user_id="u",
+        ledger=ledger,
+        budget=CostBudget(per_turn=3, per_day=30),
+    )
     assert len(outcome.accepted) == 2
     assert outcome.dropped == []
 

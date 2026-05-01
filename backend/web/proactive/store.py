@@ -42,7 +42,11 @@ class PostgresDedupStore:
     a periodic job if the table grows.
     """
 
-    ttl_seconds: float = 6 * 3600.0
+    # 24h TTL during the high-precision launch window. Same intent
+    # firing twice in one day is almost always a sign the upstream
+    # signal is the same news in a different wrapper. Bump back down
+    # once judge calibration is settled.
+    ttl_seconds: float = 24 * 3600.0
 
     async def seen_async(
         self, user_id: str, dedup_key: str, *, now: float

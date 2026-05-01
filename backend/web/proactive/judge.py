@@ -37,6 +37,13 @@ JudgeDecision = Literal["send", "silence"]
 
 _SYSTEM_PROMPT = """You decide whether a proactive search result is worth interrupting the user with.
 
+CALIBRATION: This deployment is in a high-precision, low-recall regime.
+The user is a dogfooding builder who will lose trust fast on a weak ping.
+Send only if a perceptive friend reading the user's profile + situation
+brief would say "I would have texted them about this." If you have to
+argue with yourself for it, silence. Aim for sending no more than one
+in five candidates. Silent ticks are good ticks.
+
 You read:
 - the user's Living Profile + Situation Brief + recent thread
 - the proactive move Donna chose to run, with its hypothesis,

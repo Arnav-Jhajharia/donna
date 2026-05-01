@@ -126,8 +126,11 @@ class CostBudget:
     accepts an injected ``daily_used`` count).
     """
 
-    per_turn: int = 3
-    per_day: int = 30
+    # Conservative defaults for the launch window: at most 1 proactive
+    # ping per turn, 3 per day. Tuned high-precision; loosen once
+    # calibration is settled.
+    per_turn: int = 1
+    per_day: int = 3
 
 
 # ---------------------------------------------------------------------------
