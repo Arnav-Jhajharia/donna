@@ -29,7 +29,7 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Awaitable, Callable
+from typing import Awaitable, Callable, Literal
 
 from backend.web.proactive.executor import execute_moves
 from backend.web.proactive.gates import (
@@ -46,6 +46,8 @@ from backend.web.proactive.types import (
     ProactiveContext,
     ProactiveMove,
     ProactiveResult,
+    SignalSummary,
+    TriggerKind,
 )
 
 logger = logging.getLogger(__name__)
@@ -76,6 +78,8 @@ async def build_context(
     last_proactive_at: str | None = None,
     now: datetime | None = None,
     load_blurb: ContextLoader = _default_load_blurb,
+    trigger: TriggerKind = "manual",
+    signal_queue: tuple[SignalSummary, ...] = (),
 ) -> ProactiveContext:
     """Snapshot what the brain knows about the user RIGHT NOW.
 
@@ -91,6 +95,8 @@ async def build_context(
         recent_thread=recent_thread,
         current_datetime=stamp,
         last_proactive_at=last_proactive_at,
+        trigger=trigger,
+        signal_queue=signal_queue,
     )
 
 
@@ -133,12 +139,20 @@ async def run_proactive_tick(
     last_proactive_at: str | None = None,
     max_moves: int = 3,
     load_blurb: ContextLoader = _default_load_blurb,
+    trigger: TriggerKind = "manual",
+    signal_queue: tuple[SignalSummary, ...] = (),
+    delivery_mode: Literal["shadow", "live", "none"] = "none",
 ) -> ProactiveTickResult:
     """Run one proactive cycle for a single user. Never raises.
 
     The default ``ledger`` is a fresh in-memory store — fine for one-shot
     use (e.g. CLI dry-runs, tests). Long-running schedulers should pass
     in a shared, persistent ledger so dedup works across ticks.
+
+    ``delivery_mode``:
+    - ``none``: caller handles delivery (default; preserves dry-run shape)
+    - ``shadow``: integrated; writes chat_messages with is_shadow=True
+    - ``live``: integrated; sends WhatsApp + chat_messages
     """
     started = time.monotonic()
     if ledger is None:
@@ -151,6 +165,8 @@ async def run_proactive_tick(
             recent_thread=recent_thread,
             last_proactive_at=last_proactive_at,
             load_blurb=load_blurb,
+            trigger=trigger,
+            signal_queue=signal_queue,
         )
     except Exception:
         logger.exception("run_proactive_tick: context build failed")
@@ -218,6 +234,19 @@ async def run_proactive_tick(
         if v.decision == "send":
             await daily_repo.bump(user_id, local_date, by=1)
             await ledger.mark_async(user_id, r.move.dedup_key, now=now_ts)
+
+    if delivery_mode in {"shadow", "live"}:
+        from backend.web.proactive.delivery import deliver_drafts
+        try:
+            await deliver_drafts(
+                user_id=user_id,
+                verdicts=verdicts,
+                mode=delivery_mode,  # type: ignore[arg-type]
+            )
+        except Exception:
+            logger.exception(
+                "run_proactive_tick: deliver_drafts failed user=%s", user_id[:8]
+            )
 
     return ProactiveTickResult(
         user_id=user_id,

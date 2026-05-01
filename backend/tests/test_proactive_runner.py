@@ -369,6 +369,62 @@ async def test_run_proactive_tick_respects_daily_budget_from_repo(monkeypatch):
 
 
 # ---------------------------------------------------------------------------
+# delivery_mode integration
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_runner_calls_deliver_drafts_in_live_mode(monkeypatch):
+    """When delivery_mode='live', verdicts are passed to deliver_drafts."""
+    moves = [_move(dedup_key="watch:livemode")]
+    results = [_result(moves[0])]
+    verdicts = [(results[0], JudgeVerdict(decision="send", draft="hello"))]
+
+    async def fake_create(ctx, **kw):
+        return moves
+
+    async def fake_exec(accepted):
+        return results
+
+    async def fake_judge(*, context, results):
+        return verdicts
+
+    monkeypatch.setattr(runner_mod, "create_proactive_moves", fake_create)
+    monkeypatch.setattr(runner_mod, "execute_moves", fake_exec)
+    monkeypatch.setattr(runner_mod, "judge_results", fake_judge)
+
+    class FakeRepo:
+        async def get(self, user_id, local_date):
+            return 0
+
+        async def bump(self, user_id, local_date, *, by=1):
+            return by
+
+    monkeypatch.setattr(runner_mod, "DailyCountRepo", lambda: FakeRepo())
+
+    captured: list[tuple[str, int, str]] = []
+
+    async def fake_deliver(*, user_id, verdicts, mode):
+        captured.append((user_id, len(verdicts), mode))
+        return 1
+
+    # The import inside run_proactive_tick is lazy:
+    # `from backend.web.proactive.delivery import deliver_drafts`.
+    # Patch the module attribute so the lazy import resolves to our fake.
+    import backend.web.proactive.delivery as delivery_mod
+    monkeypatch.setattr(delivery_mod, "deliver_drafts", fake_deliver)
+
+    ledger = InMemoryDedupStore()
+    await run_proactive_tick(
+        user_id="u_live",
+        ledger=ledger,
+        load_blurb=_fake_blurb,
+        delivery_mode="live",
+    )
+    assert captured == [("u_live", 1, "live")]
+
+
+# ---------------------------------------------------------------------------
 # helper: run an awaitable with a non-coroutine return (lambda factories)
 # ---------------------------------------------------------------------------
 
