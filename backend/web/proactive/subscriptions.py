@@ -161,13 +161,17 @@ async def reconcile_subscriptions(
         )
         active_keys = {r.intent_key: r for r in active_rows}
 
-        # Deactivate rows no longer in the watch list
+        # Deactivate rows no longer in the watch list. Capture the
+        # webset/monitor ids so we can delete them at Exa after the
+        # transaction commits (orphan cleanup).
         deactivated = 0
+        to_delete: list[tuple[str | None, str | None]] = []
         for key, row in active_keys.items():
             if key not in wanted_keys:
                 row.active = False
                 row.last_refreshed_at = _utcnow_naive()
                 deactivated += 1
+                to_delete.append((row.webset_id, row.monitor_id))
 
         # Create rows for new watch lines, respecting the budget
         active_count_after_deact = sum(1 for r in active_rows if r.active)
@@ -194,6 +198,33 @@ async def reconcile_subscriptions(
             budget_remaining -= 1
 
         await session.commit()
+
+    # Orphan cleanup: delete the deactivated subs' websets and monitors
+    # at Exa. Only attempt when we have an API key. Failures are logged
+    # but do not affect the local reconcile result; an orphaned Exa
+    # webset costs at most pennies until it's culled by Exa's own
+    # garbage collection.
+    if to_delete and have_exa_key():
+        from backend.web.client import exa_monitor_delete, exa_webset_delete
+        for webset_id, monitor_id in to_delete:
+            if monitor_id:
+                try:
+                    await exa_monitor_delete(monitor_id)
+                except Exception:
+                    logger.warning(
+                        "reconcile: orphan monitor_delete failed user=%s mon=%s",
+                        user_id[:8] if user_id else "?",
+                        monitor_id,
+                    )
+            if webset_id:
+                try:
+                    await exa_webset_delete(webset_id)
+                except Exception:
+                    logger.warning(
+                        "reconcile: orphan webset_delete failed user=%s ws=%s",
+                        user_id[:8] if user_id else "?",
+                        webset_id,
+                    )
 
     return ReconcileSummary(
         user_id=user_id,

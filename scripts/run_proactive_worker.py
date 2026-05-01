@@ -47,6 +47,7 @@ logger = logging.getLogger(__name__)
 DEFAULT_DRAIN_INTERVAL_S = 600.0
 DEFAULT_PURGE_INTERVAL_S = 3600.0
 DEFAULT_POLL_INTERVAL_S = 21600.0  # 6h - free-tier fallback for unprovisioned subs
+DEFAULT_URL_SIMILAR_INTERVAL_S = 43200.0  # 12h - URL-similar serendipity loop
 
 
 def _delivery_mode_for(profile: dict) -> str:
@@ -115,9 +116,9 @@ async def _purge_loop(interval: float) -> None:
 
 
 async def _poll_loop(interval: float) -> None:
-    """Free-tier fallback: poll exa_search for any sub without a
-    webset_id. Runs alongside drain. When the user upgrades to a
-    websets-capable plan, provisioned subs skip this loop automatically.
+    """Pulls fresh items per active subscription. Reads from the user's
+    Exa websets when provisioned (push-equivalent for users without a
+    public webhook URL), or runs ``exa_search`` as a fallback.
     """
     from backend.web.proactive.poller import poll_pending_subscriptions
 
@@ -141,6 +142,37 @@ async def _poll_loop(interval: float) -> None:
                     )
         except Exception:
             logger.exception("poll loop top-level error")
+        await asyncio.sleep(interval)
+
+
+async def _url_similar_loop(interval: float) -> None:
+    """Serendipity loop: mines URLs from recent chat -> exa_find_similar
+    -> queues neighbor pages as proactive_signals. Cadence longer than
+    poll because URLs in chat don't change minute-to-minute.
+    """
+    from backend.web.proactive.url_similar import poll_url_similar_signals
+
+    while True:
+        try:
+            users = await _list_active_user_ids()
+            for user_id, _profile in users:
+                try:
+                    summary = await poll_url_similar_signals(user_id)
+                    if summary.seeds_used or summary.new_signals or summary.failed:
+                        logger.info(
+                            "url_similar user=%s seeds=%d new=%d failed=%d",
+                            user_id[:8],
+                            summary.seeds_used,
+                            summary.new_signals,
+                            summary.failed,
+                        )
+                except Exception:
+                    logger.exception(
+                        "url_similar failed user=%s",
+                        user_id[:8] if user_id else "?",
+                    )
+        except Exception:
+            logger.exception("url_similar loop top-level error")
         await asyncio.sleep(interval)
 
 
@@ -186,6 +218,14 @@ async def main() -> None:
             os.environ.get("DONNA_PROACTIVE_POLL_S") or DEFAULT_POLL_INTERVAL_S
         ),
     )
+    parser.add_argument(
+        "--url-similar-interval",
+        type=float,
+        default=float(
+            os.environ.get("DONNA_PROACTIVE_URL_SIMILAR_S")
+            or DEFAULT_URL_SIMILAR_INTERVAL_S
+        ),
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -194,10 +234,11 @@ async def main() -> None:
         datefmt="%H:%M:%S",
     )
     logger.info(
-        "proactive worker starting (drain=%.0fs, purge=%.0fs, poll=%.0fs)",
+        "proactive worker starting (drain=%.0fs, purge=%.0fs, poll=%.0fs, url_similar=%.0fs)",
         args.drain_interval,
         args.purge_interval,
         args.poll_interval,
+        args.url_similar_interval,
     )
 
     try:
@@ -211,6 +252,7 @@ async def main() -> None:
         asyncio.create_task(_drain_loop(args.drain_interval)),
         asyncio.create_task(_purge_loop(args.purge_interval)),
         asyncio.create_task(_poll_loop(args.poll_interval)),
+        asyncio.create_task(_url_similar_loop(args.url_similar_interval)),
     ]
     port_raw = os.environ.get("PORT")
     if port_raw:

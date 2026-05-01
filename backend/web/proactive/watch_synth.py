@@ -124,6 +124,71 @@ Distinct-angle rule: do NOT emit two watches in the same angle category
 unless the inputs genuinely justify two distinct named entities in that
 angle. One watch per angle is the default.
 
+CRITICAL: serendipity over stack-watching.
+
+Stack watches (the user's direct dependencies - the APIs they call, the
+libraries they use) are TOO EASY. They return canonical pages the user
+already knows about. If the user is "building on Anthropic Claude," a
+watch on "Anthropic Claude updates" returns anthropic.com - which the
+user could have bookmarked themselves. The judge correctly silences
+these as predictable.
+
+Aim for NEIGHBOR watches instead:
+
+- A specific competitor or peer product, NOT the category. "Poke product
+  launches and pricing changes" beats "personal AI agent products".
+  "Limitless pendant releases and reviews" beats "AI hardware". Mine
+  named entities in the chat - specific company names, founder names,
+  product names you can SEE in the recent chat or observations.
+
+- A specific person the user orbits, NOT a generic role. "Sarav Antler
+  partner public posts and portfolio updates" beats "Antler partners".
+  Real names from the chat. If key_people is empty, MINE the recent
+  chat for proper nouns - any first-name + last-name pair the user
+  mentioned more than once is a candidate.
+
+- An intellectual question the user is actively chewing on, framed as
+  external content. "Narrow wedge case studies and postmortems 2026"
+  beats "narrow wedge thesis". "How AI agent products handle
+  permissions in production" beats "AI agent design".
+
+- An event-shaped or temporal query. "AI agent product launches in the
+  last 30 days" beats "AI agents". "YC W26 batch sales SaaS startups"
+  beats "YC startups". Bias toward freshness with explicit time spans.
+
+Aim for 3-5 watches per call. Mix is the goal:
+- Try for at least 1 neighbor-shaped watch (specific competitor, peer
+  product, named person, or thesis you inferred from their domain).
+- Fill the rest with stack-shaped watches if neighbor signal is thin.
+- Return [] only as an absolute last resort when the inputs are TRULY
+  empty (a brand-new user with no chat at all). For any user with a
+  durable narrative or mentioned products, you should be able to
+  produce at least 2-3 watches.
+
+DEFAULT BEHAVIOR: produce watches. Empty output should be rare.
+
+Inference is allowed. If the inputs make the user's domain clear ("user
+is building a personal AI assistant product on top of Anthropic Claude
++ WhatsApp"), you may name likely neighbors EVEN IF the user has not
+explicitly mentioned them in recent chat. A real friend who knew you
+were building a personal AI agent would tell you about Poke, Limitless,
+Friend, Rabbit, Pi, Inflection, Granola, Highlight without you having
+to brief them. Use the same judgment.
+
+When you infer neighbors:
+- Anchor the inference to a concrete signal in the inputs ("user is
+  building a WhatsApp-native AI assistant" -> Poke is the obvious
+  WhatsApp-native peer).
+- Keep watches specific. "Poke product launches and pricing" beats
+  "personal AI agents".
+- Don't invent companies that don't exist - only name peers you're
+  confident are real.
+
+Reminder: the user has Donna already. They DO NOT need pings about the
+APIs Donna runs on. They DO benefit from pings about competitors,
+adjacent products, people in their orbit, and intellectual companions
+they wouldn't have searched for.
+
 Voice: terse, lowercase, no em dashes."""
 
 
@@ -210,8 +275,10 @@ def _format_living_profile(
             parts.append(f"## Running themes\n{rendered}")
 
     if recent_user_chats:
+        # Show up to 80 lines (recent + earlier mix) so the deriver can
+        # mine for named entities buried in older transactional traffic.
         rendered = "\n".join(
-            f"- {c[:240]}" for c in recent_user_chats[:25] if c.strip()
+            f"- {c[:240]}" for c in recent_user_chats[:80] if c.strip()
         )
         if rendered:
             parts.append(
@@ -280,6 +347,9 @@ async def derive_external_watches(
             return []
         profile = dict(u.living_profile or {})
 
+        # Pull 200 messages so we catch named entities buried further
+        # back. Recent 30 is too narrow for users whose recent activity
+        # is transactional (meal logs, reminders).
         chat_rows = (
             await session.execute(
                 select(ChatMessage.content)
@@ -289,7 +359,7 @@ async def derive_external_watches(
                     ChatMessage.is_shadow.is_(False),
                 )
                 .order_by(desc(ChatMessage.created_at))
-                .limit(30)
+                .limit(200)
             )
         ).all()
         recent_chats = [str(r[0] or "").strip() for r in chat_rows]
@@ -339,8 +409,11 @@ async def derive_external_watches(
             system_prompt=_SYSTEM_PROMPT,
             user_message=user_block,
             schema=_WatchSynthOut,
-            max_tokens=1200,
+            max_tokens=1500,
             cache=True,
+            # Longer timeout: serendipity prompt + 200 chats can push the
+            # model past the default 8s on cold-start.
+            timeout=20.0,
         )
     except Exception:
         logger.exception(

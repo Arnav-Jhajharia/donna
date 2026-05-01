@@ -354,3 +354,18 @@ async def exa_monitor_delete(
         )
         response.raise_for_status()
         return response.json() if response.content else {"deleted": True}
+
+
+async def exa_webset_delete(
+    webset_id: str,
+    *,
+    timeout: float = _DEFAULT_TIMEOUT_S,
+) -> dict[str, Any]:
+    """DELETE /websets/v0/websets/{id}."""
+    async with httpx.AsyncClient(timeout=timeout) as client:
+        response = await client.delete(
+            f"{_EXA_BASE}/websets/v0/websets/{webset_id}",
+            headers=_headers(),
+        )
+        response.raise_for_status()
+        return response.json() if response.content else {"deleted": True}
