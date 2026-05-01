@@ -302,6 +302,7 @@ async def run_once(*, batch_size: int = 25, lock_timeout_s: int = 60) -> int:
 
             await _maybe_record_attention_surface(fresh)
             await _maybe_enqueue_next_fire(fresh)
+            await _maybe_resolve_completed_attention(fresh)
         except Exception as exc:
             logger.exception("schedule send failed id=%s", fresh.id)
             async with _session_factory()() as session:
@@ -347,17 +348,140 @@ async def _maybe_record_attention_surface(row: DonnaSchedule) -> None:
         )
 
 
+async def _maybe_resolve_completed_attention(row: DonnaSchedule) -> None:
+    """For an attention-linked one-shot fire, mark the attention RESOLVED.
+
+    Recurring attentions stay LIVE (their next fire is queued by
+    ``_maybe_enqueue_next_fire``). One-shot attentions otherwise live forever
+    in the LIVE list and pollute every reactive turn's TODAY block.
+
+    Best-effort: errors are logged, not raised. The fire already shipped.
+    """
+    if not row.attention_id:
+        return
+    if not row.recurrence_meta:
+        return
+    try:
+        from donna.attention.firing import RecurrenceMeta
+    except Exception:
+        return
+    meta = RecurrenceMeta.from_jsonb(row.recurrence_meta)
+    if meta is None or meta.is_recurring:
+        return
+    try:
+        from donna.attention.postgres_store import update_attention_status
+        from donna.attention.schema import AttentionStatus
+
+        await update_attention_status(row.attention_id, AttentionStatus.RESOLVED)
+    except Exception:
+        logger.exception(
+            "failed to resolve completed one-shot attention=%s schedule=%s",
+            row.attention_id,
+            row.id,
+        )
+    try:
+        from donna.attention.tools import resolve_attention as _file_resolve
+
+        _file_resolve(row.attention_id)
+    except Exception:
+        logger.info(
+            "file-store resolve skipped for attention=%s (best-effort)",
+            row.attention_id,
+        )
+
+
+_ENGAGEMENT_BACKOFF_LIMIT = 3  # consecutive non-replies before pausing
+_ENGAGEMENT_BACKOFF_LOOKBACK = 12  # how many recent fires to inspect
+
+
+async def _consecutive_non_replies(
+    user_id: str, attention_id: str
+) -> int:
+    """Count how many of the most recent fires for this attention got no
+    user reply between the fire and the next event. The reply heuristic
+    is "any user-side ChatMessage strictly after the fire_at".
+
+    Returns 0 if the most recent fire WAS replied to (resets the streak),
+    or N if the last N consecutive fires got no reply.
+    """
+    from sqlalchemy import desc
+    from db.models import ChatMessage
+    from backend.db.session import async_session as _session_factory
+
+    try:
+        async with _session_factory() as session:
+            recent_fires = (
+                await session.execute(
+                    select(DonnaSchedule.fire_at)
+                    .where(
+                        DonnaSchedule.user_id == user_id,
+                        DonnaSchedule.attention_id == attention_id,
+                        DonnaSchedule.fired.is_(True),
+                    )
+                    .order_by(desc(DonnaSchedule.fire_at))
+                    .limit(_ENGAGEMENT_BACKOFF_LOOKBACK)
+                )
+            ).all()
+            fires = [r[0] for r in recent_fires if r[0] is not None]
+            if not fires:
+                return 0
+            # Walk most-recent-first; count consecutive fires until we see
+            # a user-side reply that landed after the fire.
+            streak = 0
+            for fire_at in fires:
+                reply_count = (
+                    await session.execute(
+                        select(ChatMessage.id)
+                        .where(
+                            ChatMessage.user_id == user_id,
+                            ChatMessage.role == "user",
+                            ChatMessage.created_at > fire_at,
+                            ChatMessage.is_shadow.is_(False),
+                        )
+                        .limit(1)
+                    )
+                ).first()
+                if reply_count:
+                    return streak
+                streak += 1
+            return streak
+    except Exception:
+        logger.exception(
+            "engagement backoff: failed to count non-replies user=%s attn=%s",
+            user_id[:8] if user_id else "?",
+            attention_id[:8] if attention_id else "?",
+        )
+        return 0
+
+
 async def _maybe_enqueue_next_fire(row: DonnaSchedule) -> None:
     """For a fired attention-linked row with a recurring cadence, queue the next fire.
 
     No-op for one-shot reminders (legacy text reminders without ``attention_id``
     or PING attentions with ONE_SHOT cadence). Errors are logged, not raised —
     a missed re-enqueue must not break the just-completed delivery.
+
+    Engagement backoff: if the user hasn't replied to the last N
+    consecutive fires of this attention, pause the recurrence. The user
+    can resume by acknowledging the next ping or by explicitly saying
+    "remind me again" — both produce a user-side ChatMessage which the
+    next fire's engagement check sees and resets the streak.
     """
     if not row.attention_id:
         return
     if not row.recurrence_meta:
         return
+
+    streak = await _consecutive_non_replies(row.user_id, row.attention_id)
+    if streak >= _ENGAGEMENT_BACKOFF_LIMIT:
+        logger.info(
+            "engagement backoff: pausing attn=%s user=%s after %d consecutive non-replies",
+            row.attention_id[:8],
+            row.user_id[:8],
+            streak,
+        )
+        return
+
     try:
         from donna.attention.firing import RecurrenceMeta, compute_next_fire
     except Exception:
