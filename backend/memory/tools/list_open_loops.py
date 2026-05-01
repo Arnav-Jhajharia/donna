@@ -24,35 +24,31 @@ async def list_open_loops(
     user_id: str, status: str = "active", limit: int = 20
 ) -> ToolResult:
     try:
-        from sqlalchemy import select
-
-        from backend.db.models import OpenLoop
         from backend.db.session import async_session
+        from backend.memory.tools._open_loop_view import read_open_loops_unified
     except Exception:
         return degraded("db unavailable")
     try:
         async with async_session() as session:
-            stmt = (
-                select(OpenLoop)
-                .where(OpenLoop.user_id == user_id)
-                .order_by(OpenLoop.created_at.desc())
-                .limit(limit)
+            statuses = None if status == "all" else (status,)
+            views = await read_open_loops_unified(
+                session,
+                user_id=user_id,
+                statuses=statuses,
+                limit=limit,
             )
-            if status != "all":
-                stmt = stmt.where(OpenLoop.status == status)
-            rows = (await session.execute(stmt)).scalars().all()
     except Exception:
         return degraded("db error")
-    if not rows:
+    if not views:
         return no_hits()
     return ok(
         [
             {
-                "id": r.id,
-                "content": r.content,
-                "status": r.status,
-                "created_at": r.created_at.isoformat() if r.created_at else None,
+                "id": v.id,
+                "content": v.content,
+                "status": v.status,
+                "created_at": v.created_at.isoformat() if v.created_at else None,
             }
-            for r in rows
+            for v in views
         ]
     )

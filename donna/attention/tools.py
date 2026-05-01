@@ -180,6 +180,21 @@ async def create_attention(
         created_at=datetime.now(timezone.utc),
     )
     store.save(attention)
+
+    # Auto-spawn companion attentions for primary tallies — best-effort,
+    # never blocks the primary creation.
+    try:
+        from backend.memory.attention.companion_spawner import spawn_companions
+
+        await spawn_companions(
+            user_id=str(user_uuid),
+            primary_attention_id=str(attention.id),
+            primary_spec=spec.model_dump(mode="json"),
+        )
+    except Exception:
+        # Companion spawner has its own logging; fail closed.
+        pass
+
     return CreateResult(
         attention=attention,
         authored_via=pipeline.authored.via,

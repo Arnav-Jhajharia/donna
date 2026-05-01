@@ -28,6 +28,7 @@ async def close_open_loop(user_id: str, loop_id: str) -> ToolResult:
 
         from backend.db.models import OpenLoop
         from backend.db.session import async_session
+        from backend.memory.tools._open_loop_mirror import mirror_close_open_loop
     except Exception:
         return degraded("db unavailable")
     try:
@@ -40,6 +41,10 @@ async def close_open_loop(user_id: str, loop_id: str) -> ToolResult:
                 return no_hits()
             loop.status = "closed"
             loop.resolved_at = datetime.now(timezone.utc).replace(tzinfo=None)
+            # Phase 1a dual-write — mirror status to the attention shadow.
+            await mirror_close_open_loop(
+                session, user_id=user_id, open_loop_id=loop_id
+            )
             await session.commit()
             refreshed = await _refresh_situation_brief(user_id)
             return ok({"id": loop_id, "status": "closed", "situation_brief_refreshed": refreshed})

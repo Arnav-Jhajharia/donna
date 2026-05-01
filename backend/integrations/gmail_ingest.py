@@ -48,27 +48,26 @@ async def ingest_gmail_message(
         ).scalar_one_or_none()
 
         if existing is None:
-            session.add(
-                EmailMessage(
-                    user_id=user_id,
-                    gmail_message_id=msg.gmail_message_id,
-                    thread_id=msg.thread_id,
-                    from_address=msg.from_address,
-                    from_name=msg.from_name,
-                    to_addresses=msg.to_addresses,
-                    cc_addresses=msg.cc_addresses,
-                    subject=msg.subject,
-                    snippet=msg.snippet,
-                    body_text=body_text,
-                    body_stored=body_stored,
-                    labels=msg.labels,
-                    is_important=msg.is_important,
-                    is_starred=msg.is_starred,
-                    is_sent=msg.is_sent,
-                    ingest_depth=depth,
-                    internal_date=msg.internal_date,
-                )
+            row = EmailMessage(
+                user_id=user_id,
+                gmail_message_id=msg.gmail_message_id,
+                thread_id=msg.thread_id,
+                from_address=msg.from_address,
+                from_name=msg.from_name,
+                to_addresses=msg.to_addresses,
+                cc_addresses=msg.cc_addresses,
+                subject=msg.subject,
+                snippet=msg.snippet,
+                body_text=body_text,
+                body_stored=body_stored,
+                labels=msg.labels,
+                is_important=msg.is_important,
+                is_starred=msg.is_starred,
+                is_sent=msg.is_sent,
+                ingest_depth=depth,
+                internal_date=msg.internal_date,
             )
+            session.add(row)
         else:
             existing.labels = msg.labels
             existing.is_important = msg.is_important
@@ -78,8 +77,10 @@ async def ingest_gmail_message(
             existing.body_text = body_text
             existing.body_stored = body_stored
             existing.ingest_depth = depth
+            row = existing
 
         await session.commit()
+        email_row_id = row.id
 
     # Fan out to the proactive email trigger only for rows we actually
     # stored. Failures here must not affect ingest durability.
@@ -88,5 +89,18 @@ async def ingest_gmail_message(
     except Exception:
         logger.exception(
             "ingest_gmail_message: proactive trigger failed user=%s msg=%s",
+            user_id, msg.gmail_message_id,
+        )
+
+    # Run Haiku enrichment for important inbound mail. Idempotent on
+    # (user_id, email_message_id); never raises. Skips internally when
+    # the row isn't important, is outbound, or already enriched.
+    try:
+        from backend.integrations.email_enrichment import enrich_email
+
+        await enrich_email(user_id, email_row_id)
+    except Exception:
+        logger.exception(
+            "ingest_gmail_message: enrichment failed user=%s msg=%s",
             user_id, msg.gmail_message_id,
         )

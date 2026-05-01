@@ -725,31 +725,23 @@ class DeadlineProposer:
 
 
 async def _default_open_loops_with_due_at(user_id: str) -> list[Any]:
-    """Pull active open_loops with a due_at set."""
+    """Pull active open_loops with a due_at set, sorted by due date."""
     try:
-        from sqlalchemy import select
-
-        from db.models import OpenLoop
+        from backend.memory.tools._open_loop_view import read_open_loops_unified
         from db.session import async_session
     except Exception:
         return []
 
     try:
         async with async_session() as session:
-            rows = (
-                (
-                    await session.execute(
-                        select(OpenLoop)
-                        .where(OpenLoop.user_id == user_id)
-                        .where(OpenLoop.status == "active")
-                        .where(OpenLoop.due_at.isnot(None))
-                        .order_by(OpenLoop.due_at.asc())
-                    )
-                )
-                .scalars()
-                .all()
+            rows = await read_open_loops_unified(
+                session,
+                user_id=user_id,
+                statuses=("active",),
             )
-        return list(rows)
+        with_due = [r for r in rows if r.due_at is not None]
+        with_due.sort(key=lambda r: r.due_at)
+        return with_due
     except Exception:
         logger.exception(
             "deadline: open_loops fetch failed user=%s",

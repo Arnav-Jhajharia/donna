@@ -132,12 +132,18 @@ async def test_no_hits_when_gmail_not_connected_at_all(db) -> None:
 async def test_degrades_when_connected_but_bootstrap_never_ran(db) -> None:
     """Critical case from real incident: gmail integration is green but
     bootstrap was never spawned (webhook missed, watcher killed). Donna
-    must NOT lie that the inbox is empty."""
+    must NOT lie that the inbox is empty.
+
+    The `reason` payload is the user-facing Donna-voice line — it tells
+    the user the connection is fresh, not broken.
+    """
     await _connect_gmail(db, "u1")
     # No bootstrap_runs entry written.
     result = await list_gmail_recent(user_id="u1", within_hours=24)
     assert result["status"] == "degraded"
-    assert "bootstrap" in result["payload"]["reason"].lower()
+    reason = result["payload"]["reason"].lower()
+    assert "connected but" in reason
+    assert "haven't pulled" in reason
 
 
 @pytest.mark.asyncio
@@ -146,7 +152,9 @@ async def test_degrades_when_bootstrap_running(db) -> None:
     await _set_bootstrap_status(db, "u1", "running")
     result = await list_gmail_recent(user_id="u1", within_hours=24)
     assert result["status"] == "degraded"
-    assert "warming up" in result["payload"]["reason"].lower()
+    reason = result["payload"]["reason"].lower()
+    assert "still pulling" in reason
+    assert "30-60 seconds" in reason
 
 
 @pytest.mark.asyncio
@@ -155,7 +163,9 @@ async def test_degrades_when_bootstrap_failed(db) -> None:
     await _set_bootstrap_status(db, "u1", "failed")
     result = await list_gmail_recent(user_id="u1", within_hours=24)
     assert result["status"] == "degraded"
-    assert "failed" in result["payload"]["reason"].lower()
+    reason = result["payload"]["reason"].lower()
+    assert "snag" in reason
+    assert "retry" in reason
 
 
 @pytest.mark.asyncio

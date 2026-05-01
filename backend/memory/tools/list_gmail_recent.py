@@ -102,27 +102,24 @@ async def list_gmail_recent(
         # Only meaningful when gmail is actually connected; otherwise
         # there's no ingest pipeline to be waiting on.
         if await _gmail_is_connected(user_id):
+            # `reason` is the user-facing line — Donna-voice so the wrapper
+            # can forward it verbatim. Don't add explanatory prose; it's
+            # what the user sees.
             bootstrap_state = await _read_bootstrap_state(user_id)
             if bootstrap_state == "running":
                 return degraded(
-                    "gmail mirror still warming up — bootstrap is running. "
-                    "tell the user the inbox is being read right now and "
-                    "try again in 30-60s."
+                    "still pulling your mail in. give me 30-60 seconds, then ask again."
                 )
             if bootstrap_state == "failed":
                 return degraded(
-                    "gmail bootstrap failed — local mirror is empty. tell "
-                    "the user something went wrong on the ingest side and "
-                    "offer to retry."
+                    "gmail ingest hit a snag. want me to retry?"
                 )
             if bootstrap_state is None:
-                # No bootstrap_runs entry -> never fired. Likely the
-                # OAuth-completion webhook didn't deliver and the
-                # per-turn reconcile hasn't auto-spawned bootstrap yet.
+                # No bootstrap_runs entry -> never fired. OAuth completion
+                # webhook missed and per-turn reconcile hasn't auto-spawned
+                # bootstrap yet. Tell the user it's fresh, not broken.
                 return degraded(
-                    "gmail mirror is empty — bootstrap hasn't run yet. "
-                    "tell the user the connection is fresh and the first "
-                    "inbox scan is still pending."
+                    "gmail's connected but i haven't pulled anything in yet. give me a minute."
                 )
             # bootstrap_state == "completed" → real empty window.
         return no_hits()

@@ -30,12 +30,23 @@ async def track_open_loop(
     try:
         from backend.db.models import OpenLoop
         from backend.db.session import async_session
+        from backend.memory.tools._open_loop_mirror import mirror_create_open_loop
     except Exception:
         return degraded("db unavailable")
     try:
         async with async_session() as session:
             loop = OpenLoop(user_id=user_id, content=content, source_message=source_message)
             session.add(loop)
+            await session.flush()  # populate loop.id before mirror needs it
+            # Phase 1a dual-write — best-effort, non-blocking on the primary.
+            await mirror_create_open_loop(
+                session,
+                user_id=user_id,
+                open_loop_id=loop.id,
+                content=content,
+                source_message=source_message,
+                due_at=loop.due_at,
+            )
             await session.commit()
             await session.refresh(loop)
             refreshed = await _refresh_situation_brief(user_id)

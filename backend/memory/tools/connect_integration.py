@@ -123,17 +123,22 @@ def _consent_message(toolkit_links: list[tuple[str, str]]) -> str:
     Single toolkit: classic 'tap: <url>' phrasing.
     Multi toolkit: only the FIRST URL is exposed because the redirect
     chain walks the rest after a single tap.
+
+    Donna voice; the donna_runtime tool wrapper forwards this verbatim,
+    so it's the line the user actually sees.
     """
     if len(toolkit_links) == 1:
         toolkit, url = toolkit_links[0]
         return (
             f"need {_label(toolkit)} to be useful. one-time read "
-            f"so i learn who matters to you. tap: {url}"
+            f"so i learn who matters to you. tap: {url}\n"
+            f"link's good for a few minutes."
         )
     products = " + ".join(_label(t) for t, _ in toolkit_links)
     first_url = toolkit_links[0][1]
     return (
-        f"need {products} to be useful. one tap covers all of them: {first_url}"
+        f"need {products} to be useful. one tap covers all of them: "
+        f"{first_url}\nlink's good for a few minutes."
     )
 
 

@@ -48,6 +48,19 @@ async def log_observation(
     except Exception:
         return degraded("db unavailable")
     try:
+        # Schema enforcer: fill domain-specific fields (e.g. calories for
+        # meal observations) BEFORE the row is written. Best-effort.
+        try:
+            from backend.memory.observations.schema_enforcer import (
+                enforce_observation_schema,
+            )
+
+            fields = await enforce_observation_schema(
+                user_id=user_id, obs_type=type, fields=fields, raw=raw
+            )
+        except Exception:
+            logger.exception("log_observation: schema enforcer raised")
+
         async with async_session() as session:
             user = (
                 await session.execute(
@@ -89,10 +102,39 @@ async def log_observation(
             await session.commit()
             await session.refresh(obs)
             refreshed = await _refresh_situation_brief(user_id)
+
+            # Trigger the attention runtime: re-evaluate live attentions
+            # whose source matches this observation type. Tally rollups
+            # update inline; pings/open_loops are evaluated for state
+            # snapshots. Best-effort — failures here never block the write.
+            await _reevaluate_attentions(user_id=user_id, obs_type=type)
+
             return ok({"id": obs.id, "type": obs.type, "situation_brief_refreshed": refreshed})
     except Exception as exc:
         logger.exception("log_observation failed")
         return degraded(f"db error: {exc}")
+
+
+async def _reevaluate_attentions(*, user_id: str, obs_type: str) -> None:
+    """Best-effort: re-run the attention engine for cards likely impacted.
+
+    Today: any new observation triggers a full sweep of LIVE tally
+    attentions (cheap; deterministic sums). open_loop and event_stream
+    don't need a re-eval per observation. Future iterations can narrow
+    by tag.
+    """
+    try:
+        from backend.memory.attention.engine import evaluate_user_attentions
+
+        await evaluate_user_attentions(
+            user_id=user_id,
+            card_filter=("tally",),
+            trigger=f"observation:{obs_type}",
+        )
+    except Exception:
+        logger.exception(
+            "log_observation: attention re-eval failed user=%s", user_id[:8]
+        )
 
 
 async def _refresh_situation_brief(user_id: str) -> bool:

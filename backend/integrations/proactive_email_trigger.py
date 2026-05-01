@@ -23,7 +23,7 @@ from backend.integrations.proactive_rate_limit import (
     can_fire_proactive,
     record_ping,
 )
-from db.models import OpenLoop, User
+from db.models import User
 from proactive.dispatcher import dispatch as dispatcher_dispatch
 from proactive.dispatcher import is_tiered_active
 from proactive.sources.email import (
@@ -43,17 +43,15 @@ def _session_factory():
 
 
 async def _build_scoring_context(user_id: str) -> ScoringContext:
+    from backend.memory.tools._open_loop_view import read_open_loops_unified
+
     async with _session_factory()() as session:
         user = (
             await session.execute(select(User).where(User.id == user_id))
         ).scalar_one_or_none()
-        loops = (
-            await session.execute(
-                select(OpenLoop)
-                .where(OpenLoop.user_id == user_id)
-                .where(OpenLoop.status == "active")
-            )
-        ).scalars().all()
+        loops = await read_open_loops_unified(
+            session, user_id=user_id, statuses=("active",),
+        )
 
     biography = (
         (user.living_profile or {}).get("biography", {})
