@@ -24,7 +24,7 @@ from typing import Any
 
 from sqlalchemy import select, update
 
-from backend.web.client import exa_search, have_exa_key
+from backend.web.client import exa_search, exa_webset_items, have_exa_key
 from backend.web.proactive.store import SignalQueueRepo
 from db.models import ProactiveSignal, ProactiveSubscription
 from db.session import async_session
@@ -75,8 +75,16 @@ async def poll_pending_subscriptions(
     *,
     max_results_per_sub: int = 5,
 ) -> PollSummary:
-    """For each active sub with ``webset_id IS NULL``, run a fresh
-    ``exa_search`` and enqueue any new URLs as ``proactive_signals``.
+    """For each active sub, pull fresh items and enqueue any new URLs
+    as ``proactive_signals``.
+
+    Two modes, picked per-subscription:
+      - sub HAS webset_id  -> GET /websets/v0/websets/{id}/items
+        Reads the curated list Exa is maintaining for us. Cheap and
+        accurate; this is how we get monitor-fed items into the queue
+        without a public webhook URL.
+      - sub HAS NO webset_id -> POST /search
+        Free-tier fallback for subs that haven't been provisioned yet.
 
     Never raises - failures per subscription are logged and counted.
     No-op when EXA_API_KEY is missing.
@@ -91,7 +99,6 @@ async def poll_pending_subscriptions(
                     select(ProactiveSubscription).where(
                         ProactiveSubscription.user_id == user_id,
                         ProactiveSubscription.active.is_(True),
-                        ProactiveSubscription.webset_id.is_(None),
                     )
                 )
             ).scalars()
@@ -108,16 +115,57 @@ async def poll_pending_subscriptions(
     for sub in rows:
         polled += 1
         try:
-            res = await exa_search(
-                sub.description,
-                num_results=max_results_per_sub,
-                search_type="auto",
-            )
+            if sub.webset_id:
+                items_resp = await exa_webset_items(
+                    sub.webset_id, limit=max_results_per_sub
+                )
+                items_raw = (
+                    items_resp.get("data")
+                    if isinstance(items_resp, dict)
+                    else None
+                ) or []
+                # webset items wrap the source page under .properties.url etc.
+                # Normalize to the same shape /search returns.
+                normalized = []
+                for it in items_raw:
+                    if not isinstance(it, dict):
+                        continue
+                    props = it.get("properties") or {}
+                    url = (
+                        props.get("url")
+                        or it.get("url")
+                        or ""
+                    )
+                    title = (
+                        props.get("title")
+                        or it.get("title")
+                        or url
+                    )
+                    snippet = (
+                        props.get("description")
+                        or props.get("summary")
+                        or ""
+                    )
+                    if url:
+                        normalized.append({
+                            "url": url,
+                            "title": title,
+                            "highlights": [snippet] if snippet else [],
+                            "publishedDate": props.get("publishedDate"),
+                        })
+                res = {"results": normalized}
+            else:
+                res = await exa_search(
+                    sub.description,
+                    num_results=max_results_per_sub,
+                    search_type="auto",
+                )
         except Exception:
             logger.exception(
-                "poll_pending_subscriptions: exa_search failed user=%s intent=%s",
+                "poll_pending_subscriptions: pull failed user=%s intent=%s mode=%s",
                 user_id[:8] if user_id else "?",
                 sub.intent_key,
+                "webset" if sub.webset_id else "search",
             )
             failed += 1
             continue
