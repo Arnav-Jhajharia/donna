@@ -1,50 +1,138 @@
 import { NextRequest, NextResponse } from 'next/server';
 
 /**
- * Edge middleware: gate the dashboard on a session cookie OR an explicit
- * `?user_id=` query (dev escape hatch).
+ * Edge middleware: split user surface from internal surface by hostname.
  *
- * - Auth endpoints (`/auth/*`, `/api/auth/*`) are always allowed so users
- *   can land + redeem links + verify OTP without a prior session.
- * - The manifest endpoint (`/api/dashboard/.../manifest`) is allowed when
- *   it carries `?user_id=` (dev) or the session cookie (prod).
- * - Anything else under `/` requires a session cookie. Missing → redirect
- *   to `/auth/expired` so the user knows to text Donna.
+ * - User host (e.g. donna.app, localhost:3000)
+ *     - Allowed: `/`, `/auth/*`, `/api/dashboard/*`, `/api/auth/*`
+ *     - Blocked (404): `/observe`, `/moments`, `/generator`, `/expansion`,
+ *       `/admin/*`, `/api/admin/*`, `/api/events`, `/internal-home`
+ *     - `/` requires session cookie (or `?user_id=` dev escape hatch)
  *
- * We deliberately do NOT verify the cookie's signature here — Edge runtime
- * can't cleanly run our HMAC code, and the backend re-verifies on every
- * manifest fetch anyway. Middleware just checks "is a cookie present?"
- * which is enough to keep unauthenticated visitors out of the renderer.
+ * - Internal host (e.g. internal.donna.app, localhost:3001)
+ *     - Allowed: `/observe`, `/moments`, `/generator`, `/expansion`,
+ *       `/admin/*`, `/api/admin/*`, `/api/events`, `/internal-home`
+ *     - Blocked (404): user-facing routes
+ *     - All allowed routes require HTTP Basic auth
+ *       (ADMIN_USER + ADMIN_PASSWORD)
+ *     - `/` redirects to `/internal-home`
+ *
+ * - Unknown host: 404. No default routing — explicit hosts only.
+ *
+ * Hostname allowlists come from NEXT_PUBLIC_USER_HOSTS and
+ * NEXT_PUBLIC_INTERNAL_HOSTS (comma-separated). Sensible local-dev
+ * defaults: localhost:3000 = user, localhost:3001 = internal.
+ *
+ * Cookie signature is NOT verified here — Edge runtime can't run our
+ * HMAC code. The backend re-verifies on every manifest fetch.
  */
-const PUBLIC_PATHS = ['/auth/magic', '/auth/otp', '/auth/signin', '/auth/expired'];
-// All ``/api/*`` routes pass through middleware untouched — each route
-// owns its own auth (or lack of) and returns JSON. Redirecting an API
-// call to an HTML page breaks the caller's JSON parser. Dev / internal
-// page surfaces (observe, moments, etc.) also bypass auth so iteration
-// stays unblocked without minting a session every time.
-const PUBLIC_PREFIXES = [
-  '/api/',
-  '/_next/',
-  '/favicon',
-  '/observe',
-  '/moments',
-  '/expansion',
-  '/generator',
-];
 
-function isPublic(pathname: string): boolean {
-  if (PUBLIC_PATHS.includes(pathname)) return true;
-  return PUBLIC_PREFIXES.some((p) => pathname.startsWith(p));
+const DEFAULT_USER_HOSTS = ['localhost:3000', '127.0.0.1:3000'];
+const DEFAULT_INTERNAL_HOSTS = ['localhost:3001', '127.0.0.1:3001'];
+
+function parseHostList(envValue: string | undefined, fallback: string[]): string[] {
+  if (!envValue) return fallback;
+  return envValue
+    .split(',')
+    .map((h) => h.trim().toLowerCase())
+    .filter(Boolean);
 }
 
-// HTTP Basic auth gate for the /admin observability surface. Hosted on
-// the same instance as the user-facing dashboard, so without this gate
-// anyone who knows the URL would be a few clicks from raw user data.
-function requireAdminBasic(req: NextRequest): NextResponse | null {
+const USER_HOSTS = parseHostList(
+  process.env.NEXT_PUBLIC_USER_HOSTS,
+  DEFAULT_USER_HOSTS,
+);
+const INTERNAL_HOSTS = parseHostList(
+  process.env.NEXT_PUBLIC_INTERNAL_HOSTS,
+  DEFAULT_INTERNAL_HOSTS,
+);
+
+type Surface = 'user' | 'internal' | 'unknown';
+
+function classifyHost(host: string | null): Surface {
+  if (!host) return 'unknown';
+  const normalized = host.toLowerCase();
+  if (USER_HOSTS.includes(normalized)) return 'user';
+  if (INTERNAL_HOSTS.includes(normalized)) return 'internal';
+  return 'unknown';
+}
+
+// Routes that may be served from the USER host.
+//
+// /moments is public on the apex on purpose — it's the Poke-style
+// "browse the recipes before signing up" surface. The plans in
+// /moments are static showcase fixtures, not real user data, so
+// exposing them is a marketing asset, not a leak.
+const USER_PUBLIC_PATHS = new Set([
+  '/auth/magic',
+  '/auth/otp',
+  '/auth/signin',
+  '/auth/expired',
+  '/moments',
+]);
+const USER_PUBLIC_PREFIXES = ['/api/dashboard/', '/api/auth/', '/moments/'];
+
+// Routes that may only be served from the INTERNAL host.
+const INTERNAL_ALLOWED_PATHS = new Set([
+  '/observe',
+  '/moments',
+  '/generator',
+  '/expansion',
+  '/internal-home',
+  '/admin',
+]);
+const INTERNAL_ALLOWED_PREFIXES = [
+  '/admin/',
+  '/api/admin/',
+  '/api/events',
+  '/observe/',
+  '/moments/',
+  '/generator/',
+  '/expansion/',
+];
+
+// Always-allowed (asset / framework) prefixes — neutral, served on both.
+const NEUTRAL_PREFIXES = ['/_next/', '/favicon'];
+
+function isNeutral(pathname: string): boolean {
+  return NEUTRAL_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
+function isUserAllowed(pathname: string): boolean {
+  if (pathname === '/') return true;
+  if (USER_PUBLIC_PATHS.has(pathname)) return true;
+  if (USER_PUBLIC_PREFIXES.some((p) => pathname.startsWith(p))) return true;
+  return false;
+}
+
+// User-host paths that bypass the session-cookie gate. /auth/* lands
+// users here without a session. /moments is the public showcase
+// gallery (Poke-style recipe browser).
+function isUserNoAuth(pathname: string): boolean {
+  if (USER_PUBLIC_PATHS.has(pathname)) return true;
+  if (pathname.startsWith('/moments/')) return true;
+  return false;
+}
+
+function isInternalAllowed(pathname: string): boolean {
+  if (INTERNAL_ALLOWED_PATHS.has(pathname)) return true;
+  if (INTERNAL_ALLOWED_PREFIXES.some((p) => pathname.startsWith(p))) return true;
+  return false;
+}
+
+function notFound(): NextResponse {
+  return new NextResponse('not found', { status: 404 });
+}
+
+/**
+ * HTTP Basic auth gate for the internal surface. Reuses the
+ * ADMIN_USER + ADMIN_PASSWORD env vars previously scoped to /admin.
+ */
+function requireStaffBasic(req: NextRequest): NextResponse | null {
   const expectedPw = process.env.ADMIN_PASSWORD;
   if (!expectedPw) {
     return new NextResponse(
-      'admin disabled — set ADMIN_PASSWORD env var',
+      'internal disabled — set ADMIN_PASSWORD env var',
       { status: 503 },
     );
   }
@@ -61,45 +149,61 @@ function requireAdminBasic(req: NextRequest): NextResponse | null {
       // fall through to 401
     }
   }
-  return new NextResponse('admin auth required', {
+  return new NextResponse('staff auth required', {
     status: 401,
-    headers: { 'WWW-Authenticate': 'Basic realm="donna-admin"' },
+    headers: { 'WWW-Authenticate': 'Basic realm="donna-internal"' },
   });
 }
 
+function handleUserHost(req: NextRequest): NextResponse {
+  const { pathname } = req.nextUrl;
+
+  if (isNeutral(pathname)) return NextResponse.next();
+  if (!isUserAllowed(pathname)) return notFound();
+
+  // /api/* is allowed-as-listed; each route owns its own auth and
+  // returns JSON. Don't redirect API calls to HTML pages.
+  if (pathname.startsWith('/api/')) return NextResponse.next();
+
+  // /auth/* + /moments are public — the user lands here without a
+  // session, or arrives via the LP recipe gallery.
+  if (isUserNoAuth(pathname)) return NextResponse.next();
+
+  // Bare / always passes through. The page server component reads the
+  // `donna_session` cookie itself and renders either the landing page
+  // (no cookie) or the dashboard surface (cookie present). Same route,
+  // auth-state branch.
+  return NextResponse.next();
+}
+
+function handleInternalHost(req: NextRequest): NextResponse {
+  const { pathname } = req.nextUrl;
+
+  if (isNeutral(pathname)) return NextResponse.next();
+
+  // / on internal host → /internal-home (the staff navigation page).
+  if (pathname === '/') {
+    return NextResponse.redirect(new URL('/internal-home', req.url));
+  }
+
+  if (!isInternalAllowed(pathname)) return notFound();
+
+  // Every internal route — page or API — is staff-Basic gated.
+  const denied = requireStaffBasic(req);
+  if (denied) return denied;
+
+  return NextResponse.next();
+}
+
 export function middleware(req: NextRequest) {
-  const { pathname, searchParams } = req.nextUrl;
+  const host = req.headers.get('host');
+  const surface = classifyHost(host);
 
-  // Admin paths get their own auth — Basic, not the user-session cookie.
-  // Both the page surface and the API proxy are gated.
-  if (
-    pathname === '/admin' ||
-    pathname.startsWith('/admin/') ||
-    pathname.startsWith('/api/admin/')
-  ) {
-    const denied = requireAdminBasic(req);
-    if (denied) return denied;
-    return NextResponse.next();
-  }
-
-  if (isPublic(pathname)) {
-    return NextResponse.next();
-  }
-
-  const session = req.cookies.get('donna_session')?.value;
-  const userIdQuery = searchParams.get('user_id');
-
-  // Dev escape hatch: ?user_id=… bypasses auth so we can keep iterating
-  // on the renderer without a real session. Backend still authoritative
-  // on what user that maps to.
-  if (session || userIdQuery) {
-    return NextResponse.next();
-  }
-
-  return NextResponse.redirect(new URL('/auth/signin', req.url));
+  if (surface === 'user') return handleUserHost(req);
+  if (surface === 'internal') return handleInternalHost(req);
+  return notFound();
 }
 
 export const config = {
-  // Match everything except the Next.js asset paths and the favicon.
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
 };

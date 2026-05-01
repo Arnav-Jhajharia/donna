@@ -1,0 +1,29 @@
+/* ============================================================
+   Donna landing-page stylesheet.
+   Imports the landing design-system tokens, then Tailwind v4.
+   The Tailwind layer is included here; dashboard styles in
+   globals.css are unlayered, so they retain higher precedence
+   for shared selectors (e.g. body resets) and the dashboard
+   surface is unaffected.
+   ============================================================ */
+
+@import "./landing-tokens.css";
+@import "tailwindcss";
+@config "../tailwind.config.js";
+
+/* Wordmark renders text-${color} where color is one of ink/paper/rust.
+   The template literal is invisible to Tailwind's content scanner, so we
+   force the three classes into the build so all wordmark variants render. */
+@source inline("text-ink text-paper text-rust");
+
+@layer base {
+  /* The donna-bubble-lift class is referenced by ProofSection's chat
+     bubbles. Softer than any of the boxShadow tokens and tinted rust
+     so it sits on cream without announcing itself. Declared inside
+     base so the dashboard's body reset still wins where they overlap. */
+  .donna-bubble-lift {
+    box-shadow:
+      0 0.5px 0 rgba(123, 85, 68, 0.08),
+      0 1px 2px rgba(123, 85, 68, 0.04);
+  }
+}

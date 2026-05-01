@@ -1,0 +1,332 @@
+/* ============================================================
+   DONNA · DESIGN TOKENS
+   The only source of truth for color, type, space, radius, motion.
+   Every value used in UI must reference a token below.
+   No raw hex, no raw px for type, no inline shadows.
+   ============================================================ */
+
+:root {
+  /* ---------- COLOR · CORE (the six roles) ---------- */
+  --color-paper:            #FBF7F5;  /* page background */
+  --color-surface:          #F0EAE4;  /* raised cards, inputs at rest */
+  --color-surface-pressed:  #E7DFD7;  /* hover / active */
+  --color-ink:              #1E1A18;  /* all primary text, 90%+ of type */
+  --color-rust:             #7B5544;  /* the one accent */
+  --color-muted:            #6B615C;  /* secondary text only */
+
+  /* ---------- COLOR · PAPER SCALE ---------- */
+  --paper-50:  #FDFAF8;
+  --paper-100: #FBF7F5;  /* = --color-paper */
+  --paper-200: #F5EFEA;
+  --paper-300: #F0EAE4;  /* = --color-surface */
+  --paper-400: #E7DFD7;  /* = --color-surface-pressed */
+  --paper-500: #D6CAC0;
+
+  /* ---------- COLOR · INK SCALE ---------- */
+  --ink-200: #D9CEC5;  /* disabled text */
+  --ink-300: #B5A89F;  /* hairline border */
+  --ink-400: #8F837C;
+  --ink-500: #6B615C;  /* = --color-muted */
+  --ink-700: #3A3331;
+  --ink-900: #1E1A18;  /* = --color-ink */
+
+  /* ---------- COLOR · RUST SCALE ---------- */
+  --rust-50:  #F5EFEA;
+  --rust-100: #EBDCD2;  /* rust tint backgrounds */
+  --rust-300: #C9A796;
+  --rust-500: #A07562;
+  --rust-700: #7B5544;  /* = --color-rust */
+  --rust-900: #4A2F23;
+
+  /* ---------- COLOR · SIGNALS ----------
+     These ARE new hues (pulled editorial, but new). Use only in the
+     exact semantic role named. Never decorative.                   */
+  --signal-success:      #5C6B4A;  /* moss · "done", "kept", "noted" */
+  --signal-success-tint: #EEF1E7;
+  --signal-warning:      #A8804A;  /* amber · "heads up" */
+  --signal-warning-tint: #F5EBD9;
+  --signal-danger:       #8B3A2E;  /* oxblood · destructive confirm */
+  --signal-danger-tint:  #F3E0DC;
+
+  /* ---------- COLOR · SEMANTIC ALIASES ----------
+     Prefer these over roles in components. If you need a new alias,
+     add it here — never inline a new color.                         */
+  --text-primary:   var(--color-ink);
+  --text-secondary: var(--color-muted);
+  --text-disabled:  var(--ink-200);
+  --text-accent:    var(--color-rust);
+  --text-on-rust:   var(--color-paper);
+  --text-on-ink:    var(--color-paper);
+
+  --bg-page:            var(--color-paper);
+  --bg-card:            var(--color-surface);
+  --bg-card-pressed:    var(--color-surface-pressed);
+  --bg-accent:          var(--color-rust);
+  --bg-accent-pressed:  var(--rust-900);
+
+  --border-hairline: var(--ink-300);
+  --border-rust-link: rgba(123, 85, 68, 0.3);
+
+  /* ---------- TYPE · FAMILIES ---------- */
+  --font-serif: 'EB Garamond', 'Garamond', 'Georgia', serif;
+  --font-sans:  'Red Hat Text', -apple-system, BlinkMacSystemFont, 'Inter', sans-serif;
+  --font-mono:  'JetBrains Mono', 'SF Mono', Menlo, monospace;
+
+  /* ---------- TYPE · WEIGHTS (allowed list) ---------- */
+  /* Serif: 400, 500 only. NEVER 700. */
+  /* Sans: 400, 500, 600. 700 allowed ONLY for tabular numerals. */
+  --weight-regular:  400;
+  --weight-medium:   500;
+  --weight-semibold: 600;   /* sans only, for H4 */
+  --weight-bold:     700;   /* tabular numerals ONLY */
+
+  /* ---------- TYPE · SCALE ----------
+     Format: font-size / line-height / letter-spacing
+     Roles named from the spec. Use the role, not the raw size.      */
+
+  /* Display — marketing only, never in-product */
+  --type-display-size:    64px;
+  --type-display-line:    65px;
+  --type-display-track:   -0.025em;
+  --type-display-family:  var(--font-serif);
+  --type-display-weight:  var(--weight-regular);
+
+  /* H1 · page title (one per page) */
+  --type-h1-size:    44px;
+  --type-h1-line:    48px;
+  --type-h1-track:   -0.02em;
+  --type-h1-family:  var(--font-serif);
+  --type-h1-weight:  var(--weight-regular);
+
+  /* H2 · section */
+  --type-h2-size:    32px;
+  --type-h2-line:    36px;
+  --type-h2-track:   -0.015em;
+  --type-h2-family:  var(--font-serif);
+  --type-h2-weight:  var(--weight-regular);
+
+  /* H3 · subsection */
+  --type-h3-size:    22px;
+  --type-h3-line:    28px;
+  --type-h3-track:   -0.01em;
+  --type-h3-family:  var(--font-serif);
+  --type-h3-weight:  var(--weight-medium);
+
+  /* H4 · card title (most used heading) */
+  --type-h4-size:    15px;
+  --type-h4-line:    20px;
+  --type-h4-track:   0;
+  --type-h4-family:  var(--font-sans);
+  --type-h4-weight:  var(--weight-semibold);
+
+  /* Lead · page/section intro */
+  --type-lead-size:    18px;
+  --type-lead-line:    29px;
+  --type-lead-track:   0;
+  --type-lead-family:  var(--font-sans);
+  --type-lead-weight:  var(--weight-regular);
+
+  /* Body · default */
+  --type-body-size:    16px;
+  --type-body-line:    25px;
+  --type-body-track:   0;
+  --type-body-family:  var(--font-sans);
+  --type-body-weight:  var(--weight-regular);
+
+  /* Small · meta */
+  --type-small-size:    14px;
+  --type-small-line:    22px;
+  --type-small-track:   0;
+  --type-small-family:  var(--font-sans);
+  --type-small-weight:  var(--weight-regular);
+
+  /* Caption · minor */
+  --type-caption-size:    12px;
+  --type-caption-line:    18px;
+  --type-caption-track:   0;
+  --type-caption-family:  var(--font-sans);
+  --type-caption-weight:  var(--weight-regular);
+
+  /* Label · caps (section labels, always rust) */
+  --type-label-size:    11px;
+  --type-label-line:    16px;
+  --type-label-track:   0.14em;
+  --type-label-family:  var(--font-sans);
+  --type-label-weight:  var(--weight-medium);
+
+  /* Button · action */
+  --type-button-size:    15px;
+  --type-button-line:    1;
+  --type-button-track:   0;
+  --type-button-family:  var(--font-sans);
+  --type-button-weight:  var(--weight-medium);
+
+  /* Input · placeholder & value */
+  --type-input-size:    16px;
+  --type-input-line:    25px;
+  --type-input-track:   0;
+  --type-input-family:  var(--font-sans);
+  --type-input-weight:  var(--weight-regular);
+
+  /* ---------- SPACE SCALE (4px base) ----------
+     Use these, not arbitrary px. If you need a value between two,
+     the design is probably wrong.                                   */
+  --space-0:  0;
+  --space-1:  4px;
+  --space-2:  8px;
+  --space-3:  12px;
+  --space-4:  16px;
+  --space-5:  24px;
+  --space-6:  32px;
+  --space-7:  48px;
+  --space-8:  64px;
+  --space-9:  96px;
+  --space-10: 128px;
+
+  /* ---------- RADIUS ---------- */
+  --radius-none: 0;
+  --radius-sm:   4px;    /* inputs, chips */
+  --radius-md:   8px;    /* cards */
+  --radius-lg:   12px;   /* modals */
+  --radius-full: 9999px; /* pills, status dots */
+
+  /* ---------- BORDER ---------- */
+  --border-width-hairline: 1px;
+  --border-width-focus:    2px;
+
+  /* ---------- ELEVATION ----------
+     There is NO default elevation. Cards elevate via hairline or
+     surface swap, never shadow. Shadows exist only for floating
+     UI (modal, toast, popover).                                     */
+  --shadow-none:  none;
+  --shadow-modal: 0 16px 48px -12px rgba(30, 26, 24, 0.18),
+                  0 4px 12px -4px rgba(30, 26, 24, 0.08);
+  --shadow-toast: 0 8px 24px -8px rgba(30, 26, 24, 0.16);
+  --shadow-popover: 0 4px 16px -4px rgba(30, 26, 24, 0.12);
+
+  /* ---------- MOTION ---------- */
+  --ease-standard: cubic-bezier(0.2, 0, 0, 1);
+  --ease-emphasis: cubic-bezier(0.3, 0, 0, 1);
+  --duration-instant: 80ms;
+  --duration-fast:    160ms;
+  --duration-base:    240ms;
+  --duration-slow:    400ms;
+
+  /* ---------- FOCUS ---------- */
+  --focus-ring: 0 0 0 2px var(--color-paper),
+                0 0 0 4px var(--color-rust);
+}
+
+/* ============================================================
+   TYPE ROLE UTILITY CLASSES
+   Use these or the component that wraps them. Never inline
+   font-size / line-height / family on an element.
+   ============================================================ */
+
+.type-display {
+  font-family: var(--type-display-family);
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  letter-spacing: var(--type-display-track);
+  font-weight: var(--type-display-weight);
+  font-style: normal;
+}
+
+.type-h1 {
+  font-family: var(--type-h1-family);
+  font-size: var(--type-h1-size);
+  line-height: var(--type-h1-line);
+  letter-spacing: var(--type-h1-track);
+  font-weight: var(--type-h1-weight);
+  font-style: normal;
+}
+
+.type-h2 {
+  font-family: var(--type-h2-family);
+  font-size: var(--type-h2-size);
+  line-height: var(--type-h2-line);
+  letter-spacing: var(--type-h2-track);
+  font-weight: var(--type-h2-weight);
+  font-style: normal;
+}
+
+.type-h3 {
+  font-family: var(--type-h3-family);
+  font-size: var(--type-h3-size);
+  line-height: var(--type-h3-line);
+  letter-spacing: var(--type-h3-track);
+  font-weight: var(--type-h3-weight);
+  font-style: normal;
+}
+
+.type-h4 {
+  font-family: var(--type-h4-family);
+  font-size: var(--type-h4-size);
+  line-height: var(--type-h4-line);
+  font-weight: var(--type-h4-weight);
+}
+
+.type-lead {
+  font-family: var(--type-lead-family);
+  font-size: var(--type-lead-size);
+  line-height: var(--type-lead-line);
+  font-weight: var(--type-lead-weight);
+}
+
+.type-body {
+  font-family: var(--type-body-family);
+  font-size: var(--type-body-size);
+  line-height: var(--type-body-line);
+  font-weight: var(--type-body-weight);
+}
+
+.type-small {
+  font-family: var(--type-small-family);
+  font-size: var(--type-small-size);
+  line-height: var(--type-small-line);
+  font-weight: var(--type-small-weight);
+}
+
+.type-caption {
+  font-family: var(--type-caption-family);
+  font-size: var(--type-caption-size);
+  line-height: var(--type-caption-line);
+  font-weight: var(--type-caption-weight);
+}
+
+.type-label {
+  font-family: var(--type-label-family);
+  font-size: var(--type-label-size);
+  line-height: var(--type-label-line);
+  letter-spacing: var(--type-label-track);
+  font-weight: var(--type-label-weight);
+  text-transform: uppercase;
+  color: var(--color-rust); /* labels are always rust */
+}
+
+.type-button {
+  font-family: var(--type-button-family);
+  font-size: var(--type-button-size);
+  line-height: var(--type-button-line);
+  font-weight: var(--type-button-weight);
+}
+
+.type-input {
+  font-family: var(--type-input-family);
+  font-size: var(--type-input-size);
+  line-height: var(--type-input-line);
+  font-weight: var(--type-input-weight);
+  font-style: normal; /* NEVER italic */
+}
+
+/* The only three italics permitted in the product.
+   Use ONLY these three classes. Italic anywhere else is a bug.     */
+.italic-accent-heading  { font-style: italic; }  /* one word inside H1/H2 */
+.italic-accent-inline   { font-style: italic; }  /* titles / proper nouns in body */
+.italic-accent-memory   { font-style: italic; }  /* her quoted memory, verbatim */
+
+/* Tabular numerals — the ONLY place sans 700 is allowed. */
+.num-tabular {
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--weight-bold);
+}
