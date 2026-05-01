@@ -151,8 +151,8 @@ def test_evidence_to_record_hashes_user_and_preserves_structure():
 
 
 @pytest.mark.asyncio
-async def test_synthesis_worker_calls_reconcile_for_active_user(monkeypatch):
-    """_run_one must call reconcile_subscriptions + provision_pending_websets
+async def test_synthesis_worker_calls_derive_and_reconcile_for_active_user(monkeypatch):
+    """_run_one must call derive_and_reconcile + provision_pending_websets
     for the user after the morning path runs."""
     from backend.memory.jobs import synthesis_worker as sw
     from backend.web.proactive import subscriptions as subs
@@ -168,23 +168,28 @@ async def test_synthesis_worker_calls_reconcile_for_active_user(monkeypatch):
     async def fake_morning_check_in(*, user_id, timezone_name, living_profile, now_local):
         return None
 
-    # The two we actually care about
     from backend.web.proactive.subscriptions import (
+        DeriveAndReconcileSummary,
         ProvisionSummary,
         ReconcileSummary,
     )
 
-    async def fake_reconcile(user_id, **kw):
-        calls.append(("reconcile", user_id))
-        return ReconcileSummary(
-            user_id, created=0, deactivated=0, skipped_over_budget=0
+    async def fake_derive(user_id, **kw):
+        calls.append(("derive_and_reconcile", user_id))
+        return DeriveAndReconcileSummary(
+            user_id=user_id,
+            derived_count=0,
+            reconcile=ReconcileSummary(
+                user_id, created=0, deactivated=0, skipped_over_budget=0
+            ),
+            watches=[],
         )
 
     async def fake_provision(user_id):
         calls.append(("provision", user_id))
         return ProvisionSummary(user_id, provisioned=0, failed=0)
 
-    monkeypatch.setattr(subs, "reconcile_subscriptions", fake_reconcile)
+    monkeypatch.setattr(subs, "derive_and_reconcile", fake_derive)
     monkeypatch.setattr(subs, "provision_pending_websets", fake_provision)
 
     # Patch the morning trigger import inside _run_one
@@ -200,5 +205,5 @@ async def test_synthesis_worker_calls_reconcile_for_active_user(monkeypatch):
         full_runner=fake_full_runner,
         morning_runner=fake_morning_runner,
     )
-    assert ("reconcile", "u_recon_test") in calls
+    assert ("derive_and_reconcile", "u_recon_test") in calls
     assert ("provision", "u_recon_test") in calls

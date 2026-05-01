@@ -190,16 +190,24 @@ async def _run_one(
             "synthesis_worker: morning trigger failed user=%s", user_id[:8]
         )
 
-    # After Living Profile is fresh, reconcile per-user proactive
-    # subscriptions and provision Exa websets/monitors for any pending
-    # ones. This is the bridge from L0 (Living Profile) to L1
-    # (subscriptions) in the proactive web stack.
+    # After Living Profile is fresh, run the L0 -> L1 fanout: derive
+    # external watches from the user's full state (LP + recent chat +
+    # observations + open loops), reconcile them into subscriptions,
+    # and provision pending Exa websets + monitors.
     try:
         from backend.web.proactive.subscriptions import (
+            derive_and_reconcile,
             provision_pending_websets,
-            reconcile_subscriptions,
         )
-        await reconcile_subscriptions(user_id)
+        result = await derive_and_reconcile(user_id)
+        if result.derived_count or result.reconcile.created or result.reconcile.deactivated:
+            logger.info(
+                "synthesis_worker: derived=%d created=%d deactivated=%d user=%s",
+                result.derived_count,
+                result.reconcile.created,
+                result.reconcile.deactivated,
+                user_id[:8],
+            )
         await provision_pending_websets(user_id)
     except Exception:
         logger.exception(
