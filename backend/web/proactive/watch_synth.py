@@ -86,9 +86,32 @@ A bad watch (do NOT emit):
 - self-help, wellness, mindfulness angles
 - anything you have to invent or pad to fill a slot
 
-If the user's current state is mostly internal (health, personal life,
-private work) and you cannot find a concrete external angle, return [].
-Empty is valid. Silence is valid. Padding is worse than silence.
+CRITICAL distinction: separate ACUTE state from DURABLE interests.
+
+- Acute state = what the user is dealing with TODAY (a health crunch, a
+  deploy, a family event, a fight). This is internal and short-lived.
+  Acute state alone is NOT a reason to return [].
+
+- Durable interests = the work they do, the products they build, the
+  markets they care about, the people they orbit, the technologies
+  they're invested in. These persist across acute states.
+
+Read the inputs for DURABLE signals first. The narrative usually says
+what the user is durably building or thinking about ("user is building
+X", "user is investing in Y", "user runs Z"). The active_tensions and
+what_changed_this_week mostly capture acute state. The current_situation
+mixes both - read carefully.
+
+Example: a user in a health-and-deploy crunch (acute) who is durably
+building a personal AI product (durable) should still get watches on
+the personal AI / agent product space, the APIs they build on
+(Anthropic, Exa), and competitor products. The acute health state is
+not a watch target. The durable build space is.
+
+Return [] only when there is genuinely no durable external interest in
+the inputs. Empty is valid. Silence is valid. Padding is worse than
+silence. But silence on a user with clear durable work is a failure -
+they should be hearing about their space.
 
 Distinct-angle rule: do NOT emit two watches in the same angle category
 unless the inputs genuinely justify two distinct named entities in that
