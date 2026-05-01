@@ -83,7 +83,10 @@ def test_propose_candidates_dedups_by_intent():
 
 
 @pytest.mark.unit
-def test_propose_and_shadow_persists_as_shadow(tmp_path, monkeypatch):
+def test_propose_and_shadow_offers_when_probe_hits(tmp_path, monkeypatch):
+    """One-probe model: if the spec's first dry_run returns signal, the
+    candidate goes straight to OFFERED (no SHADOW tournament). The user
+    sees the card the same day instead of waiting 14 days."""
     store = AttentionStore(path=tmp_path / "attentions.json")
     monkeypatch.setattr("donna.attention.propose.AttentionStore", lambda: store)
 
@@ -103,18 +106,70 @@ def test_propose_and_shadow_persists_as_shadow(tmp_path, monkeypatch):
         "donna.attention.author._call_with_validation_retry", fake_none
     )
 
+    # Force the probe to register a hit so the candidate goes to OFFERED
+    # rather than QUIETLY_ARCHIVED.
+    from donna.attention.vocabulary import SourceType as _SourceType
+    monkeypatch.setattr(
+        "donna.attention.dry_run._REGISTRY",
+        {_SourceType.CALENDAR_EVENTS: fetcher},
+    )
+
     results = asyncio.run(propose_and_shadow("cli-user", proposers=(proposer,)))
 
     assert len(results) == 1
     persisted = results[0].attention
     assert persisted is not None
     assert persisted.origin is AttentionOrigin.SHADOW_INFERRED
-    assert persisted.status is AttentionStatus.SHADOW
-    assert persisted.shadow_state is not None
+    # New behavior: probe hit → OFFERED (skips SHADOW).
+    assert persisted.status is AttentionStatus.OFFERED
 
     listed = store.list()
     assert len(listed) == 1
     assert listed[0].id == persisted.id
+
+
+@pytest.mark.unit
+def test_propose_and_shadow_archives_when_probe_empty(tmp_path, monkeypatch):
+    """One-probe model: if the spec's first dry_run finds nothing, the
+    candidate is QUIETLY_ARCHIVED (user never sees it). No tournament."""
+    store = AttentionStore(path=tmp_path / "attentions.json")
+    monkeypatch.setattr("donna.attention.propose.AttentionStore", lambda: store)
+
+    fetcher = _FakeCalendarFetcher(
+        [
+            {"id": "1", "title": "1:1 with Empty"},
+            {"id": "2", "title": "1:1 with Empty"},
+        ]
+    )
+    proposer = CalendarRecurrenceProposer(fetcher=fetcher)
+
+    async def fake_none(**kwargs):
+        return None
+
+    monkeypatch.setattr(
+        "donna.attention.author._call_with_validation_retry", fake_none
+    )
+
+    # Force the probe to find NOTHING by registering a stub-empty fetcher.
+    from donna.attention.vocabulary import SourceType as _SourceType
+
+    class _Empty:
+        def fetch(self, source, user_id):
+            return []
+
+    monkeypatch.setattr(
+        "donna.attention.dry_run._REGISTRY",
+        {_SourceType.CALENDAR_EVENTS: _Empty()},
+    )
+    monkeypatch.setattr("donna.attention.dry_run._DEFAULT_FETCHER", _Empty())
+
+    results = asyncio.run(propose_and_shadow("cli-user", proposers=(proposer,)))
+
+    assert len(results) == 1
+    persisted = results[0].attention
+    assert persisted is not None
+    # New behavior: probe empty → QUIETLY_ARCHIVED (skips SHADOW).
+    assert persisted.status is AttentionStatus.QUIETLY_ARCHIVED
 
 
 @pytest.mark.unit

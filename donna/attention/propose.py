@@ -857,11 +857,56 @@ async def propose_and_shadow(
             continue
         existing_titles.add(title)
 
+        # ONE-PROBE OFFER. The legacy 14-day shadow tournament asked
+        # "does this spec find data over many ticks?" — the answer is
+        # answerable in a single dry_run. If the spec returns real
+        # signal once, it'll likely return signal again. Push to OFFERED
+        # immediately so the user sees the card the same day. If the
+        # probe is empty, archive silent (the user never sees the
+        # candidate at all). The user is the actual usefulness filter
+        # (accept / reject the OFFER); shadow ticks measured the wrong
+        # thing and just delayed delivery.
+        from donna.attention.dry_run import dry_run as _dry_run
+        from donna.attention.promote import _is_hit as _probe_is_hit
+
+        try:
+            probe = _dry_run(pipeline.authored.spec, user_id=user_id)
+        except Exception:
+            logger.exception(
+                "propose_and_shadow: probe dry_run failed for %r",
+                pipeline.authored.spec.title,
+            )
+            probe = None
+
+        if probe is None or not _probe_is_hit(probe):
+            # Quietly archive — never surfaces.
+            attention = Attention(
+                user_id=_coerce_uuid(user_id),
+                spec=pipeline.authored.spec,
+                origin=AttentionOrigin.SHADOW_INFERRED,
+                status=AttentionStatus.QUIETLY_ARCHIVED,
+                created_at=datetime.now(timezone.utc),
+                shadow_state=ShadowState(priority=candidate.priority),
+            )
+            store.save(attention)
+            results.append(
+                ShadowResult(
+                    candidate=candidate,
+                    attention=attention,
+                    authored_via=pipeline.authored.via,
+                    authored_confidence=pipeline.authored.confidence,
+                    error="probe_empty",
+                )
+            )
+            continue
+
+        # Probe hit — go straight to OFFERED. The user will see this
+        # surface as a card today.
         attention = Attention(
             user_id=_coerce_uuid(user_id),
             spec=pipeline.authored.spec,
             origin=AttentionOrigin.SHADOW_INFERRED,
-            status=AttentionStatus.SHADOW,
+            status=AttentionStatus.OFFERED,
             created_at=datetime.now(timezone.utc),
             shadow_state=ShadowState(priority=candidate.priority),
         )
