@@ -21,7 +21,7 @@ from backend.web.proactive.subscriptions import (
     intent_key_for_watch_line,
     reconcile_subscriptions,
 )
-from db.models import ProactiveSubscription, User
+from db.models import ProactiveSignal, ProactiveSubscription, User
 from db.session import async_session
 
 
@@ -60,6 +60,11 @@ async def user_with_watches() -> str:
         await session.commit()
     yield user_id
     async with async_session() as session:
+        await session.execute(
+            ProactiveSignal.__table__.delete().where(
+                ProactiveSignal.user_id == user_id
+            )
+        )
         await session.execute(
             ProactiveSubscription.__table__.delete().where(
                 ProactiveSubscription.user_id == user_id
@@ -184,3 +189,70 @@ async def test_provision_pending_websets_no_op_without_exa_key(
     summary = await subs.provision_pending_websets(user_with_watches)
     assert summary.provisioned == 0
     assert summary.failed == 0
+
+
+@pytest.mark.asyncio
+async def test_record_monitor_hit_writes_signal_for_known_webset(
+    monkeypatch, user_with_watches
+):
+    """A webhook payload with a known monitor_id writes a proactive_signals row."""
+    from backend.web.proactive.subscriptions import (
+        record_monitor_hit,
+        reconcile_subscriptions,
+    )
+    from backend.web.proactive.store import SignalQueueRepo
+
+    # Reconcile creates the proactive_subscriptions rows from the user's
+    # watch_for_tomorrow; we then attach a known monitor_id to one of them.
+    await reconcile_subscriptions(user_with_watches)
+
+    # Set up a sub with a known monitor_id
+    async with async_session() as session:
+        sub = (
+            await session.execute(
+                select(ProactiveSubscription).where(
+                    ProactiveSubscription.user_id == user_with_watches,
+                    ProactiveSubscription.active.is_(True),
+                )
+            )
+        ).scalars().first()
+        sub.webset_id = "ws_known"
+        sub.monitor_id = "mon_known"
+        await session.commit()
+
+    payload = {
+        "monitorId": "mon_known",
+        "websetId": "ws_known",
+        "items": [
+            {
+                "title": "Antler SG batch 13 announces",
+                "url": "https://example.com/x",
+                "publishedDate": "2026-05-01",
+                "highlights": ["snippet a", "snippet b"],
+            },
+        ],
+    }
+    written = await record_monitor_hit(payload)
+    assert written == 1
+
+    queue = SignalQueueRepo()
+    pending = await queue.drain_pending(user_with_watches)
+    assert len(pending) == 1
+    assert "Antler" in pending[0].payload.get("title", "")
+
+
+@pytest.mark.asyncio
+async def test_record_monitor_hit_unknown_monitor_is_dropped():
+    import db.session as _session_mod
+
+    # Re-bind the engine to the current event loop, matching the
+    # user_with_watches fixture pattern. Without this, a session opened
+    # by record_monitor_hit may inherit an engine bound to a closed loop
+    # from a previous test in the same file.
+    await _session_mod._engine.dispose()
+
+    from backend.web.proactive.subscriptions import record_monitor_hit
+    written = await record_monitor_hit(
+        {"monitorId": "mon_unknown", "items": [{"title": "x", "url": "https://x"}]}
+    )
+    assert written == 0

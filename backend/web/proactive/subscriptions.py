@@ -16,6 +16,7 @@ import logging
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Any
 
 from sqlalchemy import select
 
@@ -24,6 +25,7 @@ from backend.web.client import (
     exa_webset_create,
     have_exa_key,
 )
+from backend.web.proactive.store import SignalQueueRepo
 from db.models import ProactiveSubscription, User
 from db.session import async_session
 
@@ -241,3 +243,55 @@ async def provision_pending_websets(user_id: str) -> ProvisionSummary:
         await session.commit()
 
     return ProvisionSummary(user_id, provisioned=provisioned, failed=failed)
+
+
+# ---------------------------------------------------------------------------
+# webhook write path
+# ---------------------------------------------------------------------------
+
+
+async def record_monitor_hit(payload: dict[str, Any]) -> int:
+    """Process one Exa monitor webhook payload.
+
+    Looks up the matching ``ProactiveSubscription`` by ``monitorId``,
+    enqueues one ``ProactiveSignal`` per item, and bumps
+    ``last_hit_at`` on the subscription. Returns the number of signals
+    written. Drops payloads whose monitor isn't recognized — Exa may
+    fire monitors created by orphaned subs after a row was deactivated.
+    """
+    monitor_id = str(payload.get("monitorId") or "").strip()
+    items = payload.get("items") or []
+    if not monitor_id or not isinstance(items, list):
+        return 0
+
+    async with async_session() as session:
+        sub = (
+            await session.execute(
+                select(ProactiveSubscription).where(
+                    ProactiveSubscription.monitor_id == monitor_id,
+                    ProactiveSubscription.active.is_(True),
+                )
+            )
+        ).scalar_one_or_none()
+        if sub is None:
+            return 0
+
+        sub.last_hit_at = _utcnow_naive()
+        await session.commit()
+        sub_id = sub.id
+        user_id = sub.user_id
+        intent_key = sub.intent_key
+
+    queue = SignalQueueRepo()
+    written = 0
+    for item in items:
+        if not isinstance(item, dict):
+            continue
+        await queue.enqueue(
+            user_id=user_id,
+            subscription_id=sub_id,
+            intent_key=intent_key,
+            payload=item,
+        )
+        written += 1
+    return written
