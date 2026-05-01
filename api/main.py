@@ -89,6 +89,13 @@ from api.admin_routes import router as _admin_router  # noqa: E402
 
 app.include_router(_admin_router)
 
+# Exa webset monitor webhook — receives signed callbacks from Exa
+# when a monitor produces new items. HMAC-verified against
+# EXA_WEBHOOK_SECRET, forwards to record_monitor_hit.
+from api.exa_webhook import router as _exa_webhook_router  # noqa: E402
+
+app.include_router(_exa_webhook_router)
+
 _wa = WhatsAppChannel()
 _brief_refresh_task: asyncio.Task | None = None
 _living_profile_task: asyncio.Task | None = None
