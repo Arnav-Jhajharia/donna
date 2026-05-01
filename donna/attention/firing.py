@@ -455,11 +455,17 @@ def build_fire_prompt(
         f"cadence: {cadence_type}. scheduled fire: {fire_at_iso} UTC.\n"
         f"{aid_line}"
         "\n"
-        "decide if the reminder is still relevant. if yes, send it in your "
-        "voice (do not echo the user's words verbatim). if you have signal "
-        "that the user already did the thing, or it is stale, send a brief "
-        "no-op acknowledgment instead. you can call recall / list_calendar / "
-        "list_attentions before deciding. terminate with send_burst."
+        "decide if the reminder is still relevant for the user RIGHT NOW. "
+        "if yes, call send_burst with the reminder in your voice (do not "
+        "echo the user's words verbatim). you can call recall / list_calendar / "
+        "list_attentions before deciding.\n"
+        "\n"
+        "if you have signal that the user already did the thing, the moment "
+        "has passed, or the reminder is stale, SKIP THIS FIRE: do not call "
+        "send_burst at all. just end the turn. NEVER substitute a generic "
+        "check-in like 'what's on your mind', 'hey', 'anything brewing', "
+        "'how's it going' — those are noise, not reminders. silence is "
+        "correct when the reminder no longer applies."
     )
 
 
@@ -501,6 +507,13 @@ async def fire_attention_via_brain(row: Any) -> list:
         mode="proactive",
         user_id=row.user_id,
         user_phone=row.phone,
+        # Workers run in their own Railway container with no filesystem
+        # access to the API container's SDK session store. Resuming a
+        # session_id saved by a reactive turn would crash the CLI subprocess
+        # ("session not found") and ship the brain-failure fallback.
+        # RECENT CHAT in render_turn_context already provides conversation
+        # context for the proactive prompt.
+        stateless_sessions=True,
     )
     state = {
         "user_id": row.user_id,

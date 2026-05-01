@@ -369,6 +369,10 @@ async def _escalate_to_brain(
         mode="proactive",
         user_id=event.user_id,
         user_phone=phone,
+        # See donna/attention/firing.py:fire_attention_via_brain — workers
+        # have no filesystem access to the API container's SDK session
+        # store, so proactive must always be stateless.
+        stateless_sessions=True,
     )
     prompt = _build_escalation_prompt(event, judge)
     state: dict[str, Any] = {
@@ -480,8 +484,11 @@ def _build_escalation_prompt(
     return (
         f"[SYSTEM TRIGGER: proactive_{event.source}]\n"
         "a proactive event arrived that may be worth surfacing. decide "
-        "whether to ping the user. use stay_silent if the event is not "
-        "actually surface-worthy on a second look.\n\n"
+        "whether to ping the user. if it is not actually surface-worthy "
+        "on a second look, SKIP THIS FIRE: do not call send_burst, just "
+        "end the turn. NEVER substitute a generic check-in like 'what's "
+        "on your mind', 'hey', 'anything brewing' — silence is correct "
+        "when the event no longer warrants a ping.\n\n"
         f"from: {sender}\n"
         f"subject: {subject}\n"
         f"signals: {', '.join(event.signals.get('signals') or []) or 'none'}\n\n"

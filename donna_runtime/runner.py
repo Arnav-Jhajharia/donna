@@ -120,7 +120,14 @@ async def _donna_turn_core(user_message: str, config: DonnaAgentConfig) -> TurnT
                     async with asyncio.timeout(config.request_timeout_s):
                         async for message in query(prompt=wrapped_prompt, options=options):
                             _record_message(trace, message)
-                    await _fallback_plain_text_to_send_burst(trace)
+                    # Reactive turns must always reply, so plain-text → send_burst
+                    # synthesis is the right safety net. Proactive turns can
+                    # legitimately decide to skip; auto-shipping plain text turns
+                    # the model's "this isn't worth pinging" decision into a
+                    # generic check-in ("what's on your mind", etc.) which is
+                    # exactly the failure mode we are trying to kill.
+                    if config.mode != "proactive":
+                        await _fallback_plain_text_to_send_burst(trace)
                 except TimeoutError:
                     trace.record_runtime_error(f"Donna Agent SDK query timed out after {config.request_timeout_s:.1f}s")
                     emit_error(where="runner._donna_turn_core", error="sdk_query_timeout", timeout_s=config.request_timeout_s)
