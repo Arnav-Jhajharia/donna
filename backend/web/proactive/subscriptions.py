@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import os
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -54,6 +55,25 @@ def intent_key_for_watch_line(line: str) -> str:
 
 def _utcnow_naive() -> datetime:
     return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _monitor_webhook_fields() -> dict[str, Any] | None:
+    """Build the webhook-delivery fields for a new Exa monitor.
+
+    Reads EXA_WEBHOOK_BASE_URL (e.g. https://donna.example.com) and
+    appends the canonical callback path. Returns None when the env var
+    is unset, in which case the monitor runs at Exa but does not
+    deliver to us — useful for dev environments where the webhook isn't
+    reachable from public internet.
+
+    The exact field name on Exa's monitor body is currently
+    ``webhookUrl``; if Exa changes the API shape this is the only place
+    that needs an update.
+    """
+    base = (os.environ.get("EXA_WEBHOOK_BASE_URL") or "").rstrip("/")
+    if not base:
+        return None
+    return {"webhookUrl": f"{base}/api/exa/monitor_callback"}
 
 
 # ---------------------------------------------------------------------------
@@ -221,10 +241,12 @@ async def provision_pending_websets(user_id: str) -> ProvisionSummary:
                 webset_id = str(webset.get("id") or "").strip()
                 if not webset_id:
                     raise RuntimeError("webset response missing id")
+                monitor_fields = _monitor_webhook_fields()
                 monitor = await exa_monitor_create(
                     webset_id=webset_id,
                     cadence=row.cadence or "daily",
                     behavior="search",
+                    fields=monitor_fields,
                 )
                 monitor_id = str(monitor.get("id") or "").strip()
                 row.webset_id = webset_id
