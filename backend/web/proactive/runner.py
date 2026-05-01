@@ -41,6 +41,7 @@ from backend.web.proactive.gates import (
 )
 from backend.web.proactive.judge import JudgeVerdict, judge_results
 from backend.web.proactive.query_creation import create_proactive_moves
+from backend.web.proactive.store import DailyCountRepo
 from backend.web.proactive.types import (
     ProactiveContext,
     ProactiveMove,
@@ -197,9 +198,19 @@ async def run_proactive_tick(
     # don't burn the slot — the user might benefit from a fresher take on
     # the same intent next tick.
     now_ts = time.time()
+    # Bump daily counter for every send verdict. Local date is the
+    # caller's responsibility but we default to UTC YYYY-MM-DD when not
+    # provided — fine for accounting, tz drift here is harmless.
+    daily_repo = DailyCountRepo()
+    local_date = (
+        last_proactive_at.split("T", 1)[0]
+        if isinstance(last_proactive_at, str) and "T" in last_proactive_at
+        else datetime.now().strftime("%Y-%m-%d")
+    )
     for r, v in verdicts:
         if v.decision == "send":
             await ledger.mark_async(user_id, r.move.dedup_key, now=now_ts)
+            await daily_repo.bump(user_id, local_date, by=1)
 
     return ProactiveTickResult(
         user_id=user_id,

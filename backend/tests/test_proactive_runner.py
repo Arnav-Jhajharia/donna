@@ -105,6 +105,15 @@ async def test_tick_full_flow_send_marks_ledger(monkeypatch):
     monkeypatch.setattr(runner_mod, "execute_moves", fake_exec)
     monkeypatch.setattr(runner_mod, "judge_results", fake_judge)
 
+    class _FakeRepo:
+        async def get(self, user_id, local_date):
+            return 0
+
+        async def bump(self, user_id, local_date, *, by=1):
+            return by
+
+    monkeypatch.setattr(runner_mod, "DailyCountRepo", lambda: _FakeRepo())
+
     ledger = InMemoryDedupStore()
     out = await run_proactive_tick(
         user_id="u",
@@ -254,6 +263,52 @@ async def test_tick_passes_budget_through_to_gates(monkeypatch):
     )
     assert captured["accepted_count"] == 2
     assert len(out.moves_dropped) == 3
+
+
+# ---------------------------------------------------------------------------
+# daily count repo wiring
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_proactive_tick_bumps_daily_count_per_send(monkeypatch):
+    """When the judge greenlights a move, daily_count must bump by 1."""
+    moves = [_move(dedup_key="watch:dailycount")]
+    results = [_result(moves[0])]
+    verdicts = [(results[0], JudgeVerdict(decision="send", draft="x"))]
+
+    async def fake_create(ctx, **kw):
+        return moves
+
+    async def fake_exec(accepted):
+        return results
+
+    async def fake_judge(*, context, results):
+        return verdicts
+
+    monkeypatch.setattr(runner_mod, "create_proactive_moves", fake_create)
+    monkeypatch.setattr(runner_mod, "execute_moves", fake_exec)
+    monkeypatch.setattr(runner_mod, "judge_results", fake_judge)
+
+    bumps: list[tuple[str, str, int]] = []
+
+    class FakeRepo:
+        async def get(self, user_id, local_date):
+            return 0
+
+        async def bump(self, user_id, local_date, *, by=1):
+            bumps.append((user_id, local_date, by))
+            return by
+
+    monkeypatch.setattr(runner_mod, "DailyCountRepo", lambda: FakeRepo())
+
+    ledger = InMemoryDedupStore()
+    await run_proactive_tick(
+        user_id="u_dc", ledger=ledger, load_blurb=_fake_blurb
+    )
+    assert len(bumps) == 1
+    assert bumps[0][0] == "u_dc"
+    assert bumps[0][2] == 1
 
 
 # ---------------------------------------------------------------------------
