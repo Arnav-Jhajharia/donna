@@ -11,6 +11,7 @@ diff stays cheap and Exa calls are bounded.
 """
 from __future__ import annotations
 
+import asyncio
 import hashlib
 import logging
 import os
@@ -31,6 +32,11 @@ from db.models import ProactiveSubscription, User
 from db.session import async_session
 
 logger = logging.getLogger(__name__)
+
+# Delay between provisioning iterations to avoid tripping Exa's
+# concurrent-op cap on Starter (typically 1-3 in flight). Tunable;
+# 3 seconds is comfortable for serial creates of ~5 subs.
+_PROVISION_DELAY_S = 3.0
 
 
 # ---------------------------------------------------------------------------
@@ -229,27 +235,55 @@ async def provision_pending_websets(user_id: str) -> ProvisionSummary:
     provisioned = 0
     failed = 0
     async with async_session() as session:
+        # Pick up two states:
+        #   1. webset_id IS NULL  -> needs both webset_create + monitor_create
+        #   2. webset_id IS NOT NULL AND monitor_id IS NULL -> webset already
+        #      created (e.g. on a prior pass that hit a rate limit during
+        #      monitor_create); just retry the monitor.
         rows = list(
             (
                 await session.execute(
                     select(ProactiveSubscription).where(
                         ProactiveSubscription.user_id == user_id,
                         ProactiveSubscription.active.is_(True),
-                        ProactiveSubscription.webset_id.is_(None),
+                        ProactiveSubscription.monitor_id.is_(None),
                     )
                 )
             ).scalars()
         )
 
-        for row in rows:
+        for idx, row in enumerate(rows):
+            # Polite delay between iterations - Exa's Starter tier caps
+            # concurrent /websets/v0/* operations (typically 1-3). Fast
+            # back-to-back creates trip 403 "max concurrent requests"
+            # and leave orphan websets behind.
+            if idx > 0:
+                await asyncio.sleep(_PROVISION_DELAY_S)
+
+            webset_id: str | None = row.webset_id
+            if webset_id is None:
+                try:
+                    webset = await exa_webset_create(row.description, count=10)
+                    webset_id = str(webset.get("id") or "").strip() or None
+                    if not webset_id:
+                        raise RuntimeError("webset response missing id")
+                except Exception:
+                    logger.exception(
+                        "provision_pending_websets: webset_create failed user=%s intent=%s",
+                        user_id[:8] if user_id else "?",
+                        row.intent_key,
+                    )
+                    failed += 1
+                    continue
+
+                # Persist webset_id IMMEDIATELY so a downstream monitor_create
+                # failure doesn't leave the webset orphaned at Exa with no
+                # local pointer. Next pass retries monitor only.
+                row.webset_id = webset_id
+                row.last_refreshed_at = _utcnow_naive()
+                await session.flush()
+
             try:
-                webset = await exa_webset_create(
-                    row.description,
-                    count=10,
-                )
-                webset_id = str(webset.get("id") or "").strip()
-                if not webset_id:
-                    raise RuntimeError("webset response missing id")
                 monitor_fields = _monitor_webhook_fields()
                 monitor = await exa_monitor_create(
                     webset_id=webset_id,
@@ -257,16 +291,16 @@ async def provision_pending_websets(user_id: str) -> ProvisionSummary:
                     behavior="search",
                     fields=monitor_fields,
                 )
-                monitor_id = str(monitor.get("id") or "").strip()
-                row.webset_id = webset_id
-                row.monitor_id = monitor_id or None
+                monitor_id_str = str(monitor.get("id") or "").strip() or None
+                row.monitor_id = monitor_id_str
                 row.last_refreshed_at = _utcnow_naive()
                 provisioned += 1
             except Exception:
                 logger.exception(
-                    "provision_pending_websets failed user=%s intent=%s",
+                    "provision_pending_websets: monitor_create failed user=%s intent=%s webset=%s",
                     user_id[:8] if user_id else "?",
                     row.intent_key,
+                    webset_id,
                 )
                 failed += 1
                 continue

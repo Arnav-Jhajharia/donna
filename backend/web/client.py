@@ -276,23 +276,51 @@ async def exa_webset_items(
 # ---------------------------------------------------------------------------
 
 
+_CADENCE_TO_CRON: dict[str, str] = {
+    # Daily at 00:00 UTC. We can't fire more than once per day on
+    # Starter without burning through quota; daily is the sweet spot
+    # for proactive watch surfaces.
+    "daily": "0 0 * * *",
+    "weekly": "0 0 * * 0",
+    "hourly": "0 * * * *",
+}
+
+
 async def exa_monitor_create(
     *,
     webset_id: str,
     cadence: str = "daily",
     behavior: str = "search",
+    count: int = 5,
+    behavior_mode: str = "append",
+    timezone_name: str = "UTC",
     fields: dict[str, Any] | None = None,
     timeout: float = _DEFAULT_TIMEOUT_S,
 ) -> dict[str, Any]:
     """POST /websets/v0/monitors. Schedules a recurring run on a webset.
 
-    ``cadence`` is one of ``hourly``, ``daily``, ``weekly``, ``monthly``.
-    ``behavior`` is ``search`` (find new items) or ``refresh`` (re-verify).
+    Exa's monitor body changed shape; the public API now expects:
+
+      cadence:   {cron: "0 0 * * *", timezone: "UTC"}
+      behavior:  {type: "search", config: {count: 5, behavior: "append"}}
+
+    ``cadence`` here is the legacy short-hand ("daily", "weekly",
+    "hourly"); we translate to a cron expression. ``behavior`` is the
+    monitor type ("search" finds new items; alternatively "refresh"
+    re-verifies). ``behavior_mode`` is "append" (add new items) or
+    "override" (replace prior items).
+
+    ``fields`` (legacy escape hatch) is still merged into the top-level
+    body after the structured fields - useful for ``webhookUrl`` etc.
     """
+    cron = _CADENCE_TO_CRON.get(cadence, "0 0 * * *")
     body: dict[str, Any] = {
         "websetId": webset_id,
-        "cadence": cadence,
-        "behavior": behavior,
+        "cadence": {"cron": cron, "timezone": timezone_name},
+        "behavior": {
+            "type": behavior,
+            "config": {"count": int(count), "behavior": behavior_mode},
+        },
     }
     if fields:
         body.update(fields)

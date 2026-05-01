@@ -265,5 +265,8 @@ async def test_exa_monitor_create_posts_cadence_and_behavior(monkeypatch):
     body = captured["body"]
     assert captured["url"] == "https://api.exa.ai/websets/v0/monitors"
     assert body["websetId"] == "ws_1"
-    assert body["cadence"] == "daily"
-    assert body["behavior"] == "search"
+    # Exa expects structured cadence + behavior objects, not strings.
+    assert body["cadence"] == {"cron": "0 0 * * *", "timezone": "UTC"}
+    assert body["behavior"]["type"] == "search"
+    assert body["behavior"]["config"]["count"] == 5
+    assert body["behavior"]["config"]["behavior"] == "append"
