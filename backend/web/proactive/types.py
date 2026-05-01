@@ -11,6 +11,7 @@ from typing import Any, Literal
 
 ExaTool = Literal["search", "find_similar", "research", "webset", "monitor"]
 RenderHint = Literal["short_text", "long_text", "card", "image"]
+TriggerKind = Literal["morning", "drain", "pre_event", "manual"]
 
 VALID_TOOLS: frozenset[str] = frozenset(
     {"search", "find_similar", "research", "webset", "monitor"}
@@ -18,14 +19,31 @@ VALID_TOOLS: frozenset[str] = frozenset(
 VALID_RENDER_HINTS: frozenset[str] = frozenset(
     {"short_text", "long_text", "card", "image"}
 )
+VALID_TRIGGERS: frozenset[str] = frozenset(
+    {"morning", "drain", "pre_event", "manual"}
+)
+
+
+@dataclass(frozen=True)
+class SignalSummary:
+    """One pending Exa monitor hit, summarized for the reasoner."""
+
+    signal_id: str
+    intent_key: str
+    title: str
+    url: str
+    snippet: str
+    published: str | None = None
 
 
 @dataclass(frozen=True)
 class ProactiveContext:
     """Snapshot of what the brain knows about the user RIGHT NOW.
 
-    Inputs to ``query_creation.create_proactive_moves``. Treat as
-    immutable; the reasoner only reads.
+    ``trigger`` is which scheduler fired this tick — the reasoner uses
+    this to branch its prompt. ``signal_queue`` carries pending Exa
+    monitor hits awaiting judgment; for ``trigger="drain"`` ticks this
+    list is the primary input.
     """
 
     user_id: str
@@ -34,23 +52,30 @@ class ProactiveContext:
     recent_thread: str = ""
     current_datetime: str = ""
     last_proactive_at: str | None = None
+    trigger: TriggerKind = "manual"
+    signal_queue: tuple[SignalSummary, ...] = field(default_factory=tuple)
 
 
 @dataclass(frozen=True)
 class ProactiveMove:
     """One concrete proactive search action.
 
-    The reasoner emits these. The executor dispatches them. A downstream
-    judge decides whether the result is worth interrupting the user with.
+    The reasoner emits these. Each move carries a hypothesis-shaped
+    rationale: what it's *betting* the world contains, anchored on a
+    concrete signal from the user's state, with a stated payoff.
     """
 
-    rationale: str
+    rationale: str  # legacy free-form, kept for backward compat
     tool: ExaTool
     query: str
     params: dict[str, Any] = field(default_factory=dict)
     urgency: float = 0.5
     render_hint: RenderHint = "short_text"
     dedup_key: str = ""
+    # New hypothesis fields — may be empty for legacy callers
+    hypothesis: str = ""
+    user_signal: str = ""
+    payoff_if_hit: str = ""
 
 
 @dataclass(frozen=True)

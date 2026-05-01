@@ -59,6 +59,9 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     wa_message_id: Mapped[str | None] = mapped_column(String, nullable=True)
     is_proactive: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_shadow: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
@@ -663,3 +666,108 @@ class AuthOTP(Base):
     __table_args__ = (
         Index("idx_auth_otps_user_expires", "user_id", "expires_at"),
     )
+
+
+class ProactiveSubscription(Base):
+    """One persistent subscription per (user, intent_key). Backed by an
+    Exa webset + monitor. Created during nightly synth reconciliation
+    when ``living_profile.watch_for_tomorrow`` adds a new entry. Evicted
+    LRU when the user exceeds the per-user webset budget.
+    """
+
+    __tablename__ = "proactive_subscriptions"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), nullable=False
+    )
+    intent_key: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    webset_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    monitor_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    cadence: Mapped[str] = mapped_column(String, nullable=False, default="daily")
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    last_refreshed_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    last_hit_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    __table_args__ = (
+        sa.UniqueConstraint(
+            "user_id", "intent_key", name="uq_proactive_subs_user_intent"
+        ),
+        Index("idx_proactive_subs_user_active", "user_id", "active"),
+    )
+
+
+class ProactiveSignal(Base):
+    """One row per Exa monitor hit. Drained by the proactive worker.
+
+    ``payload`` carries the Exa item shape (title, url, highlights,
+    publishedDate, ...). ``consumed_at`` is set when the drain trigger
+    has finished judging the row.
+    """
+
+    __tablename__ = "proactive_signals"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), nullable=False
+    )
+    subscription_id: Mapped[str] = mapped_column(
+        String, ForeignKey("proactive_subscriptions.id"), nullable=False
+    )
+    intent_key: Mapped[str] = mapped_column(String, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    arrived_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    consumed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+
+    __table_args__ = (
+        Index(
+            "idx_proactive_signals_user_pending",
+            "user_id",
+            "arrived_at",
+            postgresql_where=sa.text("consumed_at IS NULL"),
+        ),
+    )
+
+
+class ProactiveLedger(Base):
+    """Persistent dedup ledger. Replaces InMemoryDedupStore in production.
+
+    A row exists per (user, dedup_key) with the last-fired timestamp.
+    The proactive runner's ``apply_gates`` checks ``fired_at`` against a
+    TTL window before letting the same intent fire again.
+    """
+
+    __tablename__ = "proactive_ledger"
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), primary_key=True
+    )
+    dedup_key: Mapped[str] = mapped_column(String, primary_key=True)
+    fired_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("idx_proactive_ledger_fired", "user_id", "fired_at"),
+    )
+
+
+class ProactiveDailyCount(Base):
+    """Per-user-per-local-day move counter. Feeds CostBudget.daily_used.
+
+    ``local_date`` is the user's local YYYY-MM-DD string at the moment
+    the move was emitted. The repo bumps this counter inside the same
+    transaction that marks the ledger so the two stay consistent.
+    """
+
+    __tablename__ = "proactive_daily_count"
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), primary_key=True
+    )
+    local_date: Mapped[str] = mapped_column(String, primary_key=True)
+    count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

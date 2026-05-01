@@ -44,6 +44,9 @@ class _Raw:
         urgency: float | str = 0.8,
         render_hint: str = "short_text",
         dedup_key: str = "watch:poke_launch",
+        hypothesis: str = "",
+        user_signal: str = "",
+        payoff_if_hit: str = "",
     ) -> None:
         self.rationale = rationale
         self.tool = tool
@@ -52,6 +55,9 @@ class _Raw:
         self.urgency = urgency
         self.render_hint = render_hint
         self.dedup_key = dedup_key
+        self.hypothesis = hypothesis
+        self.user_signal = user_signal
+        self.payoff_if_hit = payoff_if_hit
 
 
 class _Out:
@@ -275,3 +281,91 @@ def test_format_context_omits_blank_sections():
     assert "## Situation Brief" not in block
     assert "## Recent thread" not in block
     assert "Current local time" in block
+
+
+def test_proactive_context_default_trigger_is_manual():
+    from backend.web.proactive.types import ProactiveContext
+    ctx = ProactiveContext(user_id="u_x")
+    assert ctx.trigger == "manual"
+
+
+def test_proactive_move_hypothesis_fields_default_to_empty_string():
+    from backend.web.proactive.types import ProactiveMove
+    move = ProactiveMove(
+        rationale="r",
+        tool="search",
+        query="q",
+        dedup_key="dk",
+    )
+    assert move.hypothesis == ""
+    assert move.user_signal == ""
+    assert move.payoff_if_hit == ""
+
+
+# ---------------------------------------------------------------------------
+# trigger-aware prompt branching + hypothesis-shaped output (Task 11)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_format_context_includes_trigger_branch_for_drain(monkeypatch):
+    """When trigger=drain and signal_queue has items, the rendered user
+    block must mention the queue items so the reasoner can read them.
+    """
+    from backend.web.proactive.query_creation import _format_context
+    from backend.web.proactive.types import ProactiveContext, SignalSummary
+
+    sigs = (
+        SignalSummary(
+            signal_id="s1",
+            intent_key="watch:foo",
+            title="A new thing",
+            url="https://example.com/a",
+            snippet="snippet text",
+        ),
+    )
+    ctx = ProactiveContext(
+        user_id="u_x",
+        trigger="drain",
+        signal_queue=sigs,
+        profile_blurb="profile",
+    )
+    block = _format_context(ctx)
+    assert "drain" in block.lower()
+    assert "A new thing" in block
+    assert "https://example.com/a" in block
+
+
+@pytest.mark.asyncio
+async def test_create_proactive_moves_emits_hypothesis_fields(monkeypatch):
+    """Mock call_structured to return one raw move with hypothesis fields;
+    verify they survive _coerce_move."""
+    from backend.web.proactive import query_creation as qc
+    from backend.web.proactive.types import ProactiveContext
+
+    async def fake_call_structured(**kw):
+        from backend.web.proactive.query_creation import (
+            _QueryCreationOut,
+            _RawMove,
+        )
+        return _QueryCreationOut(
+            moves=[
+                _RawMove(
+                    rationale="legacy",
+                    tool="search",
+                    query="q1",
+                    dedup_key="dk1",
+                    hypothesis="betting there's a new entrant in maya's wedge",
+                    user_signal="user mentioned maya 3d ago",
+                    payoff_if_hit="user reacts first instead of last",
+                ),
+            ]
+        )
+
+    monkeypatch.setattr(qc, "call_structured", fake_call_structured)
+
+    moves = await qc.create_proactive_moves(ProactiveContext(user_id="u"))
+    assert len(moves) == 1
+    assert moves[0].hypothesis.startswith("betting")
+    assert moves[0].user_signal.startswith("user mentioned")
+    assert moves[0].payoff_if_hit.startswith("user reacts")

@@ -3,6 +3,8 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timezone
 
+import pytest
+
 from backend.memory.jobs import temporal_refresh
 from backend.memory.synthesis.temporal_brief import TemporalEvidence, TemporalItem
 from scripts.export_temporal_eval_traces import anonymize_user_id, evidence_to_record, redact_text
@@ -146,3 +148,57 @@ def test_evidence_to_record_hashes_user_and_preserves_structure():
     assert record["timezone"] == "Asia/Singapore"
     assert record["items"][0]["kind"] == "chat"
     assert "<email>" in record["items"][0]["text"]
+
+
+@pytest.mark.asyncio
+async def test_synthesis_worker_calls_reconcile_for_active_user(monkeypatch):
+    """_run_one must call reconcile_subscriptions + provision_pending_websets
+    for the user after the morning path runs."""
+    from backend.memory.jobs import synthesis_worker as sw
+    from backend.web.proactive import subscriptions as subs
+
+    calls: list[tuple[str, str]] = []
+
+    async def fake_full_runner(user_id):
+        return None
+
+    async def fake_morning_runner(user_id):
+        return None
+
+    async def fake_morning_check_in(*, user_id, timezone_name, living_profile, now_local):
+        return None
+
+    # The two we actually care about
+    from backend.web.proactive.subscriptions import (
+        ProvisionSummary,
+        ReconcileSummary,
+    )
+
+    async def fake_reconcile(user_id, **kw):
+        calls.append(("reconcile", user_id))
+        return ReconcileSummary(
+            user_id, created=0, deactivated=0, skipped_over_budget=0
+        )
+
+    async def fake_provision(user_id):
+        calls.append(("provision", user_id))
+        return ProvisionSummary(user_id, provisioned=0, failed=0)
+
+    monkeypatch.setattr(subs, "reconcile_subscriptions", fake_reconcile)
+    monkeypatch.setattr(subs, "provision_pending_websets", fake_provision)
+
+    # Patch the morning trigger import inside _run_one
+    import backend.web.proactive.triggers.morning as morning_mod
+    monkeypatch.setattr(
+        morning_mod, "maybe_fire_morning_check_in", fake_morning_check_in
+    )
+
+    await sw._run_one(
+        user_id="u_recon_test",
+        timezone_name="UTC",
+        living_profile={"watch_for_tomorrow": ["antler"]},
+        full_runner=fake_full_runner,
+        morning_runner=fake_morning_runner,
+    )
+    assert ("reconcile", "u_recon_test") in calls
+    assert ("provision", "u_recon_test") in calls

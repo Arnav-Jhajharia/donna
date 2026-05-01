@@ -251,6 +251,7 @@ async def _fetch_chat(user_id: str, limit: int) -> list[dict[str, Any]]:
                 await session.execute(
                     select(ChatMessage)
                     .where(ChatMessage.user_id == user_id)
+                    .where(ChatMessage.is_shadow.is_(False))
                     .order_by(ChatMessage.created_at.desc())
                     .limit(limit)
                 )

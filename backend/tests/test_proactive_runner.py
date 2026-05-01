@@ -62,6 +62,32 @@ async def _fake_blurb(user_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# autouse: never let runner tests hit the real Postgres counter
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _stub_daily_count_repo(monkeypatch):
+    """Replace ``DailyCountRepo`` with a no-op in-memory fake for every
+    runner test. Tests that need to assert specific bumps should add their
+    own monkeypatch override (request.fixturenames for context) — this
+    fixture only prevents accidental live-DB writes when a runner test
+    yields a `send` verdict.
+    """
+
+    class _StubRepo:
+        async def get(self, user_id: str, local_date: str) -> int:
+            return 0
+
+        async def bump(
+            self, user_id: str, local_date: str, *, by: int = 1
+        ) -> int:
+            return by
+
+    monkeypatch.setattr(runner_mod, "DailyCountRepo", lambda: _StubRepo())
+
+
+# ---------------------------------------------------------------------------
 # build_context
 # ---------------------------------------------------------------------------
 
@@ -117,7 +143,7 @@ async def test_tick_full_flow_send_marks_ledger(monkeypatch):
     assert len(out.verdicts) == 1
     assert out.drafts_to_send == [(results[0], "poke v2 shipped")]
     # ledger marked for the sent move
-    assert ledger.seen("u", "watch:poke", now=0.0) is True
+    assert await ledger.seen_async("u", "watch:poke", now=0.0) is True
 
 
 @pytest.mark.asyncio
@@ -134,7 +160,7 @@ async def test_tick_silence_does_not_mark_ledger(monkeypatch):
     out = await run_proactive_tick(user_id="u", ledger=ledger, load_blurb=_fake_blurb)
     assert out.drafts_to_send == []
     # Silenced moves should NOT burn the dedup slot.
-    assert ledger.seen("u", "watch:poke", now=0.0) is False
+    assert await ledger.seen_async("u", "watch:poke", now=0.0) is False
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +222,7 @@ async def test_tick_all_gated_short_circuits_execution(monkeypatch):
     import time as _time
 
     ledger = InMemoryDedupStore()
-    ledger.mark("u", "watch:poke", now=_time.time())
+    await ledger.mark_async("u", "watch:poke", now=_time.time())
 
     out = await run_proactive_tick(user_id="u", ledger=ledger, load_blurb=_fake_blurb)
     assert out.moves_emitted == moves
@@ -254,6 +280,148 @@ async def test_tick_passes_budget_through_to_gates(monkeypatch):
     )
     assert captured["accepted_count"] == 2
     assert len(out.moves_dropped) == 3
+
+
+# ---------------------------------------------------------------------------
+# daily count repo wiring
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_run_proactive_tick_bumps_daily_count_per_send(monkeypatch):
+    """When the judge greenlights a move, daily_count must bump by 1."""
+    moves = [_move(dedup_key="watch:dailycount")]
+    results = [_result(moves[0])]
+    verdicts = [(results[0], JudgeVerdict(decision="send", draft="x"))]
+
+    async def fake_create(ctx, **kw):
+        return moves
+
+    async def fake_exec(accepted):
+        return results
+
+    async def fake_judge(*, context, results):
+        return verdicts
+
+    monkeypatch.setattr(runner_mod, "create_proactive_moves", fake_create)
+    monkeypatch.setattr(runner_mod, "execute_moves", fake_exec)
+    monkeypatch.setattr(runner_mod, "judge_results", fake_judge)
+
+    bumps: list[tuple[str, str, int]] = []
+
+    class FakeRepo:
+        async def get(self, user_id, local_date):
+            return 0
+
+        async def bump(self, user_id, local_date, *, by=1):
+            bumps.append((user_id, local_date, by))
+            return by
+
+    monkeypatch.setattr(runner_mod, "DailyCountRepo", lambda: FakeRepo())
+
+    ledger = InMemoryDedupStore()
+    await run_proactive_tick(
+        user_id="u_dc", ledger=ledger, load_blurb=_fake_blurb
+    )
+    assert len(bumps) == 1
+    assert bumps[0][0] == "u_dc"
+    assert bumps[0][2] == 1
+
+
+@pytest.mark.asyncio
+async def test_run_proactive_tick_respects_daily_budget_from_repo(monkeypatch):
+    """When DailyCountRepo.get returns >= per_day, no moves accepted."""
+    moves = [_move(dedup_key=f"watch:b{i}") for i in range(3)]
+
+    async def fake_create(ctx, **kw):
+        return moves
+
+    async def fake_exec(accepted):
+        return [_result(m) for m in accepted]
+
+    async def fake_judge(*, context, results):
+        return []
+
+    monkeypatch.setattr(runner_mod, "create_proactive_moves", fake_create)
+    monkeypatch.setattr(runner_mod, "execute_moves", fake_exec)
+    monkeypatch.setattr(runner_mod, "judge_results", fake_judge)
+
+    class FakeRepo:
+        async def get(self, user_id, local_date):
+            return 5
+
+        async def bump(self, user_id, local_date, *, by=1):
+            return 5
+
+    monkeypatch.setattr(runner_mod, "DailyCountRepo", lambda: FakeRepo())
+
+    ledger = InMemoryDedupStore()
+    out = await run_proactive_tick(
+        user_id="u_b",
+        ledger=ledger,
+        budget=CostBudget(per_turn=3, per_day=5),
+        load_blurb=_fake_blurb,
+    )
+    assert out.results == []
+    assert all(
+        "per-day budget exhausted" in d.reason for d in out.moves_dropped
+    )
+
+
+# ---------------------------------------------------------------------------
+# delivery_mode integration
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_runner_calls_deliver_drafts_in_live_mode(monkeypatch):
+    """When delivery_mode='live', verdicts are passed to deliver_drafts."""
+    moves = [_move(dedup_key="watch:livemode")]
+    results = [_result(moves[0])]
+    verdicts = [(results[0], JudgeVerdict(decision="send", draft="hello"))]
+
+    async def fake_create(ctx, **kw):
+        return moves
+
+    async def fake_exec(accepted):
+        return results
+
+    async def fake_judge(*, context, results):
+        return verdicts
+
+    monkeypatch.setattr(runner_mod, "create_proactive_moves", fake_create)
+    monkeypatch.setattr(runner_mod, "execute_moves", fake_exec)
+    monkeypatch.setattr(runner_mod, "judge_results", fake_judge)
+
+    class FakeRepo:
+        async def get(self, user_id, local_date):
+            return 0
+
+        async def bump(self, user_id, local_date, *, by=1):
+            return by
+
+    monkeypatch.setattr(runner_mod, "DailyCountRepo", lambda: FakeRepo())
+
+    captured: list[tuple[str, int, str]] = []
+
+    async def fake_deliver(*, user_id, verdicts, mode):
+        captured.append((user_id, len(verdicts), mode))
+        return 1
+
+    # The import inside run_proactive_tick is lazy:
+    # `from backend.web.proactive.delivery import deliver_drafts`.
+    # Patch the module attribute so the lazy import resolves to our fake.
+    import backend.web.proactive.delivery as delivery_mod
+    monkeypatch.setattr(delivery_mod, "deliver_drafts", fake_deliver)
+
+    ledger = InMemoryDedupStore()
+    await run_proactive_tick(
+        user_id="u_live",
+        ledger=ledger,
+        load_blurb=_fake_blurb,
+        delivery_mode="live",
+    )
+    assert captured == [("u_live", 1, "live")]
 
 
 # ---------------------------------------------------------------------------

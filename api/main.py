@@ -89,6 +89,13 @@ from api.admin_routes import router as _admin_router  # noqa: E402
 
 app.include_router(_admin_router)
 
+# Exa webset monitor webhook — receives signed callbacks from Exa
+# when a monitor produces new items. HMAC-verified against
+# EXA_WEBHOOK_SECRET, forwards to record_monitor_hit.
+from api.exa_webhook import router as _exa_webhook_router  # noqa: E402
+
+app.include_router(_exa_webhook_router)
+
 _wa = WhatsAppChannel()
 _brief_refresh_task: asyncio.Task | None = None
 _living_profile_task: asyncio.Task | None = None
@@ -322,8 +329,9 @@ def _api_owns_inprocess_workers() -> bool:
     True when ``DONNA_PROCESS_ROLE`` is unset or ``api`` — the dev / single-pod
     convention where one process does everything. False when the role is
     explicitly one of the worker roles (``synthesis``, ``attention``,
-    ``reminders``) — in production those run as standalone scripts via
-    ``scripts/run_*_worker.py`` and the API must NOT double-spawn them.
+    ``reminders``, ``proactive``) — in production those run as standalone
+    scripts via ``scripts/run_*_worker.py`` and the API must NOT double-spawn
+    them.
     """
     role = (os.environ.get("DONNA_PROCESS_ROLE") or "").strip().lower()
     return role in ("", "api")
