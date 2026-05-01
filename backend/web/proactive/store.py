@@ -90,7 +90,7 @@ class PostgresDedupStore:
                 )
             )
             await session.commit()
-            return res.rowcount or 0
+            return max(0, res.rowcount or 0)
 
 
 # ---------------------------------------------------------------------------
