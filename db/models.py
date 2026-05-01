@@ -59,6 +59,9 @@ class ChatMessage(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     wa_message_id: Mapped[str | None] = mapped_column(String, nullable=True)
     is_proactive: Mapped[bool] = mapped_column(Boolean, default=False)
+    is_shadow: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
 
