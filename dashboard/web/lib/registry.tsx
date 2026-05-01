@@ -25,6 +25,7 @@ import type {
   ConfrontationBlock,
   HeroBlock,
   NewsBriefBlock,
+  NoteBlock,
   NudgeGridBlock,
   OpenLoopsBlock,
   PermissionBlock,
@@ -43,6 +44,49 @@ import type {
 } from './plan';
 import { useAction } from './action-context';
 import { Frame, PlaceholderFrame } from '@/components/Frame';
+import NoteBlockComponent from '@/components/blocks/NoteBlock';
+import CatTrackerComp from '@/components/blocks/catalogue/CatTracker';
+import CatCapabilityComp from '@/components/blocks/catalogue/CatCapability';
+import {
+  CatWatch,
+  CatBrief,
+  CatPrep,
+  CatSchedule,
+  CatStreak,
+  CatPerson,
+  CatReminder,
+  CatQuickLog,
+  CatPick,
+  CatOffer,
+  CatDraft,
+  CatDecision,
+  CatConfront,
+  CatReflection,
+  CatOpenLoop,
+  CatPermission,
+  CatRead,
+} from '@/components/blocks/catalogue/CatBlocks';
+import type {
+  CatTrackerSpec,
+  CatWatchSpec,
+  CatBriefSpec,
+  CatPrepSpec,
+  CatScheduleSpec,
+  CatStreakSpec,
+  CatPersonSpec,
+  CatReminderSpec,
+  CatQuickLogSpec,
+  CatPickSpec,
+  CatOfferSpec,
+  CatDraftSpec,
+  CatDecisionSpec,
+  CatConfrontSpec,
+  CatReflectionSpec,
+  CatOpenLoopSpec,
+  CatPermissionSpec,
+  CatReadSpec,
+  CatCapabilitySpec,
+} from './plan';
 
 type Renderer<B extends Block> = (block: B) => ReactNode;
 
@@ -401,6 +445,10 @@ const renderFooter: Renderer<FooterBlock> = (b) => (
   </Frame>
 );
 
+// note (#02) — borderless by design; no Frame wrap. The block component
+// handles kind=editorial/bar/confront internally per the catalogue spec.
+const renderNote: Renderer<NoteBlock> = (b) => <NoteBlockComponent spec={b} />;
+
 // ── Registry ─────────────────────────────────────────────────────────────
 
 type AnyRenderer = (block: Block) => ReactNode;
@@ -424,7 +472,29 @@ const REGISTRY: Record<Block['type'], AnyRenderer> = {
   'tracker-starter':((b: Block) => RenderTrackerStarter(b as TrackerStarterBlock)),
   relationship:     ((b: Block) => RenderRelationship(b as RelationshipBlock)),
   'news-brief':     ((b: Block) => RenderNewsBrief(b as NewsBriefBlock)),
+  note:             ((b: Block) => renderNote(b as NoteBlock)),
   footer:           ((b: Block) => renderFooter(b as FooterBlock)),
+  // catalogue archetypes — render directly, no Frame wrapper (each handles
+  // its own visual treatment per the catalogue specimen).
+  'c-tracker':      ((b: Block) => <CatTrackerComp spec={b as CatTrackerSpec} />),
+  'c-watch':        ((b: Block) => <CatWatch spec={b as CatWatchSpec} />),
+  'c-brief':        ((b: Block) => <CatBrief spec={b as CatBriefSpec} />),
+  'c-prep':         ((b: Block) => <CatPrep spec={b as CatPrepSpec} />),
+  'c-schedule':     ((b: Block) => <CatSchedule spec={b as CatScheduleSpec} />),
+  'c-streak':       ((b: Block) => <CatStreak spec={b as CatStreakSpec} />),
+  'c-person':       ((b: Block) => <CatPerson spec={b as CatPersonSpec} />),
+  'c-reminder':     ((b: Block) => <CatReminder spec={b as CatReminderSpec} />),
+  'c-quicklog':     ((b: Block) => <CatQuickLog spec={b as CatQuickLogSpec} />),
+  'c-pick':         ((b: Block) => <CatPick spec={b as CatPickSpec} />),
+  'c-offer':        ((b: Block) => <CatOffer spec={b as CatOfferSpec} />),
+  'c-draft':        ((b: Block) => <CatDraft spec={b as CatDraftSpec} />),
+  'c-decision':     ((b: Block) => <CatDecision spec={b as CatDecisionSpec} />),
+  'c-confront':     ((b: Block) => <CatConfront spec={b as CatConfrontSpec} />),
+  'c-reflection':   ((b: Block) => <CatReflection spec={b as CatReflectionSpec} />),
+  'c-openloop':     ((b: Block) => <CatOpenLoop spec={b as CatOpenLoopSpec} />),
+  'c-permission':   ((b: Block) => <CatPermission spec={b as CatPermissionSpec} />),
+  'c-read':         ((b: Block) => <CatRead spec={b as CatReadSpec} />),
+  'c-capability':   ((b: Block) => <CatCapabilityComp spec={b as CatCapabilitySpec} />),
 };
 
 /** Render a single block through the registry, returning a Frame-wrapped node. */

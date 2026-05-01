@@ -283,10 +283,109 @@ export interface NewsBriefBlock {
   items: NewsBriefItem[];
 }
 
+// ── Catalogue blocks (#04–#21, faithful ports from the design specimen) ──
+// All catalogue archetypes use the `c-` prefix to coexist with legacy block
+// types. They define their own visual treatment internally; the renderer just
+// dispatches by `type`.
+export type {
+  CatTrackerSpec,
+  TrackerCatItem,
+  TrackerTint,
+} from '@/components/blocks/catalogue/CatTracker';
+export type {
+  CatWatchSpec,
+  WatchItem,
+  CatBriefSpec,
+  BriefIndexItem,
+  CatPrepSpec,
+  PrepItem,
+  CatScheduleSpec,
+  ScheduleSlot,
+  ScheduleStripBlock,
+  CatStreakSpec,
+  CatPersonSpec,
+  PersonItem,
+  CatReminderSpec,
+  ReminderItemCat,
+  CatQuickLogSpec,
+  QuickLogChip,
+  CatPickSpec,
+  CatOfferSpec,
+  CatDraftSpec,
+  CatDecisionSpec,
+  DecisionOption,
+  CatConfrontSpec,
+  CatReflectionSpec,
+  CatOpenLoopSpec,
+  OpenLoopItem,
+  CatPermissionSpec,
+  CatReadSpec,
+  ReadItem,
+} from '@/components/blocks/catalogue/CatBlocks';
+
+import type {
+  CatTrackerSpec,
+} from '@/components/blocks/catalogue/CatTracker';
+import type {
+  CatWatchSpec,
+  CatBriefSpec,
+  CatPrepSpec,
+  CatScheduleSpec,
+  CatStreakSpec,
+  CatPersonSpec,
+  CatReminderSpec,
+  CatQuickLogSpec,
+  CatPickSpec,
+  CatOfferSpec,
+  CatDraftSpec,
+  CatDecisionSpec,
+  CatConfrontSpec,
+  CatReflectionSpec,
+  CatOpenLoopSpec,
+  CatPermissionSpec,
+  CatReadSpec,
+} from '@/components/blocks/catalogue/CatBlocks';
+
+// ── Block: note ───────────────────────────────────────────────────────────
+// Catalogue archetype #02. Donna's voice on the moment, sits below the intro.
+// Three flavors: editorial (borderless, breathing), bar (rust-tint left-stripe),
+// confront (oxblood, heavier — for kind=confrontation only).
+export interface NoteBlock {
+  type: 'note';
+  kind?: 'editorial' | 'bar' | 'confront';
+  eyebrow?: string;       // default: "a note from me"
+  body: string;
+  actions?: {
+    primary?: string;     // default: "noted"
+    secondary?: string;   // default: "say more" — accent color
+    tertiary?: string;    // default: "skip"
+  };
+}
+
 // ── Block: footer ─────────────────────────────────────────────────────────
+// Catalogue archetype #03. Three flavors: caps (status line), italic (warmest),
+// mark (the donna mark with hairline rules — for morning-hero moments).
 export interface FooterBlock {
   type: 'footer';
   text: string;
+  kind?: 'caps' | 'italic' | 'mark';
+}
+
+// ── Capability block (#22) — "things donna can do for you" ───────────────
+// Catalogue archetype #22. Tappable chips/rows. Each item is a verb the
+// user can fire by tapping; the tap sends `intent` to donna over WhatsApp
+// so she can do the thing. This is the dashboard's command palette.
+export interface CapabilityItem {
+  label: string;
+  intent: string;
+  icon?: import('@/components/blocks/catalogue/icons').CatIconName;
+}
+export interface CatCapabilitySpec {
+  type: 'c-capability';
+  variant: 'chips' | 'rows';
+  title?: string;
+  eyebrow?: string;
+  items: CapabilityItem[];
 }
 
 export type Block =
@@ -308,7 +407,45 @@ export type Block =
   | TrackerStarterBlock
   | RelationshipBlock
   | NewsBriefBlock
-  | FooterBlock;
+  | NoteBlock
+  | FooterBlock
+  | CatTrackerSpec
+  | CatWatchSpec
+  | CatBriefSpec
+  | CatPrepSpec
+  | CatScheduleSpec
+  | CatStreakSpec
+  | CatPersonSpec
+  | CatReminderSpec
+  | CatQuickLogSpec
+  | CatPickSpec
+  | CatOfferSpec
+  | CatDraftSpec
+  | CatDecisionSpec
+  | CatConfrontSpec
+  | CatReflectionSpec
+  | CatOpenLoopSpec
+  | CatPermissionSpec
+  | CatReadSpec
+  | CatCapabilitySpec;
+
+// ── Multi-page composition (catalogue v2) ────────────────────────────────
+// The dashboard is three pages, not one screen.
+//   id="now"   — the editorial read for this moment (hero-led, restrained)
+//   id="today" — the operational view (schedule, trackers, watches, briefs)
+//   id="hold"  — what donna is holding + what she can do
+//
+// Renderer prefers `pages[]` when present; falls back to flat `blocks[]`.
+export type PageId = 'now' | 'today' | 'hold';
+
+export interface DashboardPage {
+  id: PageId;
+  /** short eyebrow rendered above the page title (e.g. "now", "today") */
+  kicker?: string;
+  /** optional page-level read */
+  thesis?: string;
+  blocks: Block[];
+}
 
 export interface DashboardPlan {
   id: string;
@@ -320,17 +457,17 @@ export interface DashboardPlan {
   moment: MomentTag;
   blocks: Block[];
   /**
-   * Optional row-based composition. When present, the renderer uses this
-   * to lay out the plan via the visual contract grid (system.html §4).
-   * When absent, the renderer falls back to the legacy linear blocks[] flow.
-   *
-   * The brain is migrating from "ordered list of blocks" to "rows of cells",
-   * because the visual contract is row-based. Both shapes are honored during
-   * migration so existing fixtures keep working.
+   * Optional row-based composition. Legacy — most catalogue plans omit this.
    */
   rows?: Row[];
-  /** Optional intro region (system.html §6). When absent, no intro renders. */
+  /** Optional intro region (legacy). Catalogue plans use a hero block instead. */
   intro?: IntroSpec;
+  /**
+   * Three-page layout (catalogue mode v2). When present, the renderer
+   * shows a paged surface; the flat `blocks[]` is ignored. Each page
+   * carries its own kicker + thesis + blocks.
+   */
+  pages?: DashboardPage[];
 }
 
 // ── Row-based composition (visual contract) ───────────────────────────────
@@ -407,7 +544,27 @@ const DENSITY_WEIGHTS: Record<Block['type'], number> = {
   'tracker-starter': 2,
   relationship: 2,
   'news-brief': 2,
+  note: 1,
   footer: 0,
+  'c-tracker': 2,
+  'c-watch': 2,
+  'c-brief': 2,
+  'c-prep': 2,
+  'c-schedule': 2,
+  'c-streak': 1,
+  'c-person': 2,
+  'c-reminder': 2,
+  'c-quicklog': 1,
+  'c-pick': 1,
+  'c-offer': 2,
+  'c-draft': 2,
+  'c-decision': 2,
+  'c-confront': 2,
+  'c-reflection': 2,
+  'c-openloop': 2,
+  'c-permission': 1,
+  'c-read': 2,
+  'c-capability': 2,
 };
 
 export const DENSITY_BUDGET = 12;

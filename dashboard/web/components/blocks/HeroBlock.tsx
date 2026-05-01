@@ -1,7 +1,33 @@
+'use client';
+
+import { useEffect, useState } from 'react';
 import MumbaiLineArt from '../MumbaiLineArt';
 import type { HeroBlock as HeroBlockSpec } from '@/lib/plan';
 
+function formatLocal(d: Date): string {
+  const day = d.toLocaleDateString('en-US', { weekday: 'long' });
+  const dayNum = d.getDate();
+  const month = d.toLocaleDateString('en-US', { month: 'long' });
+  const hour = d.getHours();
+  const min = d.getMinutes();
+  const period = hour >= 12 ? 'pm' : 'am';
+  const h12 = hour % 12 || 12;
+  return `${day} · ${dayNum} ${month} · ${h12}:${min.toString().padStart(2, '0')} ${period}`;
+}
+
 export default function HeroBlock({ spec }: { spec: HeroBlockSpec }) {
+  // SSR uses spec.date (the LLM-emitted compose-time string) so the first
+  // paint matches between server and client. On mount the client switches
+  // to a live ticker — the hero feels current, not frozen at compose time.
+  const [now, setNow] = useState(spec.date);
+
+  useEffect(() => {
+    const tick = () => setNow(formatLocal(new Date()));
+    tick();
+    const id = setInterval(tick, 30_000);
+    return () => clearInterval(id);
+  }, []);
+
   return (
     <div
       style={{
@@ -14,6 +40,7 @@ export default function HeroBlock({ spec }: { spec: HeroBlockSpec }) {
     >
       <div style={{ padding: '22px 22px 10px' }}>
         <div
+          suppressHydrationWarning
           style={{
             fontSize: 11,
             letterSpacing: '0.14em',
@@ -22,7 +49,7 @@ export default function HeroBlock({ spec }: { spec: HeroBlockSpec }) {
             fontWeight: 500,
           }}
         >
-          {spec.date}
+          {now}
         </div>
         <div
           style={{

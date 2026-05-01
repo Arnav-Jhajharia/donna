@@ -254,7 +254,11 @@ function weightOf(b: Block): number {
     celebration: 2, reflection: 2, 'open-loops': 2, 'weather-of-you': 1,
     'calendar-shape': 2, 'todo-list': 3, 'tracker-grid': 2, 'nudge-grid': 3,
     permission: 1, reminders: 2, 'tracker-starter': 2, relationship: 2,
-    'news-brief': 2, footer: 0,
+    'news-brief': 2, note: 1, footer: 0,
+    'c-tracker': 2, 'c-watch': 2, 'c-brief': 2, 'c-prep': 2, 'c-schedule': 2,
+    'c-streak': 1, 'c-person': 2, 'c-reminder': 2, 'c-quicklog': 1, 'c-pick': 1,
+    'c-offer': 2, 'c-draft': 2, 'c-decision': 2, 'c-confront': 2, 'c-reflection': 2,
+    'c-openloop': 2, 'c-permission': 1, 'c-read': 2, 'c-capability': 2,
   };
   return w[b.type];
 }

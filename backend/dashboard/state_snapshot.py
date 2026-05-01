@@ -212,23 +212,16 @@ async def _fetch_observations(user_id: str, limit: int) -> list[dict[str, Any]]:
 
 
 async def _fetch_open_loops(user_id: str, limit: int) -> list[dict[str, Any]]:
-    from db.models import OpenLoop
+    from backend.memory.tools._open_loop_view import read_open_loops_unified
     from db.session import async_session
     from donna.attention.noise import filter_open_loops
 
     async with async_session() as session:
-        rows = (
-            (
-                await session.execute(
-                    select(OpenLoop)
-                    .where(OpenLoop.user_id == user_id)
-                    .where(OpenLoop.status == "active")
-                    .order_by(OpenLoop.created_at.desc())
-                    .limit(limit)
-                )
-            )
-            .scalars()
-            .all()
+        rows = await read_open_loops_unified(
+            session,
+            user_id=user_id,
+            statuses=("active",),
+            limit=limit,
         )
     rows = filter_open_loops(list(rows))
     return [

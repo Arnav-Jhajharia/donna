@@ -24,28 +24,31 @@ export async function GET(
     );
   }
 
+  const upstreamUrl = `${backendUrl}/api/dashboard/${encodeURIComponent(user_id)}/events`;
   let upstream: Response;
   try {
-    upstream = await fetch(
-      `${backendUrl}/api/dashboard/${encodeURIComponent(user_id)}/events`,
-      {
-        signal: req.signal,
-        cache: 'no-store',
-        // SSE: keep the connection open and proxy the chunked stream
-        // through. ``no-store`` + the upstream's own ``x-accel-buffering: no``
-        // header keep buffers from collecting events.
-      },
-    );
-  } catch {
+    upstream = await fetch(upstreamUrl, {
+      signal: req.signal,
+      cache: 'no-store',
+      // SSE: keep the connection open and proxy the chunked stream
+      // through. ``no-store`` + the upstream's own ``x-accel-buffering: no``
+      // header keep buffers from collecting events.
+    });
+  } catch (err) {
     return NextResponse.json(
-      { error: 'failed to reach backend' },
+      {
+        error: 'failed to reach backend',
+        upstream_url: upstreamUrl,
+        detail: String(err),
+        hint: `verify DONNA_BACKEND_URL points at the running uvicorn (e.g. http://localhost:8000)`,
+      },
       { status: 502 },
     );
   }
 
   if (!upstream.body) {
     return NextResponse.json(
-      { error: 'backend returned no body' },
+      { error: 'backend returned no body', upstream_url: upstreamUrl },
       { status: 502 },
     );
   }

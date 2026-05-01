@@ -59,18 +59,16 @@ function classifyHost(host: string | null): Surface {
 
 // Routes that may be served from the USER host.
 //
-// /moments is public on the apex on purpose — it's the Poke-style
-// "browse the recipes before signing up" surface. The plans in
-// /moments are static showcase fixtures, not real user data, so
-// exposing them is a marketing asset, not a leak.
+// /moments is internal-only — it's the design catalogue of dashboard
+// archetypes for staff iteration, not a public surface. End users see
+// only their own composed manifest at `/`.
 const USER_PUBLIC_PATHS = new Set([
   '/auth/magic',
   '/auth/otp',
   '/auth/signin',
   '/auth/expired',
-  '/moments',
 ]);
-const USER_PUBLIC_PREFIXES = ['/api/dashboard/', '/api/auth/', '/moments/'];
+const USER_PUBLIC_PREFIXES = ['/api/dashboard/', '/api/auth/'];
 
 // Routes that may only be served from the INTERNAL host.
 const INTERNAL_ALLOWED_PATHS = new Set([
@@ -84,6 +82,7 @@ const INTERNAL_ALLOWED_PATHS = new Set([
 const INTERNAL_ALLOWED_PREFIXES = [
   '/admin/',
   '/api/admin/',
+  '/api/dashboard/',
   '/api/events',
   '/observe/',
   '/moments/',
@@ -106,11 +105,9 @@ function isUserAllowed(pathname: string): boolean {
 }
 
 // User-host paths that bypass the session-cookie gate. /auth/* lands
-// users here without a session. /moments is the public showcase
-// gallery (Poke-style recipe browser).
+// users here without a session.
 function isUserNoAuth(pathname: string): boolean {
   if (USER_PUBLIC_PATHS.has(pathname)) return true;
-  if (pathname.startsWith('/moments/')) return true;
   return false;
 }
 

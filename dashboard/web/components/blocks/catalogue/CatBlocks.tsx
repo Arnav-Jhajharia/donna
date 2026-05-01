@@ -1,0 +1,1870 @@
+/**
+ * Catalogue archetypes #05–#21, ported faithfully from the design specimen.
+ * Each archetype exports one component and all its visual variants.
+ * Tracker (#04) is in CatTracker.tsx separately because it carries 3 variants
+ * with richer schema; the rest live here for compactness.
+ */
+
+import { cIcons, type CatIconName } from './icons';
+import { SERIF, SANS, BORDER, BORDER_STRONG, BORDER_ACCENT, Eyebrow, SectionHead } from './atoms';
+
+// ═════════════════════════════════════════════════════════════════════════
+// 05 · WATCH
+// ═════════════════════════════════════════════════════════════════════════
+export interface WatchItem {
+  subject: string;
+  signal: string;
+  at: string;
+  delta?: string;
+  up?: boolean;
+}
+export interface CatWatchSpec {
+  type: 'c-watch';
+  variant: 'rows' | 'ticker';
+  title?: string;
+  items: WatchItem[];
+}
+export function CatWatch({ spec }: { spec: CatWatchSpec }) {
+  if (spec.variant === 'ticker') return <WatchTicker spec={spec} />;
+  return <WatchRows spec={spec} />;
+}
+function WatchRows({ spec }: { spec: CatWatchSpec }) {
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <SectionHead title={spec.title ?? "what i've got eyes on"} />
+      {spec.items.map((it, i) => (
+        <div
+          key={i}
+          style={{
+            display: 'grid',
+            gridTemplateColumns: '14px 1fr auto',
+            gap: 10,
+            padding: '10px 0',
+            borderBottom: `1px solid ${BORDER}`,
+            alignItems: 'baseline',
+          }}
+        >
+          <cIcons.eye s={12} c="var(--rust-700)" />
+          <div>
+            <div style={{ fontFamily: SANS, fontSize: 13.5, color: 'var(--ink-900)', fontWeight: 500 }}>
+              {it.subject}
+              {it.delta && (
+                <span
+                  style={{
+                    color: it.up ? 'var(--moss-700)' : 'var(--oxblood-700)',
+                    fontFamily: SANS,
+                    fontSize: 11.5,
+                    marginLeft: 6,
+                  }}
+                >
+                  {it.delta}
+                </span>
+              )}
+            </div>
+            <div style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', marginTop: 2, lineHeight: 1.4 }}>
+              {it.signal}
+            </div>
+          </div>
+          <span style={{ fontFamily: SANS, fontSize: 10.5, color: 'var(--ink-400)' }}>{it.at}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+function WatchTicker({ spec }: { spec: CatWatchSpec }) {
+  return (
+    <div style={{ margin: '12px 16px 0', display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <SectionHead title={spec.title ?? 'watching'} />
+      {spec.items.map((it, i) => (
+        <div
+          key={i}
+          style={{
+            background: 'var(--paper-100)',
+            border: `1px solid ${BORDER}`,
+            borderRadius: 12,
+            padding: '12px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 12,
+          }}
+        >
+          <div
+            style={{
+              width: 34,
+              height: 34,
+              borderRadius: 8,
+              background: 'var(--paper-300)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontFamily: SANS,
+              fontSize: 11,
+              fontWeight: 600,
+              color: 'var(--ink-900)',
+              letterSpacing: '0.02em',
+            }}
+          >
+            {it.subject.slice(0, 4)}
+          </div>
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ fontFamily: SERIF, fontSize: 15, fontWeight: 500, color: 'var(--ink-900)', lineHeight: 1.2 }}>
+              {it.subject}
+            </div>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 11.5,
+                color: 'var(--ink-500)',
+                marginTop: 2,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {it.signal}
+            </div>
+          </div>
+          <div style={{ textAlign: 'right' }}>
+            {it.delta && (
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 13,
+                  color: it.up ? 'var(--moss-700)' : 'var(--rust-700)',
+                  fontWeight: 500,
+                  fontVariantNumeric: 'tabular-nums',
+                }}
+              >
+                {it.delta}
+              </div>
+            )}
+            <div style={{ fontFamily: SANS, fontSize: 10, color: 'var(--ink-400)', marginTop: 2 }}>{it.at}</div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 06 · BRIEF
+// ═════════════════════════════════════════════════════════════════════════
+export interface BriefIndexItem { subject: string; cadence: string; nextFire: string; }
+export interface CatBriefSpec {
+  type: 'c-brief';
+  variant: 'newsstand' | 'index';
+  // newsstand
+  cadenceLabel?: string;
+  fireWindow?: string;
+  title?: string;
+  highlight?: string;
+  teaser?: string;
+  chips?: string[];
+  // index
+  items?: BriefIndexItem[];
+}
+export function CatBrief({ spec }: { spec: CatBriefSpec }) {
+  if (spec.variant === 'index') {
+    return (
+      <div style={{ margin: '12px 22px 0' }}>
+        <SectionHead title="briefs i run for you" />
+        <div style={{ marginTop: 6 }}>
+          {(spec.items ?? []).map((b, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr auto',
+                gap: 8,
+                padding: '12px 0',
+                borderBottom: `1px solid ${BORDER}`,
+                alignItems: 'baseline',
+              }}
+            >
+              <div>
+                <div style={{ fontFamily: SERIF, fontSize: 16, fontWeight: 500, color: 'var(--ink-900)', lineHeight: 1.2 }}>
+                  {b.subject}
+                </div>
+                <div style={{ fontFamily: SANS, fontSize: 11.5, color: 'var(--ink-500)', marginTop: 2 }}>{b.cadence}</div>
+              </div>
+              <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--rust-700)', fontWeight: 500 }}>
+                {b.nextFire}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        margin: '12px 16px 0',
+        padding: '16px 16px 14px',
+        background: 'var(--paper-200)',
+        border: `1px solid ${BORDER}`,
+        borderRadius: 14,
+      }}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+        <Eyebrow tone="var(--rust-700)">{spec.cadenceLabel ?? 'brief · weekly'}</Eyebrow>
+        {spec.fireWindow && <span style={{ fontFamily: SANS, fontSize: 10, color: 'var(--ink-400)' }}>{spec.fireWindow}</span>}
+      </div>
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontSize: 22,
+          fontWeight: 500,
+          color: 'var(--ink-900)',
+          marginTop: 6,
+          lineHeight: 1.15,
+          letterSpacing: '-0.015em',
+        }}
+      >
+        {spec.title}{spec.highlight && <em style={{ color: 'var(--rust-700)' }}> {spec.highlight}</em>}
+      </div>
+      {spec.teaser && (
+        <div style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-500)', marginTop: 6, lineHeight: 1.5 }}>
+          {spec.teaser}
+        </div>
+      )}
+      {spec.chips && spec.chips.length > 0 && (
+        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+          {spec.chips.map((t) => (
+            <span
+              key={t}
+              style={{
+                fontFamily: SANS,
+                fontSize: 10.5,
+                color: 'var(--ink-500)',
+                fontWeight: 500,
+                border: `1px solid ${BORDER}`,
+                borderRadius: 999,
+                padding: '3px 8px',
+                background: 'var(--paper-100)',
+              }}
+            >
+              {t}
+            </span>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 07 · PREP
+// ═════════════════════════════════════════════════════════════════════════
+export interface PrepItem { label: string; done?: boolean; }
+export interface CatPrepSpec {
+  type: 'c-prep';
+  variant: 'inline' | 'card';
+  eyebrow?: string;
+  title: string;
+  items: PrepItem[];
+  nextLine?: string;
+  meta?: string;
+}
+export function CatPrep({ spec }: { spec: CatPrepSpec }) {
+  if (spec.variant === 'card') {
+    const doneCount = spec.items.filter((i) => i.done).length;
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '14px 14px 12px',
+          background: 'var(--paper-100)',
+          border: `1px solid ${BORDER_ACCENT}`,
+          borderRadius: 12,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <Eyebrow tone="var(--rust-700)">{spec.eyebrow ?? 'prep'}</Eyebrow>
+          {spec.meta && <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--ink-400)' }}>{spec.meta}</span>}
+        </div>
+        <div style={{ fontFamily: SERIF, fontSize: 18, fontWeight: 500, color: 'var(--ink-900)', marginTop: 3, lineHeight: 1.2 }}>
+          {spec.title}
+        </div>
+        <div style={{ marginTop: 10, display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ flex: 1, height: 4, background: 'var(--paper-400)', borderRadius: 2, overflow: 'hidden' }}>
+            <div
+              style={{
+                width: `${(doneCount / Math.max(1, spec.items.length)) * 100}%`,
+                height: '100%',
+                background: 'var(--rust-700)',
+              }}
+            />
+          </div>
+          <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--ink-500)', fontVariantNumeric: 'tabular-nums' }}>
+            {doneCount} of {spec.items.length}
+          </span>
+        </div>
+        {spec.nextLine && (
+          <div style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', marginTop: 8, lineHeight: 1.45 }}>
+            next: {spec.nextLine}
+          </div>
+        )}
+      </div>
+    );
+  }
+  // inline checklist
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <Eyebrow tone="var(--rust-700)">{spec.eyebrow ?? 'prep'}</Eyebrow>
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontSize: 22,
+          fontWeight: 500,
+          color: 'var(--ink-900)',
+          marginTop: 4,
+          letterSpacing: '-0.015em',
+          lineHeight: 1.15,
+        }}
+      >
+        {spec.title}
+      </div>
+      <div style={{ marginTop: 10 }}>
+        {spec.items.map((it, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '18px 1fr',
+              gap: 10,
+              padding: '8px 0',
+              borderBottom: `1px solid ${BORDER}`,
+              alignItems: 'flex-start',
+            }}
+          >
+            <div
+              style={{
+                width: 14,
+                height: 14,
+                borderRadius: 3,
+                marginTop: 4,
+                border: `1.25px solid ${it.done ? 'var(--moss-700)' : BORDER_STRONG}`,
+                background: it.done ? 'var(--moss-700)' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {it.done && <cIcons.check s={9} c="var(--paper-100)" />}
+            </div>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 13,
+                color: it.done ? 'var(--ink-500)' : 'var(--ink-900)',
+                textDecoration: it.done ? 'line-through' : 'none',
+                textDecorationColor: 'var(--ink-300)',
+                lineHeight: 1.4,
+              }}
+            >
+              {it.label}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 08 · SCHEDULE
+// ═════════════════════════════════════════════════════════════════════════
+type SlotKind = 'meeting' | 'focus' | 'break' | 'travel' | 'personal';
+const slotTone: Record<SlotKind, string> = {
+  meeting: 'var(--rust-700)',
+  focus: 'var(--moss-700)',
+  break: 'var(--ink-400)',
+  travel: 'var(--amber-700)',
+  personal: 'var(--oxblood-700)',
+};
+export interface ScheduleSlot { at: string; label: string; duration: string; kind: SlotKind; }
+export interface ScheduleStripBlock { x: number; w: number; kind: SlotKind; }
+export interface CatScheduleSpec {
+  type: 'c-schedule';
+  variant: 'column' | 'strip';
+  title?: string;
+  right?: string;
+  slots?: ScheduleSlot[];
+  // strip variant
+  blocks?: ScheduleStripBlock[];
+  ticks?: string[];
+  glance?: string;
+  range?: string;
+}
+export function CatSchedule({ spec }: { spec: CatScheduleSpec }) {
+  if (spec.variant === 'strip') {
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '14px 14px 12px',
+          background: 'var(--paper-100)',
+          border: `1px solid ${BORDER}`,
+          borderRadius: 12,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <Eyebrow>the day, at a glance</Eyebrow>
+          {spec.range && <span style={{ fontFamily: SANS, fontSize: 10.5, color: 'var(--ink-400)' }}>{spec.range}</span>}
+        </div>
+        <div
+          style={{
+            position: 'relative',
+            marginTop: 14,
+            height: 24,
+            background: 'var(--paper-300)',
+            borderRadius: 6,
+            overflow: 'hidden',
+          }}
+        >
+          {(spec.blocks ?? []).map((b, i) => (
+            <div
+              key={i}
+              style={{
+                position: 'absolute',
+                left: `${b.x}%`,
+                width: `${b.w}%`,
+                top: 0,
+                bottom: 0,
+                background: slotTone[b.kind],
+                opacity: 0.85,
+                borderRadius: 2,
+              }}
+            />
+          ))}
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 6 }}>
+          {(spec.ticks ?? ['9', '12', '15', '18', '21']).map((t) => (
+            <span key={t} style={{ fontFamily: SANS, fontSize: 10, color: 'var(--ink-400)' }}>
+              {t}
+            </span>
+          ))}
+        </div>
+        {spec.glance && (
+          <div style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-700)', marginTop: 10, lineHeight: 1.5 }}>
+            {spec.glance}
+          </div>
+        )}
+      </div>
+    );
+  }
+  // column
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <SectionHead title={spec.title ?? "today's shape"} right={spec.right ?? `${(spec.slots ?? []).length} blocks`} />
+      <div style={{ marginTop: 6 }}>
+        {(spec.slots ?? []).map((s, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '52px 8px 1fr auto',
+              gap: 10,
+              padding: '10px 0',
+              borderBottom: `1px solid ${BORDER}`,
+              alignItems: 'baseline',
+            }}
+          >
+            <span
+              style={{
+                fontFamily: SANS,
+                fontSize: 12.5,
+                color: 'var(--ink-500)',
+                fontVariantNumeric: 'tabular-nums',
+                fontWeight: 500,
+              }}
+            >
+              {s.at}
+            </span>
+            <span
+              style={{
+                width: 5,
+                height: 5,
+                borderRadius: 999,
+                background: slotTone[s.kind],
+                marginTop: 7,
+              }}
+            />
+            <span style={{ fontFamily: SANS, fontSize: 13.5, color: 'var(--ink-900)', fontWeight: 500 }}>
+              {s.label}
+            </span>
+            <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--ink-400)' }}>{s.duration}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 09 · STREAK / MILESTONE
+// ═════════════════════════════════════════════════════════════════════════
+export interface CatStreakSpec {
+  type: 'c-streak';
+  variant: 'inline' | 'badge';
+  eyebrow: string;
+  body: string;
+  count?: number;
+}
+export function CatStreak({ spec }: { spec: CatStreakSpec }) {
+  if (spec.variant === 'badge') {
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '14px 14px',
+          background: 'var(--moss-100)',
+          border: `1px solid ${BORDER}`,
+          borderRadius: 12,
+          display: 'grid',
+          gridTemplateColumns: '52px 1fr',
+          gap: 14,
+          alignItems: 'center',
+        }}
+      >
+        <div
+          style={{
+            width: 52,
+            height: 52,
+            borderRadius: 999,
+            background: 'var(--paper-100)',
+            border: `1px solid ${BORDER}`,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <div
+            style={{
+              fontFamily: SERIF,
+              fontSize: 22,
+              fontWeight: 500,
+              color: 'var(--moss-700)',
+              fontVariantNumeric: 'tabular-nums',
+              letterSpacing: '-0.02em',
+            }}
+          >
+            {spec.count ?? 7}
+          </div>
+        </div>
+        <div>
+          <Eyebrow tone="var(--moss-700)">{spec.eyebrow}</Eyebrow>
+          <div style={{ fontFamily: SERIF, fontSize: 15, fontWeight: 500, color: 'var(--ink-900)', marginTop: 2, lineHeight: 1.3 }}>
+            {spec.body}
+          </div>
+        </div>
+      </div>
+    );
+  }
+  const dots = Array.from({ length: spec.count ?? 7 });
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <Eyebrow tone="var(--moss-700)">{spec.eyebrow}</Eyebrow>
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontSize: 22,
+          fontWeight: 500,
+          color: 'var(--ink-900)',
+          marginTop: 4,
+          letterSpacing: '-0.015em',
+          lineHeight: 1.2,
+        }}
+      >
+        {spec.body}
+      </div>
+      <div style={{ display: 'flex', gap: 6, marginTop: 12 }}>
+        {dots.map((_, i) => (
+          <div
+            key={i}
+            style={{
+              width: 18,
+              height: 18,
+              borderRadius: 999,
+              background: 'var(--moss-700)',
+              opacity: 0.4 + i * 0.085,
+            }}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 10 · PERSON
+// ═════════════════════════════════════════════════════════════════════════
+export interface PersonItem { name: string; role?: string; nudge: string; ago: string; }
+export interface CatPersonSpec {
+  type: 'c-person';
+  variant: 'list' | 'hero';
+  title?: string;
+  items?: PersonItem[];
+  // hero
+  heroName?: string;
+  heroEyebrow?: string;
+  heroBody?: string;
+  ctaPrimary?: string;
+  ctaSecondary?: string;
+}
+export function CatPerson({ spec }: { spec: CatPersonSpec }) {
+  if (spec.variant === 'hero') {
+    const initial = (spec.heroName ?? 'K').charAt(0).toUpperCase();
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '16px 16px 14px',
+          background: 'var(--paper-100)',
+          border: `1px solid ${BORDER}`,
+          borderRadius: 14,
+        }}
+      >
+        <div style={{ display: 'grid', gridTemplateColumns: '48px 1fr', gap: 14, alignItems: 'center' }}>
+          <div
+            style={{
+              width: 48,
+              height: 48,
+              borderRadius: 999,
+              background: 'var(--paper-300)',
+              border: `1px solid ${BORDER}`,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontFamily: SERIF,
+              fontSize: 18,
+              fontWeight: 500,
+              color: 'var(--ink-900)',
+              fontStyle: 'italic',
+            }}
+          >
+            {initial}
+          </div>
+          <div>
+            {spec.heroEyebrow && <Eyebrow>{spec.heroEyebrow}</Eyebrow>}
+            <div
+              style={{
+                fontFamily: SERIF,
+                fontSize: 20,
+                fontWeight: 500,
+                color: 'var(--ink-900)',
+                marginTop: 2,
+                lineHeight: 1.15,
+              }}
+            >
+              {spec.heroName}
+            </div>
+          </div>
+        </div>
+        {spec.heroBody && (
+          <div style={{ fontFamily: SANS, fontSize: 13, color: 'var(--ink-700)', marginTop: 10, lineHeight: 1.5 }}>
+            {spec.heroBody}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${BORDER}` }}>
+          <span
+            style={{
+              fontFamily: SANS,
+              fontSize: 11.5,
+              color: 'var(--paper-100)',
+              background: 'var(--rust-700)',
+              padding: '5px 12px',
+              borderRadius: 999,
+              fontWeight: 500,
+            }}
+          >
+            {spec.ctaPrimary ?? 'draft a thought'}
+          </span>
+          <span style={{ fontFamily: SANS, fontSize: 11.5, color: 'var(--ink-500)', padding: '5px 6px' }}>
+            {spec.ctaSecondary ?? 'open thread'}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  // list (postcard)
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <SectionHead title={spec.title ?? "people i've been thinking of"} />
+      <div style={{ marginTop: 6 }}>
+        {(spec.items ?? []).map((p, i) => {
+          const initials = p.name
+            .split(' ')
+            .map((s) => s[0])
+            .slice(0, 2)
+            .join('');
+          return (
+            <div
+              key={i}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '34px 1fr auto',
+                gap: 12,
+                padding: '12px 0',
+                borderBottom: `1px solid ${BORDER}`,
+                alignItems: 'center',
+              }}
+            >
+              <div
+                style={{
+                  width: 34,
+                  height: 34,
+                  borderRadius: 999,
+                  background: 'var(--paper-300)',
+                  border: `1px solid ${BORDER}`,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontFamily: SERIF,
+                  fontSize: 14,
+                  fontWeight: 500,
+                  color: 'var(--ink-900)',
+                }}
+              >
+                {initials}
+              </div>
+              <div>
+                <div style={{ fontFamily: SANS, fontSize: 13.5, color: 'var(--ink-900)', fontWeight: 500 }}>
+                  {p.name}
+                  {p.role && <span style={{ fontWeight: 400, color: 'var(--ink-400)' }}> · {p.role}</span>}
+                </div>
+                <div style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', marginTop: 2, lineHeight: 1.4 }}>
+                  {p.nudge}
+                </div>
+              </div>
+              <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--ink-400)' }}>{p.ago}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 11 · REMINDER
+// ═════════════════════════════════════════════════════════════════════════
+export interface ReminderItemCat { label: string; at: string; done?: boolean; }
+export interface CatReminderSpec {
+  type: 'c-reminder';
+  variant: 'editorial' | 'pill';
+  title?: string;
+  right?: string;
+  items: ReminderItemCat[];
+}
+export function CatReminder({ spec }: { spec: CatReminderSpec }) {
+  if (spec.variant === 'pill') {
+    const it = spec.items[0];
+    if (!it) return null;
+    return (
+      <div style={{ margin: '12px 16px 0' }}>
+        <div
+          style={{
+            background: 'var(--rust-100)',
+            border: `1px solid ${BORDER_ACCENT}`,
+            borderRadius: 999,
+            padding: '10px 14px',
+            display: 'grid',
+            gridTemplateColumns: '18px 1fr auto',
+            gap: 12,
+            alignItems: 'center',
+          }}
+        >
+          <div
+            style={{
+              width: 16,
+              height: 16,
+              borderRadius: 999,
+              border: `1.4px solid var(--rust-700)`,
+            }}
+          />
+          <span style={{ fontFamily: SANS, fontSize: 13.5, color: 'var(--ink-900)', fontWeight: 500 }}>
+            {it.label}
+          </span>
+          <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--rust-700)', fontWeight: 500 }}>
+            {it.at}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  const left = spec.items.filter((i) => !i.done).length;
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <SectionHead
+        title={spec.title ?? `${spec.items.length} small ping${spec.items.length === 1 ? '' : 's'}`}
+        right={spec.right ?? `${left} left`}
+      />
+      <div style={{ marginTop: 8 }}>
+        {spec.items.map((t, i) => (
+          <div
+            key={i}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '22px 1fr auto',
+              gap: 12,
+              padding: '10px 0',
+              borderBottom: `1px solid ${BORDER}`,
+              alignItems: 'flex-start',
+            }}
+          >
+            <div
+              style={{
+                width: 18,
+                height: 18,
+                borderRadius: 999,
+                border: `1.4px solid ${t.done ? 'var(--moss-700)' : BORDER_STRONG}`,
+                background: t.done ? 'var(--moss-700)' : 'transparent',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                marginTop: 1,
+              }}
+            >
+              {t.done && <cIcons.check s={10} c="var(--paper-100)" />}
+            </div>
+            <div
+              style={{
+                fontFamily: SANS,
+                fontSize: 14,
+                fontWeight: 500,
+                color: t.done ? 'var(--ink-500)' : 'var(--ink-900)',
+                textDecoration: t.done ? 'line-through' : 'none',
+                textDecorationColor: 'var(--ink-300)',
+              }}
+            >
+              {t.label}
+            </div>
+            <span
+              style={{
+                fontFamily: SANS,
+                fontSize: 11,
+                color: t.done ? 'var(--moss-700)' : 'var(--rust-700)',
+                fontWeight: 500,
+                marginTop: 2,
+              }}
+            >
+              {t.done ? 'done' : t.at}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 12 · QUICK LOG
+// ═════════════════════════════════════════════════════════════════════════
+export interface QuickLogChip { label: string; icon: CatIconName; tint?: 'amber' | 'rust' | 'moss'; }
+export interface CatQuickLogSpec {
+  type: 'c-quicklog';
+  variant: 'chips' | 'tray';
+  chips: QuickLogChip[];
+}
+export function CatQuickLog({ spec }: { spec: CatQuickLogSpec }) {
+  if (spec.variant === 'tray') {
+    const tints = {
+      amber: { tint: 'var(--amber-100)', ic: 'var(--amber-700)' },
+      rust: { tint: 'var(--rust-100)', ic: 'var(--rust-700)' },
+      moss: { tint: 'var(--moss-100)', ic: 'var(--moss-700)' },
+    };
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '12px 12px 10px',
+          background: 'var(--paper-200)',
+          borderRadius: 12,
+          border: `1px solid ${BORDER}`,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <Eyebrow>quick log</Eyebrow>
+          <span style={{ fontFamily: SANS, fontSize: 10.5, color: 'var(--ink-400)' }}>tap to write</span>
+        </div>
+        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 8 }}>
+          {spec.chips.slice(0, 3).map((c, i) => {
+            const Icon = cIcons[c.icon];
+            const tint = tints[c.tint ?? 'rust'];
+            return (
+              <div
+                key={i}
+                style={{
+                  background: 'var(--paper-100)',
+                  border: `1px solid ${BORDER}`,
+                  borderRadius: 10,
+                  padding: '10px 8px',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <div
+                  style={{
+                    width: 30,
+                    height: 30,
+                    borderRadius: 8,
+                    background: tint.tint,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <Icon s={15} c={tint.ic} />
+                </div>
+                <span style={{ fontFamily: SANS, fontSize: 11.5, color: 'var(--ink-900)', fontWeight: 500 }}>
+                  {c.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+  // chips
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <Eyebrow>quick log</Eyebrow>
+      <div style={{ marginTop: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {spec.chips.map((c, i) => {
+          const Icon = cIcons[c.icon];
+          return (
+            <div
+              key={i}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '7px 12px',
+                borderRadius: 999,
+                background: 'var(--paper-100)',
+                border: `1px solid ${BORDER_STRONG}`,
+                fontFamily: SANS,
+                fontSize: 12.5,
+                color: 'var(--ink-900)',
+                fontWeight: 500,
+              }}
+            >
+              <Icon s={13} c="var(--ink-700)" />
+              {c.label}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 13 · PICK
+// ═════════════════════════════════════════════════════════════════════════
+export interface CatPickSpec {
+  type: 'c-pick';
+  variant: 'editorial' | 'card';
+  kind: string; // 'read' · 'watch' · 'listen' · 'place' · 'thing' · 'person'
+  title: string;
+  body?: string;
+  source?: string;
+  year?: string;
+}
+export function CatPick({ spec }: { spec: CatPickSpec }) {
+  if (spec.variant === 'card') {
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          display: 'flex',
+          background: 'var(--paper-100)',
+          border: `1px solid ${BORDER}`,
+          borderRadius: 12,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: 80,
+            background: 'var(--rust-100)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <cIcons.book s={28} c="var(--rust-700)" />
+        </div>
+        <div style={{ flex: 1, padding: '12px 14px' }}>
+          <Eyebrow tone="var(--rust-700)">pick · {spec.kind}</Eyebrow>
+          <div
+            style={{
+              fontFamily: SERIF,
+              fontSize: 16,
+              fontWeight: 500,
+              color: 'var(--ink-900)',
+              marginTop: 2,
+              lineHeight: 1.2,
+              fontStyle: 'italic',
+            }}
+          >
+            {spec.title}
+          </div>
+          {(spec.source || spec.year) && (
+            <div style={{ fontFamily: SANS, fontSize: 11.5, color: 'var(--ink-500)', marginTop: 3, lineHeight: 1.45 }}>
+              {[spec.source, spec.year].filter(Boolean).join(' · ')}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <Eyebrow tone="var(--rust-700)">a pick · {spec.kind}</Eyebrow>
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontSize: 22,
+          fontWeight: 500,
+          color: 'var(--ink-900)',
+          marginTop: 4,
+          letterSpacing: '-0.015em',
+          lineHeight: 1.15,
+          fontStyle: 'italic',
+        }}
+      >
+        {spec.title}
+      </div>
+      {spec.body && (
+        <div style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-500)', marginTop: 4, lineHeight: 1.5 }}>
+          {spec.body}
+        </div>
+      )}
+      <div
+        style={{
+          marginTop: 12,
+          paddingTop: 10,
+          borderTop: `1px solid ${BORDER}`,
+          display: 'flex',
+          gap: 18,
+        }}
+      >
+        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--rust-700)', fontWeight: 500 }}>save</span>
+        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>say more</span>
+        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', marginLeft: 'auto' }}>drop</span>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 14 · OFFER
+// ═════════════════════════════════════════════════════════════════════════
+export interface CatOfferSpec {
+  type: 'c-offer';
+  variant: 'hero' | 'twoline';
+  eyebrow?: string;
+  title: string;
+  rationale?: string;
+  ctaAccept: string;
+  ctaDismiss?: string;
+}
+export function CatOffer({ spec }: { spec: CatOfferSpec }) {
+  if (spec.variant === 'hero') {
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '16px 16px 14px',
+          background: 'var(--rust-700)',
+          border: `1px solid var(--rust-900)`,
+          borderRadius: 14,
+          color: 'var(--paper-100)',
+        }}
+      >
+        <Eyebrow tone="rgba(251,247,245,0.7)">{spec.eyebrow ?? 'offer'}</Eyebrow>
+        <div
+          style={{
+            fontFamily: SERIF,
+            fontSize: 22,
+            fontWeight: 500,
+            color: 'var(--paper-100)',
+            marginTop: 4,
+            letterSpacing: '-0.015em',
+            lineHeight: 1.15,
+          }}
+        >
+          {spec.title}
+        </div>
+        {spec.rationale && (
+          <div
+            style={{
+              fontFamily: SANS,
+              fontSize: 13,
+              color: 'rgba(251,247,245,0.78)',
+              marginTop: 6,
+              lineHeight: 1.5,
+            }}
+          >
+            {spec.rationale}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 10, marginTop: 14, alignItems: 'center' }}>
+          <span
+            style={{
+              fontFamily: SANS,
+              fontSize: 12.5,
+              fontWeight: 500,
+              color: 'var(--rust-900)',
+              background: 'var(--paper-100)',
+              padding: '7px 14px',
+              borderRadius: 999,
+            }}
+          >
+            {spec.ctaAccept}
+          </span>
+          <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'rgba(251,247,245,0.7)' }}>
+            {spec.ctaDismiss ?? 'not now'}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <Eyebrow tone="var(--rust-700)">{spec.eyebrow ?? 'offer'}</Eyebrow>
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontSize: 18,
+          fontWeight: 500,
+          color: 'var(--ink-900)',
+          marginTop: 3,
+          letterSpacing: '-0.01em',
+          lineHeight: 1.25,
+        }}
+      >
+        {spec.title}
+      </div>
+      {spec.rationale && (
+        <div style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-500)', marginTop: 3, lineHeight: 1.5 }}>
+          {spec.rationale}
+        </div>
+      )}
+      <div style={{ display: 'flex', gap: 10, marginTop: 10 }}>
+        <span
+          style={{
+            fontFamily: SANS,
+            fontSize: 12,
+            color: 'var(--paper-100)',
+            background: 'var(--rust-700)',
+            padding: '6px 12px',
+            borderRadius: 999,
+            fontWeight: 500,
+          }}
+        >
+          {spec.ctaAccept}
+        </span>
+        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}>
+          {spec.ctaDismiss ?? 'not now'}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 15 · DRAFT
+// ═════════════════════════════════════════════════════════════════════════
+export interface CatDraftSpec {
+  type: 'c-draft';
+  variant: 'letter' | 'inline';
+  recipient: string;
+  subject: string;
+  preview: string;
+}
+export function CatDraft({ spec }: { spec: CatDraftSpec }) {
+  if (spec.variant === 'letter') {
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '14px 14px',
+          background: 'var(--paper-50)',
+          border: `1px solid ${BORDER_ACCENT}`,
+          borderRadius: 12,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <Eyebrow tone="var(--rust-700)">draft · ready to send</Eyebrow>
+          <cIcons.envelope s={13} c="var(--rust-700)" />
+        </div>
+        <div style={{ fontFamily: SANS, fontSize: 11.5, color: 'var(--ink-500)', marginTop: 8 }}>
+          to <span style={{ color: 'var(--ink-900)', fontWeight: 500 }}>{spec.recipient}</span> · {spec.subject}
+        </div>
+        <div
+          style={{
+            marginTop: 8,
+            paddingTop: 8,
+            borderTop: `1px solid ${BORDER}`,
+            fontFamily: SERIF,
+            fontSize: 14,
+            color: 'var(--ink-900)',
+            lineHeight: 1.45,
+            fontStyle: 'italic',
+          }}
+        >
+          “{spec.preview}”
+        </div>
+        <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
+          <span
+            style={{
+              fontFamily: SANS,
+              fontSize: 12,
+              color: 'var(--paper-100)',
+              background: 'var(--rust-700)',
+              padding: '6px 13px',
+              borderRadius: 999,
+              fontWeight: 500,
+            }}
+          >
+            send
+          </span>
+          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}>open</span>
+          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', padding: '6px 4px', marginLeft: 'auto' }}>drop</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <Eyebrow tone="var(--rust-700)">draft for {spec.recipient} · {spec.subject}</Eyebrow>
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontSize: 16,
+          fontStyle: 'italic',
+          color: 'var(--ink-900)',
+          marginTop: 6,
+          lineHeight: 1.5,
+        }}
+      >
+        “{spec.preview}”
+      </div>
+      <div
+        style={{
+          marginTop: 10,
+          paddingTop: 10,
+          borderTop: `1px solid ${BORDER}`,
+          display: 'flex',
+          gap: 18,
+        }}
+      >
+        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--rust-700)', fontWeight: 500 }}>send</span>
+        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>open to edit</span>
+        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', marginLeft: 'auto' }}>drop</span>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 16 · DECISION
+// ═════════════════════════════════════════════════════════════════════════
+export interface DecisionOption { label: string; hint?: string; }
+export interface CatDecisionSpec {
+  type: 'c-decision';
+  variant: 'tiles' | 'stack';
+  question: string;
+  highlight?: string; // italic-rust word inside the question (stack only)
+  options: DecisionOption[];
+}
+export function CatDecision({ spec }: { spec: CatDecisionSpec }) {
+  if (spec.variant === 'stack') {
+    return (
+      <div style={{ margin: '12px 22px 0' }}>
+        <Eyebrow>quick decide</Eyebrow>
+        <div
+          style={{
+            fontFamily: SERIF,
+            fontSize: 20,
+            fontWeight: 500,
+            color: 'var(--ink-900)',
+            marginTop: 3,
+            letterSpacing: '-0.015em',
+          }}
+        >
+          {spec.question}
+          {spec.highlight && (
+            <em style={{ color: 'var(--rust-700)' }}> {spec.highlight}</em>
+          )}
+        </div>
+        <div style={{ marginTop: 10 }}>
+          {spec.options.slice(0, 3).map((o, i) => (
+            <div
+              key={i}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: '14px 1fr auto',
+                gap: 12,
+                padding: '12px 0',
+                borderBottom: `1px solid ${BORDER}`,
+                alignItems: 'baseline',
+              }}
+            >
+              <span
+                style={{
+                  width: 10,
+                  height: 10,
+                  borderRadius: 999,
+                  border: `1.3px solid ${BORDER_STRONG}`,
+                  marginTop: 5,
+                }}
+              />
+              <div>
+                <div style={{ fontFamily: SANS, fontSize: 13.5, color: 'var(--ink-900)', fontWeight: 500 }}>
+                  {o.label}
+                </div>
+                {o.hint && (
+                  <div style={{ fontFamily: SANS, fontSize: 11.5, color: 'var(--ink-500)', marginTop: 2 }}>{o.hint}</div>
+                )}
+              </div>
+              <cIcons.chev s={11} c="var(--ink-400)" />
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ margin: '12px 16px 0' }}>
+      <Eyebrow>quick decide</Eyebrow>
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontSize: 18,
+          fontWeight: 500,
+          color: 'var(--ink-900)',
+          marginTop: 3,
+          letterSpacing: '-0.01em',
+        }}
+      >
+        {spec.question}
+      </div>
+      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 10 }}>
+        {spec.options.slice(0, 3).map((o, i) => (
+          <div
+            key={i}
+            style={{
+              background: 'var(--paper-100)',
+              border: `1px solid ${BORDER}`,
+              borderRadius: 10,
+              padding: '10px 8px',
+              textAlign: 'center',
+            }}
+          >
+            <div style={{ fontFamily: SERIF, fontSize: 13.5, fontWeight: 500, color: 'var(--ink-900)' }}>
+              {o.label}
+            </div>
+            {o.hint && (
+              <div
+                style={{
+                  fontFamily: SANS,
+                  fontSize: 10.5,
+                  color: 'var(--ink-400)',
+                  marginTop: 3,
+                  fontStyle: 'italic',
+                }}
+              >
+                {o.hint}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 17 · CONFRONTATION
+// ═════════════════════════════════════════════════════════════════════════
+export interface CatConfrontSpec {
+  type: 'c-confront';
+  variant: 'quiet' | 'card';
+  eyebrow?: string;
+  title: string;
+  body?: string;
+}
+export function CatConfront({ spec }: { spec: CatConfrontSpec }) {
+  if (spec.variant === 'card') {
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '14px 14px',
+          background: 'var(--oxblood-100)',
+          border: `1px solid ${BORDER}`,
+          borderLeft: '3px solid var(--oxblood-700)',
+          borderRadius: 8,
+        }}
+      >
+        <Eyebrow tone="var(--oxblood-700)">{spec.eyebrow ?? 'confrontation'}</Eyebrow>
+        <div
+          style={{
+            fontFamily: SERIF,
+            fontSize: 17,
+            fontWeight: 500,
+            color: 'var(--ink-900)',
+            marginTop: 3,
+            lineHeight: 1.25,
+          }}
+        >
+          {spec.title}
+        </div>
+        {spec.body && (
+          <div style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-700)', marginTop: 5, lineHeight: 1.5 }}>
+            {spec.body}
+          </div>
+        )}
+        <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+          <span
+            style={{
+              fontFamily: SANS,
+              fontSize: 12,
+              color: 'var(--paper-100)',
+              background: 'var(--ink-900)',
+              padding: '6px 12px',
+              borderRadius: 999,
+              fontWeight: 500,
+            }}
+          >
+            on it
+          </span>
+          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}>later</span>
+          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}>talk to me</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <Eyebrow tone="var(--oxblood-700)">{spec.eyebrow ?? "i won't soften this"}</Eyebrow>
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontSize: 22,
+          fontWeight: 500,
+          color: 'var(--ink-900)',
+          marginTop: 6,
+          letterSpacing: '-0.015em',
+          lineHeight: 1.2,
+        }}
+      >
+        {spec.title}
+      </div>
+      {spec.body && (
+        <div style={{ fontFamily: SANS, fontSize: 13, color: 'var(--ink-700)', marginTop: 8, lineHeight: 1.55 }}>
+          {spec.body}
+        </div>
+      )}
+      <div
+        style={{
+          marginTop: 14,
+          paddingTop: 10,
+          borderTop: `1px solid ${BORDER}`,
+          display: 'flex',
+          gap: 18,
+        }}
+      >
+        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-900)', fontWeight: 500 }}>on it</span>
+        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>later</span>
+        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--rust-700)', fontWeight: 500, marginLeft: 'auto' }}>
+          talk to me
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 18 · REFLECTION
+// ═════════════════════════════════════════════════════════════════════════
+export interface CatReflectionSpec {
+  type: 'c-reflection';
+  variant: 'prompt' | 'card';
+  eyebrow?: string;
+  prompt: string;
+}
+export function CatReflection({ spec }: { spec: CatReflectionSpec }) {
+  if (spec.variant === 'card') {
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '16px 16px',
+          background: 'var(--paper-200)',
+          border: `1px solid ${BORDER}`,
+          borderRadius: 12,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          <span
+            style={{
+              fontFamily: SERIF,
+              fontStyle: 'italic',
+              fontSize: 36,
+              color: 'var(--rust-700)',
+              lineHeight: 0.6,
+              fontWeight: 500,
+            }}
+          >
+            “
+          </span>
+          <div
+            style={{
+              fontFamily: SERIF,
+              fontStyle: 'italic',
+              fontWeight: 400,
+              fontSize: 18,
+              color: 'var(--ink-900)',
+              lineHeight: 1.3,
+              marginTop: 6,
+            }}
+          >
+            {spec.prompt}
+          </div>
+        </div>
+        <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
+          <span
+            style={{
+              fontFamily: SANS,
+              fontSize: 12,
+              color: 'var(--paper-100)',
+              background: 'var(--rust-700)',
+              padding: '6px 13px',
+              borderRadius: 999,
+              fontWeight: 500,
+            }}
+          >
+            answer
+          </span>
+          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}>skip</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <Eyebrow>{spec.eyebrow ?? 'a reflection · for tonight'}</Eyebrow>
+      <div
+        style={{
+          fontFamily: SERIF,
+          fontStyle: 'italic',
+          fontWeight: 400,
+          fontSize: 24,
+          color: 'var(--ink-900)',
+          marginTop: 8,
+          letterSpacing: '-0.01em',
+          lineHeight: 1.25,
+          textWrap: 'pretty' as 'pretty',
+        }}
+      >
+        {spec.prompt}
+      </div>
+      <div style={{ display: 'flex', gap: 18, marginTop: 14 }}>
+        <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--rust-700)', fontWeight: 500 }}>answer</span>
+        <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-500)' }}>skip for today</span>
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 19 · OPEN LOOP
+// ═════════════════════════════════════════════════════════════════════════
+export interface OpenLoopItem { commitment: string; ago: string; due?: string; overdue?: boolean; }
+export interface CatOpenLoopSpec {
+  type: 'c-openloop';
+  variant: 'quote' | 'dashed';
+  title?: string;
+  right?: string;
+  items: OpenLoopItem[];
+}
+export function CatOpenLoop({ spec }: { spec: CatOpenLoopSpec }) {
+  if (spec.variant === 'dashed') {
+    const it = spec.items[0];
+    if (!it) return null;
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '12px 14px',
+          background: 'var(--paper-100)',
+          border: `1px dashed ${BORDER_ACCENT}`,
+          borderRadius: 12,
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+          <Eyebrow tone="var(--rust-700)">open loop · {it.ago}</Eyebrow>
+          {it.overdue && (
+            <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--oxblood-700)', fontWeight: 500 }}>
+              overdue
+            </span>
+          )}
+        </div>
+        <div
+          style={{
+            fontFamily: SERIF,
+            fontSize: 16,
+            fontStyle: 'italic',
+            color: 'var(--ink-900)',
+            marginTop: 5,
+            lineHeight: 1.3,
+          }}
+        >
+          “{it.commitment}”
+        </div>
+        <div style={{ display: 'flex', gap: 14, marginTop: 10 }}>
+          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--moss-700)', fontWeight: 500 }}>i did this</span>
+          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>snooze</span>
+          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>say more</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <SectionHead
+        title={spec.title ?? "things you said you'd do"}
+        right={spec.right ?? `${spec.items.length} open`}
+      />
+      <div style={{ marginTop: 8 }}>
+        {spec.items.map((l, i) => (
+          <div key={i} style={{ padding: '12px 0', borderBottom: `1px solid ${BORDER}` }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+              <Eyebrow tone={l.overdue ? 'var(--oxblood-700)' : 'var(--ink-400)'}>
+                {l.ago} · {l.due ?? (l.overdue ? 'overdue' : 'open')}
+              </Eyebrow>
+              <cIcons.chev s={11} c="var(--ink-400)" />
+            </div>
+            <div
+              style={{
+                fontFamily: SERIF,
+                fontSize: 15,
+                color: 'var(--ink-900)',
+                marginTop: 3,
+                fontStyle: 'italic',
+                lineHeight: 1.3,
+              }}
+            >
+              “{l.commitment}”
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 20 · PERMISSION
+// ═════════════════════════════════════════════════════════════════════════
+export interface CatPermissionSpec {
+  type: 'c-permission';
+  variant: 'soft' | 'editorial';
+  provider: string;
+  body: string;
+  ctaConnect?: string;
+  ctaDismiss?: string;
+}
+export function CatPermission({ spec }: { spec: CatPermissionSpec }) {
+  if (spec.variant === 'editorial') {
+    return (
+      <div style={{ margin: '12px 22px 0' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <cIcons.plug s={16} c="var(--rust-700)" />
+          <Eyebrow tone="var(--rust-700)">connect {spec.provider}</Eyebrow>
+        </div>
+        <div
+          style={{
+            fontFamily: SERIF,
+            fontSize: 18,
+            fontWeight: 500,
+            color: 'var(--ink-900)',
+            marginTop: 6,
+            letterSpacing: '-0.01em',
+            lineHeight: 1.25,
+          }}
+        >
+          {spec.body}
+        </div>
+        <div
+          style={{
+            marginTop: 12,
+            paddingTop: 10,
+            borderTop: `1px solid ${BORDER}`,
+            display: 'flex',
+            gap: 18,
+          }}
+        >
+          <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--rust-700)', fontWeight: 500 }}>
+            {spec.ctaConnect ?? 'connect'}
+          </span>
+          <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-500)' }}>
+            {spec.ctaDismiss ?? 'not yet'}
+          </span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div
+      style={{
+        margin: '12px 16px 0',
+        padding: '12px 14px',
+        background: 'var(--paper-200)',
+        border: `1px solid ${BORDER}`,
+        borderRadius: 12,
+        display: 'grid',
+        gridTemplateColumns: '1fr auto',
+        gap: 12,
+        alignItems: 'center',
+      }}
+    >
+      <div>
+        <Eyebrow>connect · {spec.provider}</Eyebrow>
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 13,
+            color: 'var(--ink-900)',
+            marginTop: 4,
+            lineHeight: 1.45,
+            fontWeight: 500,
+          }}
+        >
+          {spec.body}
+        </div>
+      </div>
+      <span
+        style={{
+          fontFamily: SANS,
+          fontSize: 12,
+          color: 'var(--paper-100)',
+          background: 'var(--rust-700)',
+          padding: '7px 14px',
+          borderRadius: 999,
+          fontWeight: 500,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {spec.ctaConnect ?? 'connect'}
+      </span>
+    </div>
+  );
+}
+
+// ═════════════════════════════════════════════════════════════════════════
+// 21 · READ
+// ═════════════════════════════════════════════════════════════════════════
+export interface ReadItem { headline: string; source: string; tag?: string; meta?: string; }
+export interface CatReadSpec {
+  type: 'c-read';
+  variant: 'index' | 'card';
+  items: ReadItem[];
+}
+export function CatRead({ spec }: { spec: CatReadSpec }) {
+  if (spec.variant === 'card') {
+    const it = spec.items[0];
+    if (!it) return null;
+    return (
+      <div
+        style={{
+          margin: '12px 16px 0',
+          padding: '14px 14px',
+          background: 'var(--paper-100)',
+          border: `1px solid ${BORDER}`,
+          borderRadius: 12,
+          display: 'grid',
+          gridTemplateColumns: '1fr 14px',
+          gap: 10,
+          alignItems: 'center',
+        }}
+      >
+        <div>
+          <Eyebrow>
+            {it.source}
+            {it.tag && ` · ${it.tag}`}
+          </Eyebrow>
+          <div
+            style={{
+              fontFamily: SERIF,
+              fontSize: 16,
+              fontWeight: 500,
+              color: 'var(--ink-900)',
+              marginTop: 4,
+              lineHeight: 1.25,
+              letterSpacing: '-0.005em',
+            }}
+          >
+            {it.headline}
+          </div>
+          {it.meta && (
+            <div style={{ fontFamily: SANS, fontSize: 11.5, color: 'var(--ink-500)', marginTop: 5 }}>
+              {it.meta}
+            </div>
+          )}
+        </div>
+        <cIcons.link s={13} c="var(--ink-400)" />
+      </div>
+    );
+  }
+  return (
+    <div style={{ margin: '12px 22px 0' }}>
+      <SectionHead title="three to read" right="picked for you" italic />
+      <div style={{ marginTop: 6 }}>
+        {spec.items.map((r, i) => (
+          <div
+            key={i}
+            style={{
+              padding: '12px 0',
+              borderBottom: `1px solid ${BORDER}`,
+              display: 'grid',
+              gridTemplateColumns: '1fr 14px',
+              gap: 10,
+              alignItems: 'flex-start',
+            }}
+          >
+            <div>
+              <Eyebrow>
+                {r.source}
+                {r.tag && ` · ${r.tag}`}
+              </Eyebrow>
+              <div
+                style={{
+                  fontFamily: SERIF,
+                  fontSize: 15.5,
+                  fontWeight: 500,
+                  color: 'var(--ink-900)',
+                  marginTop: 3,
+                  lineHeight: 1.3,
+                  letterSpacing: '-0.005em',
+                }}
+              >
+                {r.headline}
+              </div>
+            </div>
+            <cIcons.link s={12} c="var(--ink-400)" />
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}

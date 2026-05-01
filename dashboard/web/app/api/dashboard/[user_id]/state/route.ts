@@ -24,11 +24,9 @@ export async function GET(
     );
   }
 
+  const upstreamUrl = `${backendUrl}/api/dashboard/${encodeURIComponent(user_id)}/state`;
   try {
-    const upstream = await fetch(
-      `${backendUrl}/api/dashboard/${encodeURIComponent(user_id)}/state`,
-      { cache: 'no-store' },
-    );
+    const upstream = await fetch(upstreamUrl, { cache: 'no-store' });
     const body = await upstream.json().catch(() => ({}));
     return NextResponse.json(body, {
       status: upstream.status,
@@ -36,7 +34,12 @@ export async function GET(
     });
   } catch (err) {
     return NextResponse.json(
-      { error: 'failed to reach backend', detail: String(err) },
+      {
+        error: 'failed to reach backend',
+        upstream_url: upstreamUrl,
+        detail: String(err),
+        hint: `verify DONNA_BACKEND_URL points at the running uvicorn (e.g. http://localhost:8000)`,
+      },
       { status: 502 },
     );
   }

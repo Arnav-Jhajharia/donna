@@ -1,57 +1,8 @@
 import DashboardRenderer from '@/components/DashboardRenderer';
-import type { DashboardPlan } from '@/lib/plan';
 import { planDensity } from '@/lib/plan';
-import { morningCrispPlan } from '@/lib/plans/morning-crisp';
-import { morningAfterBadDayPlan } from '@/lib/plans/morning-after-bad-day';
-import { middayCheckPlan } from '@/lib/plans/midday-check';
-import { eveningReflectionPlan } from '@/lib/plans/evening-reflection';
-import { celebrationMomentPlan } from '@/lib/plans/celebration-moment';
-import { lowEnergyPlan } from '@/lib/plans/low-energy';
-import { fromAttentionPlan } from '@/lib/plans/from-attention';
+import { SHOWCASE, type ShowcaseEntry as GalleryEntry } from '@/lib/plans/showcase';
 
-interface GalleryEntry {
-  plan: DashboardPlan;
-  label: string;
-  subtitle: string;
-}
-
-const GALLERY: GalleryEntry[] = [
-  {
-    plan: morningCrispPlan,
-    label: 'morning · crisp',
-    subtitle: 'slept well · calendar is reasonable · forward-leaning',
-  },
-  {
-    plan: morningAfterBadDayPlan,
-    label: 'morning · after a hard day',
-    subtitle: 'four hours sleep · recovery register · permission + witness',
-  },
-  {
-    plan: middayCheckPlan,
-    label: 'midday · drive-by',
-    subtitle: 'short, functional, trackers + one open loop',
-  },
-  {
-    plan: eveningReflectionPlan,
-    label: 'evening · reflection',
-    subtitle: 'thesis is a question · prompts + gentle confrontation',
-  },
-  {
-    plan: celebrationMomentPlan,
-    label: 'celebration · something landed',
-    subtitle: 'lead with the landing · one witness · forward-look',
-  },
-  {
-    plan: lowEnergyPlan,
-    label: 'late · restraint',
-    subtitle: 'user is spiralling · donna chooses small',
-  },
-  {
-    plan: fromAttentionPlan,
-    label: 'midday · from attention',
-    subtitle: 'every block composed by the attention→block adapter, not hand-authored',
-  },
-];
+const GALLERY: GalleryEntry[] = SHOWCASE;
 
 export default function MomentsPage() {
   return (
