@@ -141,7 +141,8 @@ async def run_proactive_tick(
     """
     started = time.monotonic()
     if ledger is None:
-        ledger = InMemoryDedupStore()
+        from backend.web.proactive.store import PostgresDedupStore
+        ledger = PostgresDedupStore()
 
     try:
         context = await build_context(
@@ -172,7 +173,7 @@ async def run_proactive_tick(
             elapsed_ms=_elapsed_ms(started),
         )
 
-    outcome = apply_gates(
+    outcome = await apply_gates(
         moves,
         user_id=user_id,
         ledger=ledger,
@@ -198,7 +199,7 @@ async def run_proactive_tick(
     now_ts = time.time()
     for r, v in verdicts:
         if v.decision == "send":
-            ledger.mark(user_id, r.move.dedup_key, now=now_ts)
+            await ledger.mark_async(user_id, r.move.dedup_key, now=now_ts)
 
     return ProactiveTickResult(
         user_id=user_id,

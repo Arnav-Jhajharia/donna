@@ -117,7 +117,7 @@ async def test_tick_full_flow_send_marks_ledger(monkeypatch):
     assert len(out.verdicts) == 1
     assert out.drafts_to_send == [(results[0], "poke v2 shipped")]
     # ledger marked for the sent move
-    assert ledger.seen("u", "watch:poke", now=0.0) is True
+    assert await ledger.seen_async("u", "watch:poke", now=0.0) is True
 
 
 @pytest.mark.asyncio
@@ -134,7 +134,7 @@ async def test_tick_silence_does_not_mark_ledger(monkeypatch):
     out = await run_proactive_tick(user_id="u", ledger=ledger, load_blurb=_fake_blurb)
     assert out.drafts_to_send == []
     # Silenced moves should NOT burn the dedup slot.
-    assert ledger.seen("u", "watch:poke", now=0.0) is False
+    assert await ledger.seen_async("u", "watch:poke", now=0.0) is False
 
 
 # ---------------------------------------------------------------------------
@@ -196,7 +196,7 @@ async def test_tick_all_gated_short_circuits_execution(monkeypatch):
     import time as _time
 
     ledger = InMemoryDedupStore()
-    ledger.mark("u", "watch:poke", now=_time.time())
+    await ledger.mark_async("u", "watch:poke", now=_time.time())
 
     out = await run_proactive_tick(user_id="u", ledger=ledger, load_blurb=_fake_blurb)
     assert out.moves_emitted == moves

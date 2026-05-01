@@ -72,24 +72,30 @@ def is_obviously_bad(move: ProactiveMove) -> str | None:
 
 
 class DedupStore(Protocol):
-    """Minimal protocol so we can swap in Redis later."""
+    """Minimal async protocol so we can swap Postgres / Redis / fakes."""
 
-    def seen(self, user_id: str, dedup_key: str, *, now: float) -> bool: ...
-    def mark(self, user_id: str, dedup_key: str, *, now: float) -> None: ...
+    async def seen_async(
+        self, user_id: str, dedup_key: str, *, now: float
+    ) -> bool: ...
+    async def mark_async(
+        self, user_id: str, dedup_key: str, *, now: float
+    ) -> None: ...
 
 
 @dataclass
 class InMemoryDedupStore:
-    """Per-process ledger keyed by ``(user_id, dedup_key)``.
+    """Per-process ledger keyed by ``(user_id, dedup_key)`` — async API.
 
-    Each entry expires after ``ttl_seconds``. Good enough for a single
-    proactive worker. Replace with Redis when there's more than one.
+    Kept as a fallback for tests and CLI dry-runs. Production runs use
+    ``backend.web.proactive.store.PostgresDedupStore``.
     """
 
     ttl_seconds: float = 6 * 3600.0  # 6h
     _entries: dict[tuple[str, str], float] = field(default_factory=dict)
 
-    def seen(self, user_id: str, dedup_key: str, *, now: float) -> bool:
+    async def seen_async(
+        self, user_id: str, dedup_key: str, *, now: float
+    ) -> bool:
         key = (user_id, dedup_key)
         ts = self._entries.get(key)
         if ts is None:
@@ -99,7 +105,9 @@ class InMemoryDedupStore:
             return False
         return True
 
-    def mark(self, user_id: str, dedup_key: str, *, now: float) -> None:
+    async def mark_async(
+        self, user_id: str, dedup_key: str, *, now: float
+    ) -> None:
         self._entries[(user_id, dedup_key)] = now
 
 
@@ -143,7 +151,7 @@ class GateOutcome:
     dropped: list[GateDrop]
 
 
-def apply_gates(
+async def apply_gates(
     moves: list[ProactiveMove],
     *,
     user_id: str,
@@ -152,11 +160,11 @@ def apply_gates(
     daily_used: int = 0,
     now: float | None = None,
 ) -> GateOutcome:
-    """Filter moves through dedup → relevance → budget. Returns outcome.
+    """Filter moves through dedup → relevance → budget. Async because
+    the ledger is async (Postgres-backed in prod, in-memory in tests).
 
-    The ledger is *read* but not mutated — call ``ledger.mark`` on each
-    accepted move only after the worth-telling judge says yes. Marking
-    here would burn the dedup slot on a move that ends up being silenced.
+    The ledger is *read* but not mutated — call ``ledger.mark_async`` on
+    each accepted move only after the worth-telling judge says yes.
     """
     now_ts = float(now if now is not None else time.time())
 
@@ -175,7 +183,7 @@ def apply_gates(
         if bad:
             dropped.append(GateDrop(move=move, reason=bad))
             continue
-        if ledger.seen(user_id, move.dedup_key, now=now_ts):
+        if await ledger.seen_async(user_id, move.dedup_key, now=now_ts):
             dropped.append(GateDrop(move=move, reason="dedup: recently fired"))
             continue
         accepted.append(move)

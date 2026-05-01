@@ -215,7 +215,7 @@ async def _no_exa(args: argparse.Namespace) -> int:
     if not moves:
         return 0
     ledger = InMemoryDedupStore()
-    outcome = apply_gates(
+    outcome = await apply_gates(
         moves,
         user_id=args.user_id,
         ledger=ledger,
