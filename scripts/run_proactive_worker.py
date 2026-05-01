@@ -46,6 +46,7 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DRAIN_INTERVAL_S = 600.0
 DEFAULT_PURGE_INTERVAL_S = 3600.0
+DEFAULT_POLL_INTERVAL_S = 21600.0  # 6h - free-tier fallback for unprovisioned subs
 
 
 def _delivery_mode_for(profile: dict) -> str:
@@ -113,6 +114,36 @@ async def _purge_loop(interval: float) -> None:
         await asyncio.sleep(interval)
 
 
+async def _poll_loop(interval: float) -> None:
+    """Free-tier fallback: poll exa_search for any sub without a
+    webset_id. Runs alongside drain. When the user upgrades to a
+    websets-capable plan, provisioned subs skip this loop automatically.
+    """
+    from backend.web.proactive.poller import poll_pending_subscriptions
+
+    while True:
+        try:
+            users = await _list_active_user_ids()
+            for user_id, _profile in users:
+                try:
+                    summary = await poll_pending_subscriptions(user_id)
+                    if summary.polled or summary.new_signals or summary.failed:
+                        logger.info(
+                            "poll user=%s polled=%d new=%d failed=%d",
+                            user_id[:8],
+                            summary.polled,
+                            summary.new_signals,
+                            summary.failed,
+                        )
+                except Exception:
+                    logger.exception(
+                        "poll failed user=%s", user_id[:8] if user_id else "?"
+                    )
+        except Exception:
+            logger.exception("poll loop top-level error")
+        await asyncio.sleep(interval)
+
+
 async def _serve_health(port: int) -> None:
     from fastapi import FastAPI
     import uvicorn
@@ -148,6 +179,13 @@ async def main() -> None:
             os.environ.get("DONNA_PROACTIVE_PURGE_S") or DEFAULT_PURGE_INTERVAL_S
         ),
     )
+    parser.add_argument(
+        "--poll-interval",
+        type=float,
+        default=float(
+            os.environ.get("DONNA_PROACTIVE_POLL_S") or DEFAULT_POLL_INTERVAL_S
+        ),
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -156,9 +194,10 @@ async def main() -> None:
         datefmt="%H:%M:%S",
     )
     logger.info(
-        "proactive worker starting (drain=%.0fs, purge=%.0fs)",
+        "proactive worker starting (drain=%.0fs, purge=%.0fs, poll=%.0fs)",
         args.drain_interval,
         args.purge_interval,
+        args.poll_interval,
     )
 
     try:
@@ -171,6 +210,7 @@ async def main() -> None:
     tasks = [
         asyncio.create_task(_drain_loop(args.drain_interval)),
         asyncio.create_task(_purge_loop(args.purge_interval)),
+        asyncio.create_task(_poll_loop(args.poll_interval)),
     ]
     port_raw = os.environ.get("PORT")
     if port_raw:
