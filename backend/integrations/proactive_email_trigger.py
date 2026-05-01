@@ -84,8 +84,11 @@ def _format_trigger_prompt(msg: NormalizedGmailMessage, signals: list[str]) -> s
     return (
         "[SYSTEM TRIGGER: proactive_email]\n"
         "A new email arrived that may be worth surfacing to the user. "
-        "Decide whether to ping them. Use stay_silent if the email is not "
-        "actually surface-worthy on a second look.\n\n"
+        "Decide whether to ping them. If the email is not actually "
+        "surface-worthy on a second look, SKIP THIS FIRE: do not call "
+        "send_burst, just end the turn. NEVER substitute a generic "
+        "check-in like 'what's on your mind' or 'hey' — silence is "
+        "correct when the email does not warrant a ping.\n\n"
         f"From: {msg.from_name or ''} <{msg.from_address}>\n"
         f"Subject: {msg.subject or ''}\n"
         f"Importance signals: {', '.join(signals) or 'none'}\n\n"
@@ -125,7 +128,9 @@ async def _run_legacy_brain_path(
 
     from donna_runtime.config import DonnaAgentConfig
 
-    cfg = DonnaAgentConfig(mode="proactive", user_id=user_id)
+    # Workers don't share filesystem with the API container, so SDK session
+    # resume across services is impossible — see firing.py:fire_attention_via_brain.
+    cfg = DonnaAgentConfig(mode="proactive", user_id=user_id, stateless_sessions=True)
     prompt = _format_trigger_prompt(msg, score.signals)
     state = {
         "user_id": user_id,

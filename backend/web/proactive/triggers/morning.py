@@ -136,9 +136,12 @@ def _build_prompt(profile: dict) -> str:
         for w in watch_lines[:4]:
             parts.append(f"- {w}")
     parts.append(
-        "fire ONE short proactive message in donna's voice. anchor on the watch. "
-        "no inventory of everything; pick the ONE thing that matters this morning. "
-        "if there's nothing meaningful to say, end the turn with stay_silent."
+        "fire ONE short proactive message in donna's voice via send_burst. "
+        "anchor on the watch. no inventory of everything; pick the ONE thing "
+        "that matters this morning. if there's nothing meaningful to say, "
+        "SKIP THIS FIRE: do not call send_burst, just end the turn. NEVER "
+        "substitute a generic check-in like 'what's on your mind' or 'hey' — "
+        "silence is correct when there's no real signal to anchor on."
     )
     return "\n".join(parts)
 
@@ -253,7 +256,14 @@ async def maybe_fire_morning_check_in(
         return MorningTriggerDecision(fired=False, reason="cold_start")
 
     prompt = _build_prompt(profile)
-    cfg = DonnaAgentConfig(mode="proactive", user_id=user_id, user_phone=user_phone)
+    # Synthesis worker has its own filesystem; SDK session resume across
+    # containers is impossible — see firing.py:fire_attention_via_brain.
+    cfg = DonnaAgentConfig(
+        mode="proactive",
+        user_id=user_id,
+        user_phone=user_phone,
+        stateless_sessions=True,
+    )
     state: dict[str, Any] = {
         "user_id": user_id,
         "raw_input": prompt,

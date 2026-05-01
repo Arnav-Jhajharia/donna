@@ -92,24 +92,22 @@ async def user_with_signals() -> str:
 
 @pytest.mark.asyncio
 async def test_drain_marks_signals_consumed(monkeypatch, user_with_signals):
-    """After drain runs, the signals are marked consumed regardless of
-    whether the runner judged them sendable."""
+    """After drain runs, all signals are marked consumed regardless of
+    judge verdict."""
     from backend.web.proactive.triggers import drain as d
 
-    # Stub run_proactive_tick to a no-op
-    from backend.web.proactive.runner import ProactiveTickResult
+    # Stub judge_results to silence everything (so we don't hit Anthropic
+    # in tests). With no greenlit verdicts, deliver_drafts also does
+    # nothing meaningful.
+    from backend.web.proactive.judge import JudgeVerdict
 
-    async def fake_tick(**kw):
-        return ProactiveTickResult(
-            user_id=kw["user_id"],
-            moves_emitted=[],
-            moves_dropped=[],
-            results=[],
-            verdicts=[],
-            elapsed_ms=0,
-        )
+    async def fake_judge(*, context, results):
+        return [
+            (r, JudgeVerdict(decision="silence", reason="test stub"))
+            for r in results
+        ]
 
-    monkeypatch.setattr(d, "run_proactive_tick", fake_tick)
+    monkeypatch.setattr(d, "judge_results", fake_judge)
 
     decision = await maybe_drain_signals(
         user_id=user_with_signals,
