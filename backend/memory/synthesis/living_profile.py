@@ -197,6 +197,7 @@ async def _load_recent_chat_lines(
                 await session.execute(
                     select(ChatMessage)
                     .where(ChatMessage.user_id == user_id)
+                    .where(ChatMessage.is_shadow.is_(False))
                     .where(ChatMessage.created_at >= since)
                     .order_by(ChatMessage.created_at.desc())
                     .limit(max_messages)

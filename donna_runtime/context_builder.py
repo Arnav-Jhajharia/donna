@@ -764,6 +764,7 @@ async def _safe_recent_chat(
                 await session.execute(
                     select(ChatMessage)
                     .where(ChatMessage.user_id == user_id)
+                    .where(ChatMessage.is_shadow.is_(False))
                     .order_by(ChatMessage.created_at.desc())
                     .limit(_MAX_RECENT_CHAT)
                 )

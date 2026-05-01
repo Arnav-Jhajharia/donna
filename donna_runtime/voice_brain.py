@@ -96,6 +96,7 @@ async def _recent_history(user_id: str, limit: int = _HISTORY_TURNS * 2) -> list
             stmt = (
                 select(ChatMessage)
                 .where(ChatMessage.user_id == user_id)
+                .where(ChatMessage.is_shadow.is_(False))
                 .order_by(ChatMessage.created_at.desc())
                 .limit(limit)
             )

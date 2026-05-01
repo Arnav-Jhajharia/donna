@@ -135,3 +135,50 @@ async def test_live_mode_writes_chat_message_with_is_shadow_false(
         ).scalars().all()
     assert len(rows) == 1
     assert rows[0].is_shadow is False
+
+
+@pytest.mark.asyncio
+async def test_shadow_rows_filterable_by_is_shadow_false(fresh_user):
+    """Regression: brain/synth readers must be able to exclude shadow rows.
+
+    Locks in the contract that ``ChatMessage.is_shadow.is_(False)`` filters
+    out shadow drafts. Without this filter the reactive brain, voice brain,
+    dashboard snapshot, Living Profile synth, and temporal brief synth all
+    leak Donna's phantom shadow turns into context.
+    """
+    now = _utcnow_naive()
+    async with async_session() as session:
+        session.add(
+            ChatMessage(
+                user_id=fresh_user,
+                role="user",
+                content="real user message",
+                is_shadow=False,
+                is_proactive=False,
+                created_at=now,
+            )
+        )
+        session.add(
+            ChatMessage(
+                user_id=fresh_user,
+                role="assistant",
+                content="phantom shadow draft",
+                is_shadow=True,
+                is_proactive=True,
+                created_at=now,
+            )
+        )
+        await session.commit()
+
+    async with async_session() as session:
+        rows = (
+            await session.execute(
+                select(ChatMessage)
+                .where(ChatMessage.user_id == fresh_user)
+                .where(ChatMessage.is_shadow.is_(False))
+            )
+        ).scalars().all()
+
+    assert len(rows) == 1
+    assert rows[0].content == "real user message"
+    assert rows[0].is_shadow is False
