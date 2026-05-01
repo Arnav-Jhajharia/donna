@@ -162,9 +162,126 @@ class UserElicitationFetcher:
         return [{"question": params.get("question", ""), "expected_shape": params.get("expected_shape", "text")}]
 
 
+class ExaWebFetcher:
+    """Real fetcher for web-shaped attention sources.
+
+    Replaces the StubFetcher fixture path for SourceType.WEB_EXA,
+    WEB_GOOGLE_NEWS, WEB_HN, WEB_REDDIT, WEB_X_TWITTER, WEB_RSS,
+    WEB_SUBSTACK, WEB_PRODUCTHUNT, WEB_YOUTUBE, WEB_GITHUB_TRENDING,
+    WEB_GITHUB_REPO, WEB_ARXIV, WEB_DOMAIN, WEB_PODCAST_TRANSCRIPT,
+    WEB_SEARCH_GOOGLE.
+
+    All of these used to return canned data via StubFetcher. They now
+    call ``backend.web.client.exa_search`` with the source's ``query``
+    param. The Source.type effectively becomes a hint we mostly ignore -
+    Exa's neural index covers all of these flavors. We pass the search
+    category when it maps cleanly (news for WEB_GOOGLE_NEWS, code for
+    WEB_GITHUB_*).
+    """
+
+    _CATEGORY_BY_TYPE: dict[SourceType, str] = {
+        SourceType.WEB_GOOGLE_NEWS: "news",
+        SourceType.WEB_X_TWITTER: "tweet",
+        SourceType.WEB_GITHUB_REPO: "github",
+        SourceType.WEB_GITHUB_TRENDING: "github",
+        SourceType.WEB_ARXIV: "research paper",
+        SourceType.WEB_PODCAST_TRANSCRIPT: "podcast",
+    }
+
+    def fetch(self, source: Source, user_id: str | None) -> list[dict[str, Any]]:
+        params = source.params or {}
+        query = (params.get("query") or "").strip()
+        if not query:
+            return []
+        # The fetcher Protocol is sync but exa_search is async. Run a
+        # short event loop; this matches CalendarFetcher's pattern of
+        # adapting async code to the sync proposer surface.
+        import asyncio
+        from backend.web.client import exa_search, have_exa_key
+
+        if not have_exa_key():
+            return []
+
+        num_results = int(params.get("num_results") or 10)
+        category = self._CATEGORY_BY_TYPE.get(source.type)
+        # Domain restriction passes through where the spec set one.
+        include_domains = params.get("include_domains")
+        max_age_hours = params.get("max_age_hours")
+
+        async def _run() -> dict[str, Any]:
+            return await exa_search(
+                query,
+                num_results=num_results,
+                search_type="auto",
+                category=category if category in {"news", "company", "people", "code"} else None,
+                include_domains=include_domains if isinstance(include_domains, list) else None,
+                max_age_hours=int(max_age_hours) if max_age_hours else None,
+            )
+
+        try:
+            res = asyncio.run(_run())
+        except RuntimeError:
+            # Already in an event loop - rare in the sync proposer
+            # surface, but defensively run in a thread.
+            import concurrent.futures
+            with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                future = pool.submit(asyncio.run, _run())
+                res = future.result(timeout=15)
+        except Exception:
+            logger.exception("ExaWebFetcher failed for %s", source.type.value)
+            return []
+
+        items = res.get("results") if isinstance(res, dict) else None
+        if not isinstance(items, list):
+            return []
+        normalized: list[dict[str, Any]] = []
+        for item in items:
+            if not isinstance(item, dict):
+                continue
+            url = str(item.get("url") or "").strip()
+            if not url:
+                continue
+            highlights = item.get("highlights") or []
+            snippet = ""
+            if isinstance(highlights, list) and highlights:
+                snippet = " | ".join(str(h).strip() for h in highlights[:2])
+            elif item.get("text"):
+                snippet = str(item.get("text"))[:300]
+            normalized.append({
+                "title": item.get("title") or url,
+                "url": url,
+                "snippet": snippet,
+                "publishedDate": item.get("publishedDate"),
+                "source_type": source.type.value,
+            })
+        return normalized
+
+
+_EXA_FETCHER = ExaWebFetcher()
+
+_WEB_SOURCE_TYPES = (
+    SourceType.WEB_EXA,
+    SourceType.WEB_GOOGLE_NEWS,
+    SourceType.WEB_HN,
+    SourceType.WEB_REDDIT,
+    SourceType.WEB_X_TWITTER,
+    SourceType.WEB_PRODUCTHUNT,
+    SourceType.WEB_YOUTUBE,
+    SourceType.WEB_SUBSTACK,
+    SourceType.WEB_PODCAST_TRANSCRIPT,
+    SourceType.WEB_RSS,
+    SourceType.WEB_GITHUB_TRENDING,
+    SourceType.WEB_GITHUB_REPO,
+    SourceType.WEB_ARXIV,
+    SourceType.WEB_DOMAIN,
+    SourceType.WEB_SEARCH_GOOGLE,
+)
+
+
 _REGISTRY: dict[SourceType, Fetcher] = {
     SourceType.CALENDAR_EVENTS: CalendarFetcher(),
     SourceType.USER_ELICITATION: UserElicitationFetcher(),
+    **{t: _EXA_FETCHER for t in _WEB_SOURCE_TYPES},
 }
 _DEFAULT_FETCHER: Fetcher = StubFetcher()
 

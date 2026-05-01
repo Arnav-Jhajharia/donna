@@ -26,10 +26,23 @@ def test_empty_fixture_emits_warning():
 
 
 @pytest.mark.unit
-def test_fetcher_registry_defaults_to_stub():
-    # A non-registered source type resolves to the default stub fetcher.
-    fetcher = fetcher_for(SourceType.WEB_HN)
-    assert isinstance(fetcher, StubFetcher)
+def test_fetcher_registry_routes_web_sources_to_exa():
+    # All web-shaped source types now resolve to the real ExaWebFetcher
+    # (which hits the network when EXA_API_KEY is set). Truly-unhandled
+    # source types still fall through to StubFetcher.
+    from donna.attention.dry_run import ExaWebFetcher
+
+    web_fetcher = fetcher_for(SourceType.WEB_HN)
+    assert isinstance(web_fetcher, ExaWebFetcher)
+
+    exa_fetcher = fetcher_for(SourceType.WEB_EXA)
+    assert isinstance(exa_fetcher, ExaWebFetcher)
+
+    # Attention-internal types that aren't web-shaped and aren't
+    # explicitly registered (e.g. INTERNAL_EPISODES) still fall through
+    # to the stub.
+    internal = fetcher_for(SourceType.INTERNAL_EPISODES)
+    assert isinstance(internal, StubFetcher)
 
 
 @pytest.mark.unit
