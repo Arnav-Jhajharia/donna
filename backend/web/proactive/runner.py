@@ -221,9 +221,9 @@ async def run_proactive_tick(
     verdicts = await judge_results(context=context, results=results)
 
     # For each greenlit verdict bump the daily counter first, then mark
-    # the dedup ledger. Bump-first means a failure between the two writes
-    # leaves both unwound on the next tick (we re-dedup, re-bump together).
-    # Silenced moves burn neither.
+    # the dedup ledger. Bump-first means a partial failure (bump succeeded,
+    # mark failed) double-counts the daily budget rather than letting the
+    # same intent re-fire next tick. Silenced moves burn neither.
     now_ts = time.time()
     # Bump daily counter for every send verdict. Today's date in
     # server-local time is good enough for accounting; per-user-tz
@@ -231,9 +231,17 @@ async def run_proactive_tick(
     daily_repo = DailyCountRepo()
     local_date = datetime.now().strftime("%Y-%m-%d")
     for r, v in verdicts:
-        if v.decision == "send":
+        if v.decision != "send":
+            continue
+        try:
             await daily_repo.bump(user_id, local_date, by=1)
             await ledger.mark_async(user_id, r.move.dedup_key, now=now_ts)
+        except Exception:
+            logger.exception(
+                "run_proactive_tick: bump/mark failed user=%s dedup_key=%s",
+                user_id[:8],
+                r.move.dedup_key,
+            )
 
     if delivery_mode in {"shadow", "live"}:
         from backend.web.proactive.delivery import deliver_drafts
