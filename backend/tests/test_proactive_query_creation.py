@@ -275,3 +275,22 @@ def test_format_context_omits_blank_sections():
     assert "## Situation Brief" not in block
     assert "## Recent thread" not in block
     assert "Current local time" in block
+
+
+def test_proactive_context_default_trigger_is_manual():
+    from backend.web.proactive.types import ProactiveContext
+    ctx = ProactiveContext(user_id="u_x")
+    assert ctx.trigger == "manual"
+
+
+def test_proactive_move_hypothesis_fields_default_to_empty_string():
+    from backend.web.proactive.types import ProactiveMove
+    move = ProactiveMove(
+        rationale="r",
+        tool="search",
+        query="q",
+        dedup_key="dk",
+    )
+    assert move.hypothesis == ""
+    assert move.user_signal == ""
+    assert move.payoff_if_hit == ""
