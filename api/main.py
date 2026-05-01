@@ -329,8 +329,9 @@ def _api_owns_inprocess_workers() -> bool:
     True when ``DONNA_PROCESS_ROLE`` is unset or ``api`` — the dev / single-pod
     convention where one process does everything. False when the role is
     explicitly one of the worker roles (``synthesis``, ``attention``,
-    ``reminders``) — in production those run as standalone scripts via
-    ``scripts/run_*_worker.py`` and the API must NOT double-spawn them.
+    ``reminders``, ``proactive``) — in production those run as standalone
+    scripts via ``scripts/run_*_worker.py`` and the API must NOT double-spawn
+    them.
     """
     role = (os.environ.get("DONNA_PROCESS_ROLE") or "").strip().lower()
     return role in ("", "api")
