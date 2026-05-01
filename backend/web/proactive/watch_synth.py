@@ -17,10 +17,10 @@ from dataclasses import dataclass
 from typing import Any
 
 from pydantic import BaseModel, Field
-from sqlalchemy import select
+from sqlalchemy import desc, select
 
 from backend.memory.retrieval.structured import call_structured
-from db.models import User
+from db.models import ChatMessage, Observation, OpenLoop, User
 from db.session import async_session
 
 logger = logging.getLogger(__name__)
@@ -54,13 +54,20 @@ You output 0-5 watch topics. Each watch must come from a DISTINCT angle:
 
 Each watch has three fields:
 
-- description: a SEARCH-SHAPED string, named entities or proper nouns
-  preferred. Examples: "Anthropic Claude API new features", "YC W26
-  batch AI sales SaaS launches", "Antler SG batch 13 announcements".
-  NOT internal hooks like "did user hit deploy on time" or "check on
-  user's stomach health". Donna will hand this string to Exa as a
-  webset query - if the string would not return useful pages on Google,
-  do not emit it.
+- description: a SEARCH-SHAPED string. Hard rules:
+    * Sentence-shaped, not a keyword bag. Exa runs neural search; it
+      wants natural-language phrasing.
+    * Named entities or proper nouns are required when the inputs
+      mention them. "Poke updates and product launches" beats
+      "personal AI agents". "Anthropic Claude API outages and pricing
+      changes" beats "Claude API reliability updates SDKs".
+    * No duplicated terms. No comma-bag of keywords.
+    * Mine the recent chat and observations for ACTUAL named entities
+      the user has mentioned. Specific names beat category labels.
+    * NOT internal hooks like "did user hit deploy on time" or "check
+      on user's stomach health". Donna will hand this string to Exa as
+      a webset query - if the string would not return useful pages on
+      Google, do not emit it.
 
 - rationale: 1 sentence quoting or paraphrasing the SPECIFIC signal in
   the inputs that justifies the watch. Example: "user mentioned in
@@ -144,8 +151,19 @@ class DerivedWatch:
     angle: str
 
 
-def _format_living_profile(profile: dict) -> str:
-    """Render the slice of Living Profile the deriver actually reads."""
+def _format_living_profile(
+    profile: dict,
+    *,
+    recent_user_chats: list[str] | None = None,
+    observations: list[str] | None = None,
+    open_loops: list[str] | None = None,
+) -> str:
+    """Render Living Profile + recent raw signals for the deriver.
+
+    Living Profile is a lossy summary; the deriver also gets recent
+    chat snippets and observations so it can mine actual named entities
+    the user has mentioned.
+    """
     parts: list[str] = []
 
     narrative = (profile.get("narrative") or "").strip()
@@ -191,12 +209,38 @@ def _format_living_profile(profile: dict) -> str:
         if rendered:
             parts.append(f"## Running themes\n{rendered}")
 
+    if recent_user_chats:
+        rendered = "\n".join(
+            f"- {c[:240]}" for c in recent_user_chats[:25] if c.strip()
+        )
+        if rendered:
+            parts.append(
+                "## Recent user-side chat (mine these for named entities)\n"
+                + rendered
+            )
+
+    if observations:
+        rendered = "\n".join(
+            f"- {o[:200]}" for o in observations[:12] if o.strip()
+        )
+        if rendered:
+            parts.append("## Recent observations\n" + rendered)
+
+    if open_loops:
+        rendered = "\n".join(
+            f"- {l[:200]}" for l in open_loops[:8] if l.strip()
+        )
+        if rendered:
+            parts.append("## Open loops\n" + rendered)
+
     if not parts:
         parts.append("(empty profile)")
 
     parts.append(
         "Decide what (if anything) Donna should subscribe to on the external "
-        "web for this user. Return 0-5 watches. Empty is valid."
+        "web for this user. Return 0-5 watches. Empty is valid. Prefer "
+        "named entities you can see in the chat / observations / open loops "
+        "over abstract category labels."
     )
     return "\n\n".join(parts)
 
@@ -232,13 +276,63 @@ async def derive_external_watches(
         u = (
             await session.execute(select(User).where(User.id == user_id))
         ).scalar_one_or_none()
-    if u is None:
-        return []
-    profile = dict(u.living_profile or {})
-    if not profile:
+        if u is None:
+            return []
+        profile = dict(u.living_profile or {})
+
+        chat_rows = (
+            await session.execute(
+                select(ChatMessage.content)
+                .where(
+                    ChatMessage.user_id == user_id,
+                    ChatMessage.role == "user",
+                    ChatMessage.is_shadow.is_(False),
+                )
+                .order_by(desc(ChatMessage.created_at))
+                .limit(30)
+            )
+        ).all()
+        recent_chats = [str(r[0] or "").strip() for r in chat_rows]
+        recent_chats = [c for c in recent_chats if c]
+
+        obs_rows = (
+            await session.execute(
+                select(Observation)
+                .where(Observation.user_id == user_id)
+                .order_by(desc(Observation.event_time))
+                .limit(15)
+            )
+        ).scalars().all()
+        observations: list[str] = []
+        for o in obs_rows:
+            raw = (o.raw or "").strip()
+            if raw:
+                observations.append(f"[{o.type}] {raw}")
+                continue
+            fields_summary = ", ".join(f"{k}={v}" for k, v in (o.fields or {}).items() if v)
+            if fields_summary:
+                observations.append(f"[{o.type}] {fields_summary}")
+
+        loop_rows = (
+            await session.execute(
+                select(OpenLoop.content)
+                .where(OpenLoop.user_id == user_id, OpenLoop.status == "active")
+                .order_by(desc(OpenLoop.created_at))
+                .limit(10)
+            )
+        ).all()
+        open_loops_text = [str(r[0] or "").strip() for r in loop_rows]
+        open_loops_text = [l for l in open_loops_text if l]
+
+    if not profile and not recent_chats and not observations:
         return []
 
-    user_block = _format_living_profile(profile)
+    user_block = _format_living_profile(
+        profile,
+        recent_user_chats=recent_chats,
+        observations=observations,
+        open_loops=open_loops_text,
+    )
     try:
         result = await call_structured(
             model=model,
