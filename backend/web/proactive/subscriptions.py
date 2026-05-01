@@ -19,6 +19,11 @@ from datetime import datetime, timezone
 
 from sqlalchemy import select
 
+from backend.web.client import (
+    exa_monitor_create,
+    exa_webset_create,
+    have_exa_key,
+)
 from db.models import ProactiveSubscription, User
 from db.session import async_session
 
@@ -159,3 +164,80 @@ async def reconcile_subscriptions(
         deactivated=deactivated,
         skipped_over_budget=skipped,
     )
+
+
+# ---------------------------------------------------------------------------
+# provision (Exa)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ProvisionSummary:
+    """Result of one ``provision_pending_websets`` pass."""
+
+    user_id: str
+    provisioned: int
+    failed: int
+
+
+async def provision_pending_websets(user_id: str) -> ProvisionSummary:
+    """For each active subscription with webset_id IS NULL, create the
+    Exa webset and attach a monitor. Persists the IDs back to the row.
+
+    No-op when EXA_API_KEY is missing — the Exa client refuses to call.
+    Failures are logged and counted; the row is left pending so the next
+    reconcile pass retries.
+    """
+    if not have_exa_key():
+        logger.info(
+            "provision_pending_websets: no EXA_API_KEY, skipping user=%s",
+            user_id[:8] if user_id else "?",
+        )
+        return ProvisionSummary(user_id, provisioned=0, failed=0)
+
+    provisioned = 0
+    failed = 0
+    async with async_session() as session:
+        rows = list(
+            (
+                await session.execute(
+                    select(ProactiveSubscription).where(
+                        ProactiveSubscription.user_id == user_id,
+                        ProactiveSubscription.active.is_(True),
+                        ProactiveSubscription.webset_id.is_(None),
+                    )
+                )
+            ).scalars()
+        )
+
+        for row in rows:
+            try:
+                webset = await exa_webset_create(
+                    row.description,
+                    count=10,
+                )
+                webset_id = str(webset.get("id") or "").strip()
+                if not webset_id:
+                    raise RuntimeError("webset response missing id")
+                monitor = await exa_monitor_create(
+                    webset_id=webset_id,
+                    cadence=row.cadence or "daily",
+                    behavior="search",
+                )
+                monitor_id = str(monitor.get("id") or "").strip()
+                row.webset_id = webset_id
+                row.monitor_id = monitor_id or None
+                row.last_refreshed_at = _utcnow_naive()
+                provisioned += 1
+            except Exception:
+                logger.exception(
+                    "provision_pending_websets failed user=%s intent=%s",
+                    user_id[:8] if user_id else "?",
+                    row.intent_key,
+                )
+                failed += 1
+                continue
+
+        await session.commit()
+
+    return ProvisionSummary(user_id, provisioned=provisioned, failed=failed)

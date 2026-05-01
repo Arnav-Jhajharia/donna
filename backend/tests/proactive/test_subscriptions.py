@@ -135,3 +135,52 @@ async def test_reconcile_enforces_budget_lru(user_with_watches):
     summary = await reconcile_subscriptions(user_with_watches, max_active=1)
     assert summary.created == 1
     assert summary.skipped_over_budget == 1
+
+
+@pytest.mark.asyncio
+async def test_provision_pending_websets_calls_exa_and_persists_ids(
+    monkeypatch, user_with_watches
+):
+    """Pending subs (webset_id IS NULL) get provisioned via Exa client."""
+    from backend.web.proactive import subscriptions as subs
+
+    calls: list[tuple[str, dict]] = []
+
+    async def fake_webset_create(query, **kw):
+        calls.append(("webset", {"query": query, **kw}))
+        return {"id": f"ws_{len(calls)}", "status": "pending"}
+
+    async def fake_monitor_create(*, webset_id, cadence, behavior, **kw):
+        calls.append(
+            ("monitor", {"websetId": webset_id, "cadence": cadence, "behavior": behavior})
+        )
+        return {"id": f"mon_{webset_id}", "status": "active"}
+
+    monkeypatch.setattr(subs, "exa_webset_create", fake_webset_create)
+    monkeypatch.setattr(subs, "exa_monitor_create", fake_monitor_create)
+    monkeypatch.setattr(subs, "have_exa_key", lambda: True)
+
+    await subs.reconcile_subscriptions(user_with_watches)
+    summary = await subs.provision_pending_websets(user_with_watches)
+    assert summary.provisioned == 2
+    assert summary.failed == 0
+    # 2 websets + 2 monitors
+    assert sum(1 for c in calls if c[0] == "webset") == 2
+    assert sum(1 for c in calls if c[0] == "monitor") == 2
+
+    # Re-running should be a no-op
+    summary2 = await subs.provision_pending_websets(user_with_watches)
+    assert summary2.provisioned == 0
+
+
+@pytest.mark.asyncio
+async def test_provision_pending_websets_no_op_without_exa_key(
+    monkeypatch, user_with_watches
+):
+    from backend.web.proactive import subscriptions as subs
+
+    monkeypatch.setattr(subs, "have_exa_key", lambda: False)
+    await subs.reconcile_subscriptions(user_with_watches)
+    summary = await subs.provision_pending_websets(user_with_watches)
+    assert summary.provisioned == 0
+    assert summary.failed == 0
