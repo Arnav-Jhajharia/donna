@@ -62,6 +62,32 @@ async def _fake_blurb(user_id: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# autouse: never let runner tests hit the real Postgres counter
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _stub_daily_count_repo(monkeypatch):
+    """Replace ``DailyCountRepo`` with a no-op in-memory fake for every
+    runner test. Tests that need to assert specific bumps should add their
+    own monkeypatch override (request.fixturenames for context) — this
+    fixture only prevents accidental live-DB writes when a runner test
+    yields a `send` verdict.
+    """
+
+    class _StubRepo:
+        async def get(self, user_id: str, local_date: str) -> int:
+            return 0
+
+        async def bump(
+            self, user_id: str, local_date: str, *, by: int = 1
+        ) -> int:
+            return by
+
+    monkeypatch.setattr(runner_mod, "DailyCountRepo", lambda: _StubRepo())
+
+
+# ---------------------------------------------------------------------------
 # build_context
 # ---------------------------------------------------------------------------
 
@@ -104,15 +130,6 @@ async def test_tick_full_flow_send_marks_ledger(monkeypatch):
     monkeypatch.setattr(runner_mod, "create_proactive_moves", fake_create)
     monkeypatch.setattr(runner_mod, "execute_moves", fake_exec)
     monkeypatch.setattr(runner_mod, "judge_results", fake_judge)
-
-    class _FakeRepo:
-        async def get(self, user_id, local_date):
-            return 0
-
-        async def bump(self, user_id, local_date, *, by=1):
-            return by
-
-    monkeypatch.setattr(runner_mod, "DailyCountRepo", lambda: _FakeRepo())
 
     ledger = InMemoryDedupStore()
     out = await run_proactive_tick(

@@ -194,23 +194,20 @@ async def run_proactive_tick(
     results = await execute_moves(outcome.accepted)
     verdicts = await judge_results(context=context, results=results)
 
-    # Mark dedup ledger for everything we're about to send. Silenced moves
-    # don't burn the slot — the user might benefit from a fresher take on
-    # the same intent next tick.
+    # For each greenlit verdict bump the daily counter first, then mark
+    # the dedup ledger. Bump-first means a failure between the two writes
+    # leaves both unwound on the next tick (we re-dedup, re-bump together).
+    # Silenced moves burn neither.
     now_ts = time.time()
-    # Bump daily counter for every send verdict. Local date is the
-    # caller's responsibility but we default to UTC YYYY-MM-DD when not
-    # provided — fine for accounting, tz drift here is harmless.
+    # Bump daily counter for every send verdict. Today's date in
+    # server-local time is good enough for accounting; per-user-tz
+    # accuracy can come later if needed (Donna already knows user tzs).
     daily_repo = DailyCountRepo()
-    local_date = (
-        last_proactive_at.split("T", 1)[0]
-        if isinstance(last_proactive_at, str) and "T" in last_proactive_at
-        else datetime.now().strftime("%Y-%m-%d")
-    )
+    local_date = datetime.now().strftime("%Y-%m-%d")
     for r, v in verdicts:
         if v.decision == "send":
-            await ledger.mark_async(user_id, r.move.dedup_key, now=now_ts)
             await daily_repo.bump(user_id, local_date, by=1)
+            await ledger.mark_async(user_id, r.move.dedup_key, now=now_ts)
 
     return ProactiveTickResult(
         user_id=user_id,
