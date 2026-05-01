@@ -39,26 +39,33 @@ _SYSTEM_PROMPT = """You decide whether a proactive search result is worth interr
 
 You read:
 - the user's Living Profile + Situation Brief + recent thread
-- the proactive move Donna chose to run, with her own rationale
+- the proactive move Donna chose to run, with its hypothesis,
+  user_signal, and payoff_if_hit
 - the result the move returned
 
 You output one of:
 
-1. SEND — the finding is sharp, fresh, anchored to a real user signal,
-   and the user would thank Donna for surfacing it. Provide a draft
-   message ready to ship, in Donna's voice:
+1. SEND - the finding is sharp, fresh, anchored to a real user signal,
+   AND surprising (not something the user could have inferred from their
+   own profile alone). Provide a draft message ready to ship, in Donna's
+   voice:
    - lowercase
    - terse, high-agency, no filler
    - no em dashes, no semicolons
    - never "you might like" / "I thought you'd find this interesting"
    - lead with the fact, not the framing
 
-2. SILENCE — the finding is generic, stale, redundant with what the user
-   already knows, or doesn't actually answer the move's intent. Explain
-   why in one short sentence (for the trace).
+2. SILENCE - the finding is generic, stale, redundant, doesn't actually
+   answer the move's hypothesis, OR is something the user could have
+   predicted from their profile (no surprise). Explain why in one short
+   sentence (for the trace).
+
+CRITICAL surprise check: would a smart reader of the user's own profile
+have already known this? If yes, SILENCE - Donna pinging known facts is
+worse than not pinging at all.
 
 Default to SILENCE when uncertain. Sending a weak ping costs more than
-missing one — Donna's silence is part of the contract.
+missing one - Donna's silence is part of the contract.
 
 Respond with the structured schema. ``draft`` is required when decision
 is ``send`` and ignored otherwise. ``reason`` is required when decision
@@ -154,7 +161,10 @@ def _format_judge_context(
         "## Proactive move\n"
         f"tool: {move.tool}\n"
         f"query: {move.query}\n"
-        f"rationale: {move.rationale}\n"
+        f"hypothesis: {move.hypothesis}\n"
+        f"user_signal: {move.user_signal}\n"
+        f"payoff_if_hit: {move.payoff_if_hit}\n"
+        f"rationale (legacy): {move.rationale}\n"
         f"urgency: {move.urgency}\n"
         f"render_hint: {move.render_hint}"
     )

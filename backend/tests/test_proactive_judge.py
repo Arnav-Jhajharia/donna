@@ -251,3 +251,49 @@ def test_summarize_payload_handles_none():
     res = ProactiveResult(move=_move(), status="ok", payload=None)
     summary = judge_mod._summarize_payload(res)
     assert summary == "(no payload)"
+
+
+# ---------------------------------------------------------------------------
+# surprise check (Task 12)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_judge_silences_when_finding_could_be_inferred_from_profile(
+    monkeypatch,
+):
+    """When the result is something the user could have predicted from their
+    profile alone (no surprise), judge silences."""
+    from backend.web.proactive import judge as j
+    from backend.web.proactive.types import (
+        ProactiveContext,
+        ProactiveMove,
+        ProactiveResult,
+    )
+
+    async def fake_call_structured(**kw):
+        from backend.web.proactive.judge import _JudgeOut
+        return _JudgeOut(
+            decision="silence",
+            reason="result is something user already infers from profile",
+        )
+
+    monkeypatch.setattr(j, "call_structured", fake_call_structured)
+
+    move = ProactiveMove(
+        rationale="r",
+        tool="search",
+        query="q",
+        dedup_key="dk",
+    )
+    result = ProactiveResult(
+        move=move,
+        status="ok",
+        payload={"results": [{"url": "https://x", "title": "obvious"}]},
+    )
+    verdict = await j.judge_result(
+        context=ProactiveContext(user_id="u"),
+        result=result,
+    )
+    assert verdict.decision == "silence"
+    assert "infer" in verdict.reason.lower()
