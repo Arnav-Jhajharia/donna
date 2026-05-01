@@ -72,12 +72,18 @@ export default function Hero({
   const { onCtaClick, href: ctaHref } = useWhatsAppCTA();
   const isDesktop = useIsDesktop();
   const videoRef = useRef<HTMLVideoElement>(null);
-  // Desktop gets the wide cinematic 16:9 (DONNA COMPUTER.mp4 → hero-desktop.mp4).
-  // Mobile keeps the original portrait-friendly hero1.mp4 framing. Each video
-  // ships a poster JPG (frame extracted from the same source) so slow networks
-  // see a representative still instead of black bg-ink while the bytes stream.
-  const videoSrc = isDesktop ? "/hero-desktop.mp4" : "/hero1.mp4";
-  const posterSrc = isDesktop ? "/hero-desktop-poster.jpg" : "/hero1-poster.jpg";
+  // Desktop gets the wide cinematic 16:9 (hero-desktop). Mobile keeps the
+  // original portrait-friendly hero1 framing. Both videos and their poster
+  // JPGs are served from Cloudinary with q_auto,f_auto so each browser
+  // gets the best codec (WebM in Chrome, MP4 in Safari) at an
+  // appropriate quality level. This keeps git + Vercel deploys lean.
+  const CLOUDINARY = "https://res.cloudinary.com/djwprq1uj";
+  const videoSrc = isDesktop
+    ? `${CLOUDINARY}/video/upload/q_auto,f_auto/hero-desktop_apspgi`
+    : `${CLOUDINARY}/video/upload/q_auto,f_auto/hero1_czjxs1`;
+  const posterSrc = isDesktop
+    ? `${CLOUDINARY}/image/upload/q_auto,f_auto/hero-desktop-poster_b2yclw`
+    : `${CLOUDINARY}/image/upload/q_auto,f_auto/hero1-poster_ulx2ik`;
 
   useEffect(() => {
     const v = videoRef.current;

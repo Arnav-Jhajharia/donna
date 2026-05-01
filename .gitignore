@@ -35,6 +35,11 @@ dashboard/**/.next-internal/
 dashboard/**/out/
 dashboard/**/.turbo/
 
+# Heavy media — host on Cloudinary (or other CDN), not git/Vercel
+dashboard/web/public/*.mp4
+dashboard/web/public/*.mov
+dashboard/web/public/*.webm
+
 # IDE / OS
 .DS_Store
 .idea/
