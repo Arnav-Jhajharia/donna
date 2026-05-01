@@ -95,8 +95,14 @@ async def reconcile_subscriptions(
     user_id: str,
     *,
     max_active: int = 5,
+    watches_override: list[str] | None = None,
 ) -> ReconcileSummary:
-    """Diff ``living_profile.watch_for_tomorrow`` against active subs.
+    """Diff watch list against active subs.
+
+    By default reads ``living_profile.watch_for_tomorrow`` (the legacy
+    morning-trigger field; usually shaped wrong for external search).
+    Pass ``watches_override`` to supply a list of search-shaped strings
+    instead - typically from ``watch_synth.derive_external_watches``.
 
     Creates rows for new watch lines (Exa provisioning is deferred to
     ``provision_pending_websets``). Deactivates rows whose intent_key no
@@ -120,9 +126,12 @@ async def reconcile_subscriptions(
             )
 
         profile = dict(user.living_profile or {})
-        watches = profile.get("watch_for_tomorrow") or []
-        if isinstance(watches, str):
-            watches = [watches]
+        if watches_override is not None:
+            watches = list(watches_override)
+        else:
+            watches = profile.get("watch_for_tomorrow") or []
+            if isinstance(watches, str):
+                watches = [watches]
         watch_lines = [str(w).strip() for w in watches if str(w).strip()]
         # Deterministic ordering: sort by intent_key so LRU eviction /
         # over-budget skipping is reproducible across CPython versions.
@@ -317,3 +326,49 @@ async def record_monitor_hit(payload: dict[str, Any]) -> int:
         )
         written += 1
     return written
+
+
+# ---------------------------------------------------------------------------
+# derive + reconcile in one shot
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class DeriveAndReconcileSummary:
+    """Result of a derive + reconcile pass with the derived watches inline.
+
+    Returned so callers (CLI, dashboards, manual smoke runs) can see what
+    Donna actually decided to watch and why.
+    """
+
+    user_id: str
+    derived_count: int
+    reconcile: ReconcileSummary
+    watches: list[Any]  # list[DerivedWatch] but kept loose to avoid circular import
+
+
+async def derive_and_reconcile(
+    user_id: str,
+    *,
+    max_active: int = 5,
+) -> DeriveAndReconcileSummary:
+    """Run the full fanout: Living Profile -> derived watches -> subs.
+
+    This is the entry point a worker / cron should call. It:
+      1. asks Haiku what to watch for THIS user RIGHT NOW (watch_synth)
+      2. reconciles those into proactive_subscriptions rows
+      3. returns the derived watches inline so the caller can log them
+    """
+    from backend.web.proactive.watch_synth import derive_external_watches
+
+    derived = await derive_external_watches(user_id, max_watches=max_active)
+    watch_strings = [w.description for w in derived]
+    summary = await reconcile_subscriptions(
+        user_id, max_active=max_active, watches_override=watch_strings
+    )
+    return DeriveAndReconcileSummary(
+        user_id=user_id,
+        derived_count=len(derived),
+        reconcile=summary,
+        watches=list(derived),
+    )
