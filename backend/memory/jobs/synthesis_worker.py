@@ -146,18 +146,19 @@ async def _run_one(
     now_local = _user_local_now(timezone_name)
     profile = living_profile or {}
 
+    full_just_ran = False
     if is_full_due(
         now_local=now_local, generated_at=profile.get("generated_at")
     ):
         try:
             await full_runner(user_id)
+            full_just_ran = True
         except Exception:
             logger.exception(
                 "synthesis_worker: full pass failed user=%s", user_id[:8]
             )
-        return
 
-    if is_morning_due(
+    if not full_just_ran and is_morning_due(
         now_local=now_local,
         yesterday_refreshed_at=profile.get("yesterday_refreshed_at"),
     ):
@@ -187,6 +188,23 @@ async def _run_one(
     except Exception:
         logger.exception(
             "synthesis_worker: morning trigger failed user=%s", user_id[:8]
+        )
+
+    # After Living Profile is fresh, reconcile per-user proactive
+    # subscriptions and provision Exa websets/monitors for any pending
+    # ones. This is the bridge from L0 (Living Profile) to L1
+    # (subscriptions) in the proactive web stack.
+    try:
+        from backend.web.proactive.subscriptions import (
+            provision_pending_websets,
+            reconcile_subscriptions,
+        )
+        await reconcile_subscriptions(user_id)
+        await provision_pending_websets(user_id)
+    except Exception:
+        logger.exception(
+            "synthesis_worker: subscriptions reconcile failed user=%s",
+            user_id[:8],
         )
 
 
