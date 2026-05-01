@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import logging
 import time
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
-from typing import Any
+from typing import Any, AsyncIterator
 
 from claude_agent_sdk import AssistantMessage, ResultMessage, SystemMessage, TextBlock, ToolUseBlock, query
 
@@ -29,34 +30,61 @@ from .tool_logic import send_burst_result, set_voice_filter_enabled
 from .tracing import TurnTrace
 
 
-async def donna_turn(user_message: str, config: DonnaAgentConfig | None = None) -> TurnTrace:
+async def donna_turn(
+    user_message: str,
+    config: DonnaAgentConfig | None = None,
+    *,
+    images: list[tuple[bytes, str]] | None = None,
+) -> TurnTrace:
     config = config or DonnaAgentConfig()
-    return await _donna_turn_core(user_message, config)
+    return await _donna_turn_core(user_message, config, images=images)
 
 
-async def traced_donna_turn(user_message: str, config: DonnaAgentConfig) -> TurnTrace:
-    inputs = {
+async def traced_donna_turn(
+    user_message: str,
+    config: DonnaAgentConfig,
+    *,
+    images: list[tuple[bytes, str]] | None = None,
+) -> TurnTrace:
+    image_summaries = _summarize_images(images)
+    inputs: dict[str, Any] = {
         "user_message": user_message,
         "model": config.model,
         "max_turns": config.max_turns,
         "resume_session_id": config.resume_session_id,
         "fork_session": config.fork_session,
         "user_id": config.user_id,
+        "image_count": len(images) if images else 0,
     }
+    if images:
+        # Send the actual content-block list to LangSmith so the run viewer
+        # renders the image alongside the wrapped text. LangSmith natively
+        # displays {"type": "image", "source": {...}} blocks.
+        inputs["multimodal_content"] = _build_multimodal_blocks(user_message, images)
+        inputs["images_summary"] = image_summaries
+    metadata: dict[str, Any] = {"component": "donna", "runtime": "claude-agent-sdk-query"}
+    if image_summaries:
+        metadata["image_mime_types"] = [s["mime_type"] for s in image_summaries]
+        metadata["image_total_bytes"] = sum(s["bytes"] for s in image_summaries)
     with trace_run(
         "donna.turn",
         "chain",
         inputs=inputs,
         project_name=config.langsmith_project,
         tags=config.langsmith_tags,
-        metadata={"component": "donna", "runtime": "claude-agent-sdk-query"},
+        metadata=metadata,
     ) as run_tree:
-        trace = await _donna_turn_core(user_message, config)
+        trace = await _donna_turn_core(user_message, config, images=images)
         end_run(run_tree, trace.to_langsmith_outputs())
         return trace
 
 
-async def _donna_turn_core(user_message: str, config: DonnaAgentConfig) -> TurnTrace:
+async def _donna_turn_core(
+    user_message: str,
+    config: DonnaAgentConfig,
+    *,
+    images: list[tuple[bytes, str]] | None = None,
+) -> TurnTrace:
     set_voice_filter_enabled(config.voice_filter_enabled)
     trace = TurnTrace(user_message)
     trace.record_resume_session_id(config.resume_session_id)
@@ -117,8 +145,13 @@ async def _donna_turn_core(user_message: str, config: DonnaAgentConfig) -> TurnT
                         fork_session=config.fork_session,
                         max_turns=config.max_turns,
                     )
+                    prompt_input: Any
+                    if images:
+                        prompt_input = _multimodal_prompt_stream(wrapped_prompt, images)
+                    else:
+                        prompt_input = wrapped_prompt
                     async with asyncio.timeout(config.request_timeout_s):
-                        async for message in query(prompt=wrapped_prompt, options=options):
+                        async for message in query(prompt=prompt_input, options=options):
                             _record_message(trace, message)
                     # Reactive turns must always reply, so plain-text → send_burst
                     # synthesis is the right safety net. Proactive turns can
@@ -165,6 +198,72 @@ async def _fallback_plain_text_to_send_burst(trace: TurnTrace) -> None:
     trace.record_tool_call("mcp__donna__send_burst", args, call_id)
     await send_burst_result(args)
     _fire_memory_hooks(trace, args)
+
+
+_MAX_IMAGE_BYTES = 5 * 1024 * 1024  # Anthropic per-image limit
+
+
+def _summarize_images(images: list[tuple[bytes, str]] | None) -> list[dict[str, Any]]:
+    """Light-weight stats per image — bytes, mime, sha256[:12]. No raw bytes."""
+    if not images:
+        return []
+    import hashlib
+    out: list[dict[str, Any]] = []
+    for raw, mime in images:
+        if not raw:
+            continue
+        out.append({
+            "bytes": len(raw),
+            "mime_type": mime or "image/jpeg",
+            "sha256_12": hashlib.sha256(raw).hexdigest()[:12],
+        })
+    return out
+
+
+def _build_multimodal_blocks(
+    wrapped_prompt: str,
+    images: list[tuple[bytes, str]],
+) -> list[dict[str, Any]]:
+    """Build the same content-block list the SDK sees, for LangSmith rendering."""
+    blocks: list[dict[str, Any]] = [{"type": "text", "text": wrapped_prompt}]
+    for raw, mime in images:
+        if not raw or len(raw) > _MAX_IMAGE_BYTES:
+            continue
+        blocks.append({
+            "type": "image",
+            "source": {
+                "type": "base64",
+                "media_type": mime or "image/jpeg",
+                "data": base64.b64encode(raw).decode("ascii"),
+            },
+        })
+    return blocks
+
+
+async def _multimodal_prompt_stream(
+    wrapped_prompt: str,
+    images: list[tuple[bytes, str]],
+) -> AsyncIterator[dict[str, Any]]:
+    """Yield one user-message dict carrying text + image content blocks.
+
+    The Claude Agent SDK's `query(prompt=...)` accepts an AsyncIterable of
+    message dicts when the input is multimodal. The CLI forwards each dict
+    straight to the Anthropic API, so the content list uses the native
+    image-block format: {"type": "image", "source": {...}}.
+    """
+    for raw, mime in images:
+        if raw and len(raw) > _MAX_IMAGE_BYTES:
+            logging.getLogger(__name__).warning(
+                "runner: skipping oversized image (%.1f MB > 5 MB cap)",
+                len(raw) / 1024 / 1024,
+            )
+    content = _build_multimodal_blocks(wrapped_prompt, images)
+    yield {
+        "type": "user",
+        "message": {"role": "user", "content": content},
+        "parent_tool_use_id": None,
+        "session_id": "default",
+    }
 
 
 @contextmanager

@@ -34,6 +34,7 @@ async def fanout(
     use_observations: bool = True,
     use_open_loops: bool = True,
     use_situation_brief: bool = True,
+    use_documents: bool = True,
 ) -> list[RetrievalResult]:
     tasks: list[asyncio.Task] = []
     hints = detect_structured_hints(original_message, queries)
@@ -65,6 +66,8 @@ async def fanout(
             tasks.append(asyncio.create_task(_search_sm(user_id, q, per_query_limit)))
         if use_graphiti:
             tasks.append(asyncio.create_task(_search_gt(user_id, q, per_query_limit)))
+        if use_documents:
+            tasks.append(asyncio.create_task(_search_docs(user_id, q, per_query_limit)))
     if not tasks:
         return []
     batched = await asyncio.gather(*tasks, return_exceptions=True)
@@ -202,29 +205,28 @@ async def _search_open_loops(
     limit: int,
 ) -> list[RetrievalResult]:
     try:
-        from sqlalchemy import or_, select
-
-        from backend.db.models import OpenLoop
         from backend.db.session import async_session
+        from backend.memory.tools._open_loop_view import read_open_loops_unified
     except Exception:
         logger.exception("fanout.open_loops imports failed")
         return []
 
     terms = query_terms(query)
+    if not hints.wants_open_loops and not terms:
+        return []
+    content_terms = None if hints.wants_open_loops else terms[:6]
     try:
         async with async_session() as session:
-            stmt = (
-                select(OpenLoop)
-                .where(OpenLoop.user_id == user_id)
-                .where(OpenLoop.status == "active")
-                .order_by(OpenLoop.created_at.desc())
-                .limit(max(limit, 10))
+            rows = await asyncio.wait_for(
+                read_open_loops_unified(
+                    session,
+                    user_id=user_id,
+                    statuses=("active",),
+                    limit=max(limit, 10),
+                    content_terms=content_terms,
+                ),
+                timeout=_LANE_TIMEOUT,
             )
-            if not hints.wants_open_loops:
-                if not terms:
-                    return []
-                stmt = stmt.where(or_(*(OpenLoop.content.ilike(f"%{t}%") for t in terms[:6])))
-            rows = (await asyncio.wait_for(session.execute(stmt), timeout=_LANE_TIMEOUT)).scalars().all()
     except asyncio.TimeoutError:
         return []
     except Exception:
@@ -317,6 +319,47 @@ async def _search_sm(user_id: str, query: str, limit: int) -> list[RetrievalResu
         for h in hits
         if h.id
     ]
+
+
+async def _search_docs(user_id: str, query: str, limit: int) -> list[RetrievalResult]:
+    """Documents lane — chunks of any user-uploaded PDF / image-extracted-text /
+    long-content ingest. Hits the Supermemory Documents endpoint (separate from
+    the Memories endpoint that ``_search_sm`` queries).
+
+    Without this lane, recall(auto) misses everything inside chunked documents
+    and the brain has to know to call ``recall_document_chunks`` separately —
+    which it usually doesn't.
+    """
+    try:
+        chunks = await asyncio.wait_for(
+            get_memory_client().search_document_chunks(user_id, query, limit=limit),
+            timeout=_LANE_TIMEOUT,
+        )
+    except asyncio.TimeoutError:
+        return []
+    except Exception:
+        logger.exception("fanout.docs failed")
+        return []
+    results: list[RetrievalResult] = []
+    for c in chunks:
+        if not c.content:
+            continue
+        # Stable id: doc + content hash so duplicate hits across query
+        # facets dedupe at rerank time.
+        chunk_id = f"doc:{c.doc_id or 'unknown'}:{_hash(c.content)}"
+        meta = dict(c.metadata or {})
+        meta.setdefault("doc_id", c.doc_id)
+        results.append(
+            RetrievalResult(
+                id=chunk_id,
+                source="documents",
+                content=c.content,
+                score=float(c.score or 0.0),
+                retrieved_via=query,
+                metadata=meta,
+            )
+        )
+    return results
 
 
 async def _search_gt(user_id: str, query: str, limit: int) -> list[RetrievalResult]:

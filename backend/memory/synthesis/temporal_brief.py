@@ -154,8 +154,9 @@ async def collect_temporal_evidence(
     """Load the timestamped Postgres state needed for temporal briefs."""
     from sqlalchemy import select
 
-    from backend.db.models import CalendarEntry, ChatMessage, DonnaSchedule, Observation, OpenLoop, User
+    from backend.db.models import CalendarEntry, ChatMessage, DonnaSchedule, Observation, User
     from backend.db.session import async_session
+    from backend.memory.tools._open_loop_view import read_open_loops_unified
 
     now_utc = _aware_utc(now or datetime.now(timezone.utc))
 
@@ -186,15 +187,12 @@ async def collect_temporal_evidence(
                 .limit(observation_limit)
             )
         ).scalars().all()
-        loop_rows = (
-            await session.execute(
-                select(OpenLoop)
-                .where(OpenLoop.user_id == user_id)
-                .where(OpenLoop.status == "active")
-                .order_by(OpenLoop.created_at.desc())
-                .limit(loop_limit)
-            )
-        ).scalars().all()
+        loop_rows = await read_open_loops_unified(
+            session,
+            user_id=user_id,
+            statuses=("active",),
+            limit=loop_limit,
+        )
         cal_rows = (
             await session.execute(
                 select(CalendarEntry)

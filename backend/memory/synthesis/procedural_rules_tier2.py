@@ -46,8 +46,9 @@ async def _collect_evidence(user_id: str) -> str:
     """Pull recent observations + open loops; render as compact text."""
     from sqlalchemy import select
 
-    from backend.db.models import Observation, OpenLoop
+    from backend.db.models import Observation
     from backend.db.session import async_session
+    from backend.memory.tools._open_loop_view import read_open_loops_unified
 
     since = datetime.now(timezone.utc) - timedelta(days=_LOOKBACK_DAYS)
     lines: list[str] = []
@@ -63,12 +64,10 @@ async def _collect_evidence(user_id: str) -> str:
         for o in obs_rows:
             lines.append(f"OBS[{o.type}] {o.fields}")
 
-        loop_rows = (
-            await session.execute(
-                select(OpenLoop).where(OpenLoop.user_id == user_id).limit(30)
-            )
-        ).scalars().all()
-        for l in loop_rows:
+        loops = await read_open_loops_unified(
+            session, user_id=user_id, limit=30
+        )
+        for l in loops:
             lines.append(f"LOOP[{l.status}] {l.content}")
     return "\n".join(lines) or "(no recent observations)"
 

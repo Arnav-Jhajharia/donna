@@ -32,7 +32,7 @@ async def list_calendar(
         from backend.db.models import CalendarEntry, User
         from backend.db.session import async_session
     except Exception:
-        return degraded("db unavailable")
+        return degraded("calendar's offline on my end. try again in a sec.")
     now = utcnow_naive()
     until = now + timedelta(days=within_days)
     try:
@@ -51,7 +51,7 @@ async def list_calendar(
             )
             rows = (await session.execute(stmt)).scalars().all()
     except Exception:
-        return degraded("db error")
+        return degraded("calendar's offline on my end. try again in a sec.")
     if not rows:
         return no_hits()
     return ok(

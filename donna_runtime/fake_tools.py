@@ -93,62 +93,14 @@ _CALENDAR = [
 # ---------------------------------------------------------------------------
 
 @tool(
-    "recall_episodic",
-    (
-        "Search episodic memory for past-conversation snippets. "
-        "Returns up to 5 dated snippets as plain text. "
-        "USE WHEN: the user references something Donna would only know from past turns "
-        "('did I tell you about X', 'was I nervous last time', 'what did luca say'). "
-        "DO NOT USE: for ambient filler ('haha', 'k'), for things the Living Profile or "
-        "current thread already answers, or for anything time-sensitive like today's calendar."
-    ),
-    {"query": str},
-)
-async def recall_episodic(args):
-    query = str(args.get("query", "")).strip().lower()
-    if not query:
-        return text_content("no matching memories found.")
-    # naive substring rank so it feels responsive to the query
-    scored = [(sum(1 for w in query.split() if w in snippet.lower()), ts, snippet)
-              for ts, snippet in _EPISODIC_SNIPPETS]
-    scored.sort(reverse=True)
-    hits = [(ts, s) for score, ts, s in scored if score > 0][:5]
-    if not hits:
-        hits = random.sample(_EPISODIC_SNIPPETS, 2)
-    body = "\n".join(f"[{ts}] {s}" for ts, s in hits)
-    return text_content(body)
-
-
-@tool(
-    "recall_graph",
-    (
-        "Search the user's knowledge graph for relational facts (people, decisions, "
-        "commitments). Returns up to 10 lines like 'subject -> relation -> object'. "
-        "USE WHEN: the user asks about relationships or roles ('who is luca', 'what's harp'), "
-        "or when composing a reply needs to anchor to known entities. "
-        "DO NOT USE: for episodic recall, for trackers, or when the Living Profile covers it."
-    ),
-    {"query": str},
-)
-async def recall_graph(args):
-    query = str(args.get("query", "")).strip().lower()
-    if not query:
-        return text_content("no graph hits.")
-    hits = [f for f in _GRAPH_FACTS if any(w in f for w in query.split())]
-    if not hits:
-        hits = _GRAPH_FACTS[:3]
-    return text_content("\n".join(f"- {h}" for h in hits[:10]))
-
-
-@tool(
     "smart_recall",
     (
         "Adaptive recall across episodic, graph, and document memory. Returns the top "
         "mixed hits. "
         "USE WHEN: you want the best answer without picking a source (vague questions, "
         "'what did we talk about'). "
-        "DO NOT USE: when the question is clearly episodic-only or graph-only — call those "
-        "directly. Never call after recall_episodic or recall_graph already ran this turn."
+        "DO NOT USE: when the question is clearly source-specific — pass purpose to recall "
+        "instead. Never call twice in one turn — use what you got."
     ),
     {"message": str},
 )
@@ -234,7 +186,7 @@ async def list_open_loops(args):
         "List upcoming calendar events (next 72h). Returns title, time, duration. "
         "USE WHEN: the user asks about their schedule, or a reply needs to reference what's "
         "coming up (pre-pitch nerves, conflicts). "
-        "DO NOT USE: for past events (use recall_episodic) or to create events (no tool yet)."
+        "DO NOT USE: for past events (use recall) or to create events (no tool yet)."
     ),
     {},
 )

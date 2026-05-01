@@ -25,7 +25,17 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
     """Run one turn of the SDK brain. Mutates state with _outbound and returns it."""
     raw = (state.get("raw_input") or "").strip()
     user_id = state.get("user_id") or "unknown"
-    logger.info("brain: turn for user=%s chars=%d", user_id[:8], len(raw))
+    images = _extract_inbound_images(state)
+    logger.info(
+        "brain: turn for user=%s chars=%d images=%d",
+        user_id[:8], len(raw), len(images),
+    )
+
+    # An image-only message (sticker, photo with no caption) is still a real
+    # turn — Donna should respond to what's in the image. Fall back to a
+    # neutral placeholder so the wrapped prompt is non-empty.
+    if not raw and images:
+        raw = "[image]"
 
     if not raw:
         state["_outbound"] = []
@@ -74,7 +84,7 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
     trace = None
     failed = False
     try:
-        trace = await traced_donna_turn(raw, cfg)
+        trace = await traced_donna_turn(raw, cfg, images=images or None)
 
         if resume_id and not trace.tool_calls and not buffer:
             logger.warning(
@@ -88,7 +98,7 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
             )
             buffer.clear()
             fresh_cfg = replace(cfg, resume_session_id=None, fork_session=False)
-            trace = await traced_donna_turn(raw, fresh_cfg)
+            trace = await traced_donna_turn(raw, fresh_cfg, images=images or None)
     except Exception as exc:
         logger.exception("brain: SDK loop failed for user=%s", user_id[:8])
         emit_error(where="brain.donna_turn", error=f"{type(exc).__name__}: {exc}")
@@ -124,3 +134,22 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
     state["_outbound"] = list(buffer)
     state["_turn_trace"] = trace
     return state
+
+
+def _extract_inbound_images(state: dict) -> list[tuple[bytes, str]]:
+    """Pull (bytes, mime) tuples for any image attachments on the inbound payload.
+
+    Today only one image rides per WhatsApp message, but the runner accepts a
+    list so multi-image platforms (web upload, future stacking) drop in.
+    """
+    payload = state.get("_ingress_payload")
+    if payload is None:
+        return []
+    image = getattr(payload, "image", None)
+    if image is None:
+        return []
+    raw = getattr(image, "file_bytes", None)
+    if not raw:
+        return []
+    mime = getattr(image, "mime_type", None) or "image/jpeg"
+    return [(raw, mime)]

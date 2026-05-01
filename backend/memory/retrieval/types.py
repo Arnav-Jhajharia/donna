@@ -10,6 +10,7 @@ Source = Literal[
     "observations",
     "open_loops",
     "situation_brief",
+    "documents",
 ]
 
 

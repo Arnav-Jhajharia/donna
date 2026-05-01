@@ -59,49 +59,6 @@ async def test_composio_search_tools_wrapper(stub_meta, with_user_id):
 
 
 @pytest.mark.asyncio
-async def test_composio_manage_connections_wrapper(stub_meta, with_user_id):
-    from donna_runtime.tools import composio_manage_connections
-
-    stub_meta.manage_response = {
-        "results": {
-            "gmail": {
-                "status": "INITIATED",
-                "redirect_url": "https://backend.composio.dev/g",
-            },
-        },
-    }
-    out = await composio_manage_connections.handler({"toolkits": ["gmail"]})
-    text = out["content"][0]["text"]
-    assert "https://backend.composio.dev/g" in text
-    assert stub_meta.calls[0][0] == "manage_connections"
-    assert stub_meta.calls[0][1] == {"user_id": "u1", "toolkits": ["gmail"]}
-
-
-@pytest.mark.asyncio
-async def test_composio_wait_for_connections_wrapper(stub_meta, with_user_id):
-    from donna_runtime.tools import composio_wait_for_connections
-
-    stub_meta.wait_response = {
-        "results": {
-            "gmail": {"status": "ACTIVE"},
-            "googlecalendar": {"status": "ACTIVE"},
-        },
-    }
-    out = await composio_wait_for_connections.handler({
-        "toolkits": ["gmail", "googlecalendar"],
-        "mode": "all",
-    })
-    text = out["content"][0]["text"]
-    assert "ACTIVE" in text
-    assert stub_meta.calls[0][1] == {
-        "user_id": "u1",
-        "toolkits": ["gmail", "googlecalendar"],
-        "mode": "all",
-        "timeout_seconds": 120,
-    }
-
-
-@pytest.mark.asyncio
 async def test_composio_execute_tool_wrapper(stub_meta, with_user_id):
     from donna_runtime.tools import composio_execute_tool
 

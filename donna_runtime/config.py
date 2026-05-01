@@ -44,8 +44,6 @@ ALLOWED_TOOLS = (
     "mcp__donna__read_gmail_thread",
     "mcp__donna__list_calendar",
     "mcp__donna__composio_search_tools",
-    "mcp__donna__composio_manage_connections",
-    "mcp__donna__composio_wait_for_connections",
     "mcp__donna__composio_execute_tool",
     "mcp__donna__update_dashboard",
     "mcp__donna__send_dashboard_link",

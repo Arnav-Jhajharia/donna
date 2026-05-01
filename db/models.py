@@ -469,6 +469,67 @@ class EmailMessage(Base):
     )
 
 
+class EmailIntelligence(Base):
+    """Haiku-enriched view of an inbound EmailMessage.
+
+    One row per important inbound email (importance gate lives in the
+    ``enrich_email`` hook). Drives the morning brief, the [INTEGRATIONS
+    SIGNALS] block's "drafts ready" count, and the dashboard's pending-
+    review surface.
+
+    Conservative agency: ``draft_text`` is *never* sent automatically.
+    ``user_action`` and ``sent_draft_at`` are populated only when the
+    user explicitly confirms via the dashboard tile or WhatsApp button.
+    """
+    __tablename__ = "email_intelligence"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), nullable=False
+    )
+    email_message_id: Mapped[str] = mapped_column(
+        String, ForeignKey("email_messages.id"), nullable=False
+    )
+    # Bucket the model emits. One of: reply_needed | fyi | scheduling |
+    # waiting_on_others | killable. Free-text on disk so the model can
+    # evolve without a migration; rendering layer normalizes unknowns.
+    classification: Mapped[str] = mapped_column(String, nullable=False)
+    urgency: Mapped[float] = mapped_column(Float, nullable=False, default=0.0)
+    key_points: Mapped[list[str]] = mapped_column(
+        JSONB, nullable=False, default=list
+    )
+    # Populated only when classification == 'reply_needed'.
+    draft_text: Mapped[str | None] = mapped_column(Text, nullable=True)
+    draft_confidence: Mapped[float | None] = mapped_column(Float, nullable=True)
+    recommended_action: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Cross-integration links the model surfaced. Shape:
+    # {"open_loop_ids": [...], "calendar_event_ids": [...], "thread_ids": [...]}
+    context_links: Mapped[dict] = mapped_column(
+        JSONB, nullable=False, default=dict
+    )
+    processed_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    # Conservative-agency fields. Both nullable until the user acts.
+    sent_draft_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    user_action: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    __table_args__ = (
+        Index(
+            "uq_email_intel_message",
+            "user_id", "email_message_id",
+            unique=True,
+        ),
+        Index("idx_email_intel_user_processed", "user_id", "processed_at"),
+        Index(
+            "idx_email_intel_user_unhandled",
+            "user_id", "processed_at",
+            postgresql_where=sa.text(
+                "sent_draft_at IS NULL AND user_action IS NULL"
+            ),
+        ),
+    )
+
+
 class DashboardManifest(Base):
     """Latest brain-emitted DashboardPlan for a user.
 

@@ -25,7 +25,7 @@ AMBIENT_FILLER = {
     "cool", "nice", "hmm", "thanks", "ty", "np",
 }
 
-MEMORY_TOOLS = {"recall_graph", "recall_episodic", "smart_recall"}
+MEMORY_TOOLS = {"recall", "smart_recall"}
 
 
 @dataclass(frozen=True)

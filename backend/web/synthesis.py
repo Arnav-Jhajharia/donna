@@ -28,7 +28,7 @@ from backend.web.types import WebAnswer, WebHit
 logger = logging.getLogger(__name__)
 
 _MODEL = "claude-haiku-4-5-20251001"
-_MAX_ANSWER_CHARS = 900
+_MAX_ANSWER_CHARS = 900ss
 _MAX_SOURCE_SNIPPET = 600
 
 

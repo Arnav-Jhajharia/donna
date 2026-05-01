@@ -175,7 +175,23 @@ async def can_fire_proactive(
     sleep_at = _parse_hhmm(sleep_raw)
     wake_at = _parse_hhmm(wake_raw)
     if sleep_at and wake_at:
-        if _in_quiet_window(now.time(), sleep_at, wake_at):
+        # Convert UTC ``now`` to the user's local time-of-day before
+        # comparing. Without this, users far from UTC saw the quiet
+        # window shifted by their offset (e.g. an Asia/Singapore user
+        # hit ``quiet:00:00-07:00`` during their midday).
+        tz_name = await _load_user_timezone(user_id)
+        now_local_t = now.time()
+        if tz_name:
+            try:
+                from zoneinfo import ZoneInfo
+                now_local_t = (
+                    now.replace(tzinfo=timezone.utc)
+                    .astimezone(ZoneInfo(tz_name))
+                    .time()
+                )
+            except Exception:
+                pass
+        if _in_quiet_window(now_local_t, sleep_at, wake_at):
             return FireDecision(
                 allowed=False,
                 reason=f"quiet:{sleep_raw}-{wake_raw}",

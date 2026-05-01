@@ -39,6 +39,29 @@ def phone_info(phone: str) -> tuple[str, str]:
     return "Asia/Singapore", ""
 
 
+async def _write_welcome_manifest(
+    *, user_id: str, name: str | None, timezone_name: str | None
+) -> None:
+    """Seed a Day-1 dashboard so the first link doesn't 404.
+
+    Best-effort: any failure is logged and swallowed — the brain still
+    runs, the user still gets a reply, the dashboard just falls back to
+    the empty state until ``update_dashboard`` lands a real plan.
+    """
+    try:
+        from backend.dashboard.store import upsert_manifest
+        from backend.dashboard.welcome import build_welcome_plan
+
+        plan = build_welcome_plan(
+            user_id=user_id, name=name, timezone_name=timezone_name
+        )
+        await upsert_manifest(user_id, plan, trigger="welcome")
+    except Exception:
+        logger.exception(
+            "user_lookup: failed to seed welcome manifest user_id=%s", user_id
+        )
+
+
 def state_from_payload(payload: IngressPayload) -> dict:
     """Flat state dict consumed by user_lookup + ingress.node.enrich + brain.donna_turn."""
     return {
@@ -103,6 +126,11 @@ async def user_lookup(state: dict) -> dict:
             await session.commit()
             await session.refresh(user)
             is_first_message = True
+            await _write_welcome_manifest(
+                user_id=user.id,
+                name=user.name or profile_name,
+                timezone_name=user.timezone,
+            )
 
     if not is_first_message:
         async with async_session() as session:

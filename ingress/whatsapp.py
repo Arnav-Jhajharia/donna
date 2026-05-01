@@ -17,7 +17,9 @@ Does NOT handle:
   - Pipeline execution
   - Message merging for rapid-fire users — that's done by the cancel-and-
     restart dispatcher in api/main.py::_dispatch, which works on top of
-    parse_webhook's output. No debounce delay is added to the first message.
+    parse_webhook's output. The pipeline opens with a brief settle window
+    (DONNA_PIPELINE_SETTLE_S, default 0.4s) so messages a few hundred ms
+    apart land in the same merged turn.
 """
 from __future__ import annotations
 

@@ -260,21 +260,17 @@ async def _fetch_today_observations(
 
 async def _fetch_active_open_loops(user_id: str) -> list[Any]:
     try:
-        from sqlalchemy import select
-
-        from backend.db.models import OpenLoop
+        from backend.memory.tools._open_loop_view import read_open_loops_unified
         from db.session import async_session
 
         async with async_session() as session:
-            stmt = (
-                select(OpenLoop)
-                .where(OpenLoop.user_id == user_id)
-                .where(OpenLoop.status == "active")
-                .order_by(OpenLoop.created_at.desc())
-                .limit(_MAX_TODAY_OPEN_LOOPS)
+            rows = await read_open_loops_unified(
+                session,
+                user_id=user_id,
+                statuses=("active",),
+                limit=_MAX_TODAY_OPEN_LOOPS,
             )
-            rows = list((await session.execute(stmt)).scalars().all())
-        return filter_open_loops(rows)
+        return filter_open_loops(list(rows))
     except Exception:
         logger.exception("load_today_block: open loops fetch failed")
         return []
@@ -605,10 +601,19 @@ async def render_turn_context(state: dict[str, Any]) -> str:
         lines.extend(["", pending])
 
     # [INTEGRATIONS] — connection state for external providers (Composio).
+    # Followed by [OAUTH IN FLIGHT] when any pending row has a fresh
+    # cached redirect URL (signal that the user just tapped a consent
+    # link and the next turn might be them coming back).
     if user_id:
         try:
             from backend.integrations import state as _integrations_state
-            from backend.integrations.render import render_integrations_block
+            from backend.integrations.render import (
+                render_integrations_block,
+                render_oauth_in_flight_block,
+            )
+            from backend.integrations.signals import (
+                render_integrations_signals_block,
+            )
 
             rows = await _integrations_state.list_user_integrations(user_id)
             await _maybe_reconcile_integrations(user_id, rows)
@@ -618,6 +623,12 @@ async def render_turn_context(state: dict[str, Any]) -> str:
             block = render_integrations_block(rows)
             if block:
                 lines.extend(["", block])
+            signals_block = await render_integrations_signals_block(user_id)
+            if signals_block:
+                lines.extend(["", signals_block])
+            oauth_block = render_oauth_in_flight_block(rows)
+            if oauth_block:
+                lines.extend(["", oauth_block])
         except Exception:
             logger.exception("render_turn_context: integrations block failed")
 

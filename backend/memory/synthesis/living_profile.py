@@ -261,21 +261,14 @@ async def _load_recent_observation_lines(
 
 
 async def _load_open_loop_lines(user_id: str, *, max_rows: int) -> tuple[str, ...]:
-    from sqlalchemy import select
-
-    from backend.db.models import OpenLoop
     from backend.db.session import async_session
+    from backend.memory.tools._open_loop_view import read_open_loops_unified
 
     try:
         async with async_session() as session:
-            rows = (
-                await session.execute(
-                    select(OpenLoop)
-                    .where(OpenLoop.user_id == user_id)
-                    .order_by(OpenLoop.created_at.desc())
-                    .limit(max_rows)
-                )
-            ).scalars().all()
+            rows = await read_open_loops_unified(
+                session, user_id=user_id, limit=max_rows,
+            )
     except Exception:
         logger.exception(
             "living_profile: open loop fetch failed user=%s", user_id[:8]

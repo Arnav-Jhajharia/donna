@@ -28,7 +28,6 @@ from .langsmith_tracing import traceable
 from .tool_logic import (
     compose_image_prompt,
     read_tracker_result,
-    recall_episodic_result,
     send_burst_result,
     text_content,
 )
@@ -43,11 +42,21 @@ def _tool_text(
     *,
     no_hits_text: str = "No hits.",
     degraded_text: str = "Memory unavailable.",
+    voice_degraded: bool = False,
 ) -> dict[str, list[dict[str, str]]]:
+    """Render a ToolResult into chat content.
+
+    When ``voice_degraded`` is True, the payload's `reason` is treated as
+    the user-facing line (already Donna-voice) and forwarded verbatim.
+    The ``degraded_text`` only applies when the reason is missing — i.e.
+    a code path that returned `degraded()` without a message.
+    """
     status = result.get("status")
     payload = result.get("payload")
     if status == "degraded":
         reason = payload.get("reason") if isinstance(payload, dict) else None
+        if voice_degraded and reason:
+            return text_content(reason)
         return text_content(f"{degraded_text}{f' {reason}' if reason else ''}")
     if status == "no_hits" or not payload:
         return text_content(no_hits_text)
@@ -103,25 +112,12 @@ def _result_text(
 
 
 @tool(
-    "recall_episodic",
-    "Search episodic memory for past-conversation snippets not in the Living Profile. "
-    "Returns up to 5 dated snippets. "
-    "Do NOT use if the Living Profile already has the answer, for countable "
-    "observations (use read_tracker), or for relational facts (use recall_graph).",
-    {"query": str},
-)
-@traceable(name="donna.tool.recall_episodic", run_type="tool")
-async def recall_episodic(args):
-    return await recall_episodic_result(args)
-
-
-@tool(
     "read_tracker",
     "Read-only tracker lookup by observation type (e.g. 'expense', 'mood'). "
     "Use period for local-time questions like today, this week, or last week. "
     "Returns JSON list of recent observations with local timestamps. "
     "Do NOT use for free-text memory recall or for non-countable events; "
-    "use recall_episodic or smart_recall instead.",
+    "use recall instead.",
     {
         "type": "object",
         "required": ["name"],
@@ -137,26 +133,6 @@ async def recall_episodic(args):
 @traceable(name="donna.tool.read_tracker", run_type="tool")
 async def read_tracker(args):
     return await read_tracker_result(args)
-
-
-@tool(
-    "recall_graph",
-    "Search the user's knowledge graph for relational facts (people, decisions, "
-    "commitments). Returns up to 10 facts with timestamps. "
-    "Do NOT use for countable observations (use read_tracker) or for "
-    "free-text episodic snippets (use recall_episodic).",
-    {"query": str},
-)
-@traceable(name="donna.tool.recall_graph", run_type="tool")
-async def recall_graph(args):
-    from backend.memory.tools.recall_graph import recall_graph as _recall_graph
-
-    user_id = _current_user_id()
-    query = str(args.get("query", "")).strip()
-    if not user_id or not query:
-        return text_content("No graph hits.")
-    res = await _recall_graph(user_id=user_id, query=query, limit=10)
-    return _tool_text(res, no_hits_text="No graph hits.", degraded_text="Graph unavailable.")
 
 
 @tool(
@@ -189,7 +165,7 @@ async def smart_recall(args):
     "List active unresolved threads for this user. Use when deciding what the "
     "user may be forgetting or what needs follow-up. "
     "Do NOT use for calendar events (use list_calendar) or for historical "
-    "context (use recall_episodic).",
+    "context (use recall).",
     {
         "type": "object",
         "properties": {
@@ -220,7 +196,7 @@ async def list_open_loops(args):
     "Optional `within_days` (default horizon ~7) and `limit` (default 10). "
     "Use for schedule-aware replies: conflict checks, 'what's next', "
     "availability, context-aware timing ('8am meds while going out for lunch' "
-    "-> check lunch time). Do NOT use for past events (use recall_episodic), "
+    "-> check lunch time). Do NOT use for past events (use recall), "
     "untimed follow-ups (use list_open_loops), or when the user's question "
     "has no time dimension.",
     {
@@ -243,7 +219,12 @@ async def list_calendar(args):
         within_days=int(args.get("within_days") or 7),
         limit=int(args.get("limit") or 10),
     )
-    return _tool_text(res, no_hits_text="No calendar entries.", degraded_text="Calendar unavailable.")
+    return _tool_text(
+        res,
+        no_hits_text="nothing on your calendar in that window.",
+        degraded_text="calendar's offline on my end. try again in a sec.",
+        voice_degraded=True,
+    )
 
 
 @tool(
@@ -273,14 +254,19 @@ async def list_gmail_recent(args):
 
     user_id = _current_user_id()
     if not user_id:
-        return text_content("No recent mail.")
+        return text_content("nothing new in your inbox.")
     res = await _list_gmail_recent(
         user_id=user_id,
         within_hours=int(args.get("within_hours") or 24),
         limit=int(args.get("limit") or 20),
         important_only=bool(args.get("important_only") or False),
     )
-    return _tool_text(res, no_hits_text="No recent mail.", degraded_text="Gmail unavailable.")
+    return _tool_text(
+        res,
+        no_hits_text="nothing new in your inbox.",
+        degraded_text="gmail's offline on my end. try again in a sec.",
+        voice_degraded=True,
+    )
 
 
 @tool(
@@ -313,7 +299,12 @@ async def read_gmail_thread(args):
     if not thread_id:
         return text_content("Cannot read thread: thread_id is required.")
     res = await _read_gmail_thread(user_id=user_id, thread_id=thread_id)
-    return _tool_text(res, no_hits_text="Thread not found.", degraded_text="Gmail unavailable.")
+    return _tool_text(
+        res,
+        no_hits_text="can't find that thread. probably archived or deleted.",
+        degraded_text="gmail's slow right now. try again in a sec.",
+        voice_degraded=True,
+    )
 
 
 @tool(
@@ -351,109 +342,6 @@ async def composio_search_tools(args):
     res = await composio_meta.search_tools(user_id=user_id, use_case=use_case)
     import json as _json
     return text_content(_json.dumps(res, indent=2))
-
-
-@tool(
-    "composio_manage_connections",
-    "Initiate OAuth for one or more Composio toolkits. Returns a redirect "
-    "URL per toolkit that the user must tap to consent. Idempotent: "
-    "already-connected toolkits are skipped silently. Use when the user "
-    "asks to connect a SaaS provider, or you need a tool whose toolkit "
-    "is not yet active. Pair with composio_wait_for_connections in the "
-    "next turn (after the user has tapped the URLs) to confirm completion. "
-    "Do NOT use for google (gmail/calendar) — connect_integration handles "
-    "those with cleaner consent copy. Do NOT call this and "
-    "composio_wait_for_connections in the same turn — the user has not "
-    "tapped the URL yet.",
-    {
-        "type": "object",
-        "properties": {
-            "toolkits": {
-                "type": "array",
-                "items": {"type": "string"},
-                "minItems": 1,
-                "description": "Composio toolkit slugs (e.g. ['gmail', "
-                               "'googlecalendar', 'slack', 'notion']).",
-            },
-        },
-        "required": ["toolkits"],
-    },
-)
-@traceable(name="donna.tool.composio_manage_connections", run_type="tool")
-async def composio_manage_connections(args):
-    from backend.integrations import composio_meta
-
-    user_id = _current_user_id()
-    if not user_id:
-        return text_content("Cannot connect: no user_id in scope.")
-    raw = args.get("toolkits") or []
-    toolkits = [str(t).strip() for t in raw if str(t).strip()]
-    if not toolkits:
-        return text_content("Cannot connect: 'toolkits' is required.")
-
-    res = await composio_meta.manage_connections(
-        user_id=user_id, toolkits=toolkits
-    )
-    lines = []
-    for slug, payload in (res.get("results") or {}).items():
-        status = ((payload or {}).get("status") or "").lower()
-        url = (payload or {}).get("redirect_url")
-        if status == "active":
-            lines.append(f"{slug}: already connected")
-        elif url:
-            lines.append(f"{slug}: tap to connect {url}")
-        else:
-            lines.append(f"{slug}: status={status or '?'}")
-    return text_content("\n".join(lines) or "no toolkits returned")
-
-
-@tool(
-    "composio_wait_for_connections",
-    "Block until specified Composio toolkits finish OAuth (or timeout). "
-    "Use after composio_manage_connections, on a follow-up turn, to "
-    "confirm the user completed the consent flow before executing tools "
-    "that depend on those toolkits. mode='all' waits for every toolkit; "
-    "mode='any' returns once one is active. Default timeout 120s. "
-    "Do NOT call in the same turn as composio_manage_connections — the "
-    "user has not had time to tap the URLs. Do NOT use for google — "
-    "the [INTEGRATIONS] block already shows google connection state.",
-    {
-        "type": "object",
-        "properties": {
-            "toolkits": {
-                "type": "array",
-                "items": {"type": "string"},
-                "minItems": 1,
-            },
-            "mode": {"type": "string", "enum": ["all", "any"]},
-            "timeout_seconds": {"type": "integer", "minimum": 5, "maximum": 600},
-        },
-        "required": ["toolkits"],
-    },
-)
-@traceable(name="donna.tool.composio_wait_for_connections", run_type="tool")
-async def composio_wait_for_connections(args):
-    from backend.integrations import composio_meta
-
-    user_id = _current_user_id()
-    if not user_id:
-        return text_content("Cannot wait: no user_id in scope.")
-    raw = args.get("toolkits") or []
-    toolkits = [str(t).strip() for t in raw if str(t).strip()]
-    if not toolkits:
-        return text_content("Cannot wait: 'toolkits' is required.")
-    mode = args.get("mode") or "all"
-    timeout = int(args.get("timeout_seconds") or 120)
-
-    res = await composio_meta.wait_for_connections(
-        user_id=user_id, toolkits=toolkits, mode=mode, timeout_seconds=timeout
-    )
-    lines = [str(res.get("message") or "")]
-    for slug, payload in (res.get("results") or {}).items():
-        status = (payload or {}).get("status", "?")
-        ca = (payload or {}).get("connected_account_id", "")
-        lines.append(f"{slug}: {status} {ca}".rstrip())
-    return text_content("\n".join(line for line in lines if line))
 
 
 @tool(
@@ -781,7 +669,13 @@ async def connect_integration(args):
     user_id = _current_user_id()
     if not user_id:
         return text_content("Cannot connect: no user_id in scope.")
-    raw = args.get("toolkits") or args.get("products") or []
+    if "products" in args and "toolkits" not in args:
+        # Hard-correct the model: only `toolkits` is in the schema.
+        return text_content(
+            "connect_integration takes 'toolkits', not 'products'. "
+            "retry with toolkits=[...]."
+        )
+    raw = args.get("toolkits") or []
     if not isinstance(raw, list):
         raw = [raw]
     toolkits = [str(t).strip() for t in raw if str(t).strip()]
@@ -791,9 +685,11 @@ async def connect_integration(args):
     res = await _connect(user_id=user_id, toolkits=toolkits)
     status = res.get("status")
     if status == "already_connected":
-        return text_content("already connected.")
+        return text_content("already connected. nothing to do.")
     if status == "error":
-        return text_content(f"connect failed: {res.get('message') or 'unknown'}")
+        msg = (res.get("message") or "unknown").strip()
+        return text_content(f"connect failed: {msg}. try again in a sec.")
+    # Backend `_consent_message` is already Donna-voice; forward verbatim.
     return text_content(res.get("message") or f"tap: {res.get('url')}")
 
 
@@ -2521,8 +2417,6 @@ DONNA_TOOLS = (
     read_gmail_thread,
     list_calendar,
     composio_search_tools,
-    composio_manage_connections,
-    composio_wait_for_connections,
     composio_execute_tool,
     update_dashboard,
     send_dashboard_link,

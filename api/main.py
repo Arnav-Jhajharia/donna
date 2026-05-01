@@ -113,6 +113,13 @@ _pending_items: dict[str, list[_DispatchItem]] = {}
 _sending_phase: dict[str, bool] = {}
 _phone_locks: dict[str, asyncio.Lock] = {}
 
+# Brief grace period at the start of every pipeline run. If another message
+# arrives during this window, the cancel-and-restart path in _dispatch
+# coalesces it into the same turn — without it, fast brain turns can race
+# past _sending_phase=True before the second message dispatches, leaving
+# the user's two rapid-fire messages handled as separate turns.
+_PIPELINE_SETTLE_S = float(os.environ.get("DONNA_PIPELINE_SETTLE_S") or 0.4)
+
 
 def _lock_for(phone: str) -> asyncio.Lock:
     lock = _phone_locks.get(phone)
@@ -198,6 +205,14 @@ async def _run_pipeline(phone: str, items: list[_DispatchItem]) -> None:
     payloads = [p for p, _ in items]
     row_ids = [rid for _, rid in items if rid]
     try:
+        # Brief settle window before the brain runs. A second message that
+        # lands here triggers the cancel-and-restart path in _dispatch,
+        # which spawns a fresh task with both items merged — this awaits
+        # cancellation cleanly. Without the settle, fast brains can reach
+        # _sending_phase=True before the second dispatch lands, losing
+        # the merge.
+        if _PIPELINE_SETTLE_S > 0:
+            await asyncio.sleep(_PIPELINE_SETTLE_S)
         merged = _merge_payloads(payloads)
         if len(payloads) > 1:
             logger.info("pipeline: merged %d payloads for %s", len(payloads), phone[:6])

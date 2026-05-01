@@ -64,8 +64,6 @@ class DonnaRuntimeTests(unittest.TestCase):
             "mcp__donna__read_gmail_thread",
             "mcp__donna__list_calendar",
             "mcp__donna__composio_search_tools",
-            "mcp__donna__composio_manage_connections",
-            "mcp__donna__composio_wait_for_connections",
             "mcp__donna__composio_execute_tool",
             "mcp__donna__update_dashboard",
             "mcp__donna__send_dashboard_link",
@@ -437,9 +435,10 @@ class DonnaRuntimeTests(unittest.TestCase):
         async def fake_user_model(user_id):
             return "USER MODEL\n  name: Arnav"
 
-        async def fake_turn(message, config):
+        async def fake_turn(message, config, *, images=None):
             captured["message"] = message
             captured["config"] = config
+            captured["images"] = images
             buffer = _OUTBOUND_BUFFER.get()
             if buffer is not None:
                 buffer.append(TextMessage(body="ack"))
@@ -467,6 +466,90 @@ class DonnaRuntimeTests(unittest.TestCase):
         self.assertTrue(captured["config"].chat_already_persisted)
         self.assertEqual(captured["saved"], ("user-1", "session-2"))
         self.assertEqual(result["_outbound"][0].body, "ack")
+
+    def test_brain_forwards_inbound_image_to_runner(self) -> None:
+        """Regression: image bytes attached to the inbound payload must reach
+        the SDK turn so the model sees the picture this turn, not just in
+        future recall via the background captioner."""
+        from delivery.messages import TextMessage
+        from donna_runtime import brain
+        from donna_runtime.hooks import _OUTBOUND_BUFFER
+        from ingress.payload import ImagePayload, IngressPayload
+
+        captured: dict = {}
+
+        async def fake_resolve(**kwargs):
+            return None
+
+        async def fake_save(*args, **kwargs):
+            return None
+
+        async def fake_context(state):
+            return ""
+
+        async def fake_user_model(user_id):
+            return ""
+
+        async def fake_turn(message, config, *, images=None):
+            captured["message"] = message
+            captured["images"] = images
+            buffer = _OUTBOUND_BUFFER.get()
+            if buffer is not None:
+                buffer.append(TextMessage(body="ack"))
+            trace = TurnTrace(message)
+            trace.record_session_id("session-img")
+            return trace
+
+        jpeg_bytes = b"\xff\xd8\xff\xe0fake-jpeg"
+        payload = IngressPayload(
+            user_id="user-1",
+            phone="+1",
+            message="how is this",
+            message_type="image",
+            image=ImagePayload(file_bytes=jpeg_bytes, mime_type="image/jpeg"),
+        )
+        state = {
+            "user_id": "user-1",
+            "raw_input": "how is this",
+            "_ingress_payload": payload,
+        }
+        with tempfile.TemporaryDirectory() as tmpdir, \
+            patch.object(brain, "resolve_session_id_db", fake_resolve), \
+            patch.object(brain, "save_user_session_db", fake_save), \
+            patch.object(brain, "render_turn_context", fake_context), \
+            patch.object(brain, "load_user_model_block", fake_user_model), \
+            patch.object(brain, "traced_donna_turn", fake_turn), \
+            patch.object(brain, "_stateless_sessions_default", lambda: True):
+            cfg = DonnaAgentConfig(trace_file=Path(tmpdir) / "trace.jsonl")
+            asyncio.run(brain.donna_turn(state, config=cfg))
+
+        self.assertEqual(captured["message"], "how is this")
+        self.assertEqual(captured["images"], [(jpeg_bytes, "image/jpeg")])
+
+    def test_multimodal_prompt_stream_emits_image_block(self) -> None:
+        """The runner builds a single user-message dict with text + image
+        content blocks when images are passed, matching the Anthropic content
+        block format the CLI forwards verbatim."""
+        import base64
+        from donna_runtime.runner import _multimodal_prompt_stream
+
+        async def collect():
+            return [m async for m in _multimodal_prompt_stream(
+                "wrapped text", [(b"raw-bytes", "image/jpeg")],
+            )]
+
+        messages = asyncio.run(collect())
+        self.assertEqual(len(messages), 1)
+        msg = messages[0]
+        self.assertEqual(msg["type"], "user")
+        content = msg["message"]["content"]
+        self.assertEqual(content[0], {"type": "text", "text": "wrapped text"})
+        self.assertEqual(content[1]["type"], "image")
+        self.assertEqual(content[1]["source"]["media_type"], "image/jpeg")
+        self.assertEqual(
+            content[1]["source"]["data"],
+            base64.b64encode(b"raw-bytes").decode("ascii"),
+        )
 
     def test_audit_flags_disallowed_tools_and_send_burst_policy(self) -> None:
         findings = audit_trace(

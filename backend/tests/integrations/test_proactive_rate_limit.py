@@ -63,9 +63,20 @@ async def test_quiet_hours_blocks(db, monkeypatch):
     async def _quiet(_user_id):  # noqa: ANN001
         return ("23:00", "07:00")
 
+    async def _no_tz(_user_id):  # noqa: ANN001
+        # Force tz=None so the arbiter compares ``now.time()`` raw.
+        # The conftest seeds u1 with Asia/Singapore which would otherwise
+        # convert UTC 02:30 → SGT 10:30 (outside the quiet window) and
+        # change this test's intent.
+        return None
+
     monkeypatch.setattr(
         "backend.integrations.proactive_rate_limit._load_user_quiet_hours",
         _quiet,
+    )
+    monkeypatch.setattr(
+        "backend.integrations.proactive_rate_limit._load_user_timezone",
+        _no_tz,
     )
     decision = await can_fire_proactive(
         "u1", source="email", now=datetime(2026, 4, 25, 2, 30)

@@ -102,8 +102,8 @@ async def test_active_chat_clear_after_window(db, _no_quiet_hours):
 @pytest.mark.asyncio
 async def test_quiet_hours_fallback_uses_timezone_default(db, monkeypatch):
     """When sleep_time/wake_time are unset but timezone is set, default to
-    midnight-7am local (interpreted as UTC time the way the existing arbiter
-    treats `now`)."""
+    midnight-7am in the user's local time (UTC ``now`` is converted via
+    ZoneInfo before the time-of-day comparison)."""
 
     async def _no_facts(_user_id):  # noqa: ANN001
         return (None, None)
@@ -119,11 +119,19 @@ async def test_quiet_hours_fallback_uses_timezone_default(db, monkeypatch):
         "backend.integrations.proactive_rate_limit._load_user_timezone",
         _has_tz,
     )
+    # 18:00 UTC = 02:00 next-day Singapore (UTC+8) — inside the
+    # 00:00-07:00 default quiet window. Must suppress.
     decision = await can_fire_proactive(
-        "u1", source="email", now=datetime(2026, 4, 25, 3, 0)
+        "u1", source="email", now=datetime(2026, 4, 25, 18, 0)
     )
     assert decision.allowed is False
     assert "quiet" in decision.reason
+
+    # 03:00 UTC = 11:00 same-day Singapore — outside quiet window. Allow.
+    decision_day = await can_fire_proactive(
+        "u1", source="email", now=datetime(2026, 4, 25, 3, 0)
+    )
+    assert decision_day.allowed is True
 
 
 @pytest.mark.asyncio

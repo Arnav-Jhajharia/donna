@@ -26,7 +26,7 @@ def test_accept_multi_burst():
 
 
 def test_accept_used_memory():
-    v = _fast_accept(_g(inbound="a" * 50, tools=("recall_graph",), outbound=["one"]))
+    v = _fast_accept(_g(inbound="a" * 50, tools=("recall",), outbound=["one"]))
     assert v is not None and v.worth_ingesting is True
 
 
@@ -64,14 +64,14 @@ def test_ten_must_reject(inbound, expected):
     [
         ("I just moved to Singapore for grad school, start Monday", ()),
         ("My dad is in the hospital, surgery tomorrow morning", ()),
-        ("What did we decide about the London trip?", ("recall_graph",)),
-        ("remind me what kaiser said about the launch", ("recall_episodic",)),
+        ("What did we decide about the London trip?", ("recall",)),
+        ("remind me what kaiser said about the launch", ("recall",)),
         ("can you pull up that thing about my diet last month", ("smart_recall",)),
-        ("anyone ask about the handoff? I need to know", ("recall_graph",)),
-        ("look up what we said about the meeting", ("recall_episodic",)),
+        ("anyone ask about the handoff? I need to know", ("recall",)),
+        ("look up what we said about the meeting", ("recall",)),
         ("find that note about my rent increase", ("smart_recall",)),
-        ("pull my chat history from yesterday", ("recall_episodic",)),
-        ("what does my graph say about arjun", ("recall_graph",)),
+        ("pull my chat history from yesterday", ("recall",)),
+        ("what does my graph say about arjun", ("recall",)),
     ],
 )
 def test_ten_must_accept(inbound, tools):
