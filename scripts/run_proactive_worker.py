@@ -46,8 +46,14 @@ logger = logging.getLogger(__name__)
 
 DEFAULT_DRAIN_INTERVAL_S = 600.0
 DEFAULT_PURGE_INTERVAL_S = 3600.0
-DEFAULT_POLL_INTERVAL_S = 21600.0  # 6h - free-tier fallback for unprovisioned subs
-DEFAULT_URL_SIMILAR_INTERVAL_S = 43200.0  # 12h - URL-similar serendipity loop
+# Poll loop runs hourly. Each pass picks subs whose cadence interval
+# (daily/weekly/monthly, set per-sub by the deriver) has elapsed since
+# last_hit_at. Hourly cadence is fine-grained enough to honor a "daily"
+# sub on time without over-polling weekly/monthly subs.
+DEFAULT_POLL_INTERVAL_S = 3600.0
+# URL-similar costs ~5 credits/seed and most chats don't gain new URLs
+# day-to-day — weekly cadence is generous.
+DEFAULT_URL_SIMILAR_INTERVAL_S = 7 * 24 * 3600.0
 
 
 def _delivery_mode_for(profile: dict) -> str:
@@ -116,9 +122,9 @@ async def _purge_loop(interval: float) -> None:
 
 
 async def _poll_loop(interval: float) -> None:
-    """Pulls fresh items per active subscription. Reads from the user's
-    Exa websets when provisioned (push-equivalent for users without a
-    public webhook URL), or runs ``exa_search`` as a fallback.
+    """Cadence-aware /search loop. Each tick, runs ``exa_search`` per
+    subscription whose cadence (daily/weekly/monthly) has elapsed since
+    ``last_hit_at``. Costs ~5 credits per /search call.
     """
     from backend.web.proactive.poller import poll_pending_subscriptions
 

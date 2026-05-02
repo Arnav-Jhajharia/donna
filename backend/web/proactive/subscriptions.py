@@ -100,15 +100,18 @@ class ReconcileSummary:
 async def reconcile_subscriptions(
     user_id: str,
     *,
-    max_active: int = 5,
-    watches_override: list[str] | None = None,
+    max_active: int = 3,
+    watches_override: list[str] | list[Any] | None = None,
 ) -> ReconcileSummary:
     """Diff watch list against active subs.
 
     By default reads ``living_profile.watch_for_tomorrow`` (the legacy
     morning-trigger field; usually shaped wrong for external search).
-    Pass ``watches_override`` to supply a list of search-shaped strings
-    instead - typically from ``watch_synth.derive_external_watches``.
+    Pass ``watches_override`` to supply either:
+      - a list of search-shaped strings (legacy path; cadence defaults
+        to weekly), or
+      - a list of ``DerivedWatch`` objects so the deriver-picked cadence
+        flows through into ``proactive_subscriptions.cadence``.
 
     Creates rows for new watch lines (Exa provisioning is deferred to
     ``provision_pending_websets``). Deactivates rows whose intent_key no
@@ -132,22 +135,41 @@ async def reconcile_subscriptions(
             )
 
         profile = dict(user.living_profile or {})
+        # Build (description, cadence) pairs. Accept three input shapes:
+        # DerivedWatch objects (preferred), bare strings, or the legacy
+        # profile.watch_for_tomorrow string list.
+        from backend.web.proactive.watch_synth import DerivedWatch
+
         if watches_override is not None:
-            watches = list(watches_override)
+            raw_watches = list(watches_override)
         else:
-            watches = profile.get("watch_for_tomorrow") or []
-            if isinstance(watches, str):
-                watches = [watches]
-        watch_lines = [str(w).strip() for w in watches if str(w).strip()]
+            raw_watches = profile.get("watch_for_tomorrow") or []
+            if isinstance(raw_watches, str):
+                raw_watches = [raw_watches]
+
+        watch_pairs: list[tuple[str, str]] = []  # (description, cadence)
+        for item in raw_watches:
+            if isinstance(item, DerivedWatch):
+                desc = (item.description or "").strip()
+                cadence = (item.cadence or "weekly").strip().lower()
+            else:
+                desc = str(item or "").strip()
+                cadence = "weekly"
+            if desc:
+                watch_pairs.append((desc, cadence))
+
         # Deterministic ordering: sort by intent_key so LRU eviction /
         # over-budget skipping is reproducible across CPython versions.
-        wanted_pairs = sorted(
-            ((intent_key_for_watch_line(w), w) for w in watch_lines),
-            key=lambda kv: kv[0],
+        wanted_triples = sorted(
+            (
+                (intent_key_for_watch_line(desc), desc, cadence)
+                for desc, cadence in watch_pairs
+            ),
+            key=lambda t: t[0],
         )
-        wanted_keys: dict[str, str] = {}
-        for k, w in wanted_pairs:
-            wanted_keys.setdefault(k, w)
+        wanted_keys: dict[str, tuple[str, str]] = {}
+        for k, desc, cadence in wanted_triples:
+            wanted_keys.setdefault(k, (desc, cadence))
 
         active_rows = list(
             (
@@ -178,7 +200,7 @@ async def reconcile_subscriptions(
         budget_remaining = max(0, int(max_active) - active_count_after_deact)
         created = 0
         skipped = 0
-        for key, line in wanted_keys.items():
+        for key, (desc, cadence) in wanted_keys.items():
             if key in active_keys:
                 continue
             if budget_remaining <= 0:
@@ -187,8 +209,8 @@ async def reconcile_subscriptions(
             row = ProactiveSubscription(
                 user_id=user_id,
                 intent_key=key,
-                description=line[:1000],
-                cadence="daily",
+                description=desc[:1000],
+                cadence=cadence,
                 created_at=_utcnow_naive(),
                 last_refreshed_at=_utcnow_naive(),
                 active=True,
@@ -249,17 +271,25 @@ class ProvisionSummary:
 
 
 async def provision_pending_websets(user_id: str) -> ProvisionSummary:
-    """For each active subscription with webset_id IS NULL, create the
-    Exa webset and attach a monitor. Persists the IDs back to the row.
+    """[DEPRECATED] Create Exa webset+monitor for pending subs.
 
-    No-op when EXA_API_KEY is missing — the Exa client refuses to call.
-    Also no-ops when DONNA_EXA_AUTOMATION_PAUSE=1 (operator emergency
-    stop; see backend/web/proactive/cost_gate.py).
-    Failures are logged and counted; the row is left pending so the next
-    reconcile pass retries.
+    The proactive subsystem has pivoted to a /search-only model
+    (~5 credits/call) instead of webset+monitor (~10 credits per
+    delivered row, plus per-creation enrichment overhead). This
+    function is retained for manual one-off provisioning but is no
+    longer called by the synthesis worker. Calling it logs a
+    deprecation warning.
+
+    No-op when EXA_API_KEY is missing or
+    DONNA_EXA_AUTOMATION_PAUSE=1.
     """
     from backend.web.proactive.cost_gate import exa_automation_paused
 
+    logger.warning(
+        "provision_pending_websets is deprecated under the /search-only "
+        "model; called explicitly for user=%s",
+        user_id[:8] if user_id else "?",
+    )
     if exa_automation_paused():
         logger.info(
             "provision_pending_websets: paused via DONNA_EXA_AUTOMATION_PAUSE"
@@ -303,7 +333,10 @@ async def provision_pending_websets(user_id: str) -> ProvisionSummary:
             webset_id: str | None = row.webset_id
             if webset_id is None:
                 try:
-                    webset = await exa_webset_create(row.description, count=10)
+                    # count=3: smaller seed set is cheaper to create
+                    # (Exa runs verification per item) and the monitor
+                    # appends new items over time anyway.
+                    webset = await exa_webset_create(row.description, count=3)
                     webset_id = str(webset.get("id") or "").strip() or None
                     if not webset_id:
                         raise RuntimeError("webset response missing id")
@@ -327,7 +360,7 @@ async def provision_pending_websets(user_id: str) -> ProvisionSummary:
                 monitor_fields = _monitor_webhook_fields()
                 monitor = await exa_monitor_create(
                     webset_id=webset_id,
-                    cadence=row.cadence or "daily",
+                    cadence=row.cadence or "weekly",
                     behavior="search",
                     fields=monitor_fields,
                 )
@@ -424,21 +457,21 @@ class DeriveAndReconcileSummary:
 async def derive_and_reconcile(
     user_id: str,
     *,
-    max_active: int = 5,
+    max_active: int = 3,
 ) -> DeriveAndReconcileSummary:
     """Run the full fanout: Living Profile -> derived watches -> subs.
 
     This is the entry point a worker / cron should call. It:
       1. asks Haiku what to watch for THIS user RIGHT NOW (watch_synth)
-      2. reconciles those into proactive_subscriptions rows
+      2. reconciles those into proactive_subscriptions rows (each row
+         carries the deriver-picked cadence)
       3. returns the derived watches inline so the caller can log them
     """
     from backend.web.proactive.watch_synth import derive_external_watches
 
     derived = await derive_external_watches(user_id, max_watches=max_active)
-    watch_strings = [w.description for w in derived]
     summary = await reconcile_subscriptions(
-        user_id, max_active=max_active, watches_override=watch_strings
+        user_id, max_active=max_active, watches_override=list(derived)
     )
     return DeriveAndReconcileSummary(
         user_id=user_id,

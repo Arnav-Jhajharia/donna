@@ -1,35 +1,65 @@
-"""Polling fallback for users without Exa websets access.
+"""Cadence-aware /search poller — the proactive watch primary path.
 
-Free-tier Exa accounts can call ``/search`` but not ``/websets/v0/*``.
-This module runs a periodic ``/search`` per active-but-unprovisioned
-subscription, dedupes URLs against rows already in ``proactive_signals``
-for that subscription, and enqueues new hits.
+For each active subscription, runs ``/search`` at the cadence picked by
+the deriver (``daily``/``weekly``/``monthly``), dedupes URLs against
+rows already in ``proactive_signals``, and enqueues new hits.
 
-Coexists with the webset/monitor provisioning path:
-- If the subscription has ``webset_id`` set, Exa is pushing for us; the
-  poller skips it.
-- If the subscription has ``webset_id IS NULL`` (free-tier or pending
-  upgrade), the poller fills the gap by pulling.
+This is the cost-conscious path. Websets+monitors at Exa cost ~10
+credits per delivered row; ``/search`` costs ~5 credits per call
+regardless of ``numResults``. For our 8000-credit/$49 budget, polling
+is 15-30x cheaper than monitor-driven curation. The webset+monitor
+provisioning code path is deprecated; the legacy webhook receiver
+(``api/exa_webhook.py``) stays in place but should never fire under
+the current architecture.
 
-Once a user upgrades to a tier that supports websets, the next
-``provision_pending_websets`` call sets ``webset_id`` and the poller
-stops polling that subscription. No code or data migration needed.
+Cadence-to-interval map:
+    daily   = 24h  (caller must run loop ≤1h to hit it accurately)
+    weekly  = 7d
+    monthly = 30d
+
+Each tick: pick subs whose ``last_hit_at + cadence_interval <= now``
+(or whose ``last_hit_at`` is NULL → never polled), call ``/search``,
+write new URLs to ``proactive_signals``, bump ``last_hit_at``.
 """
 from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from sqlalchemy import select, update
 
-from backend.web.client import exa_search, exa_webset_items, have_exa_key
+from backend.web.client import exa_search, have_exa_key
 from backend.web.proactive.store import SignalQueueRepo
 from db.models import ProactiveSignal, ProactiveSubscription
 from db.session import async_session
 
 logger = logging.getLogger(__name__)
+
+
+_CADENCE_TO_INTERVAL: dict[str, timedelta] = {
+    "hourly": timedelta(hours=1),
+    "daily": timedelta(hours=24),
+    "weekly": timedelta(days=7),
+    "monthly": timedelta(days=30),
+}
+_DEFAULT_CADENCE = "weekly"
+
+
+def _is_due(sub: ProactiveSubscription, now: datetime) -> bool:
+    """True when this sub's cadence interval has elapsed since last poll.
+
+    Subs that have never been polled (``last_hit_at IS NULL``) are due
+    immediately. Unknown cadences fall back to weekly.
+    """
+    if sub.last_hit_at is None:
+        return True
+    interval = _CADENCE_TO_INTERVAL.get(
+        (sub.cadence or "").strip().lower(),
+        _CADENCE_TO_INTERVAL[_DEFAULT_CADENCE],
+    )
+    return (now - sub.last_hit_at) >= interval
 
 
 @dataclass(frozen=True)
@@ -73,22 +103,22 @@ async def _existing_urls_for_subscription(
 async def poll_pending_subscriptions(
     user_id: str,
     *,
-    max_results_per_sub: int = 5,
+    max_results_per_sub: int = 2,
 ) -> PollSummary:
-    """For each active sub, pull fresh items and enqueue any new URLs
-    as ``proactive_signals``.
+    """For each ACTIVE + DUE sub, run ``/search`` and enqueue new URLs.
 
-    Two modes, picked per-subscription:
-      - sub HAS webset_id  -> GET /websets/v0/websets/{id}/items
-        Reads the curated list Exa is maintaining for us. Cheap and
-        accurate; this is how we get monitor-fed items into the queue
-        without a public webhook URL.
-      - sub HAS NO webset_id -> POST /search
-        Free-tier fallback for subs that haven't been provisioned yet.
+    "Due" means ``last_hit_at + cadence_interval <= now`` (or
+    ``last_hit_at`` is NULL). Subs whose cadence interval hasn't elapsed
+    are skipped — that's how we honor the deriver's daily/weekly/monthly
+    choice without paying credits to over-poll.
 
-    Never raises - failures per subscription are logged and counted.
-    No-op when EXA_API_KEY is missing or when the operator has set
-    DONNA_EXA_AUTOMATION_PAUSE=1 (emergency cost stop).
+    Cost shape: each ``/search`` costs ~5 credits at Exa, regardless of
+    ``numResults``. We default to 2 results per call to keep judge load
+    modest downstream — the drain trigger judges every URL we enqueue.
+
+    Never raises — per-sub failures are logged and counted. No-op when
+    ``EXA_API_KEY`` missing or the operator has set
+    ``DONNA_EXA_AUTOMATION_PAUSE=1`` (emergency cost stop).
     """
     from backend.web.proactive.cost_gate import exa_automation_paused
 
@@ -97,6 +127,7 @@ async def poll_pending_subscriptions(
     if not have_exa_key():
         return PollSummary(user_id, polled=0, new_signals=0, failed=0)
 
+    now = _utcnow_naive()
     async with async_session() as session:
         rows = list(
             (
@@ -109,7 +140,8 @@ async def poll_pending_subscriptions(
             ).scalars()
         )
 
-    if not rows:
+    due_rows = [r for r in rows if _is_due(r, now)]
+    if not due_rows:
         return PollSummary(user_id, polled=0, new_signals=0, failed=0)
 
     queue = SignalQueueRepo()
@@ -117,63 +149,36 @@ async def poll_pending_subscriptions(
     new_signals = 0
     failed = 0
 
-    for sub in rows:
+    for sub in due_rows:
         polled += 1
         try:
-            if sub.webset_id:
-                items_resp = await exa_webset_items(
-                    sub.webset_id, limit=max_results_per_sub
-                )
-                items_raw = (
-                    items_resp.get("data")
-                    if isinstance(items_resp, dict)
-                    else None
-                ) or []
-                # webset items wrap the source page under .properties.url etc.
-                # Normalize to the same shape /search returns.
-                normalized = []
-                for it in items_raw:
-                    if not isinstance(it, dict):
-                        continue
-                    props = it.get("properties") or {}
-                    url = (
-                        props.get("url")
-                        or it.get("url")
-                        or ""
-                    )
-                    title = (
-                        props.get("title")
-                        or it.get("title")
-                        or url
-                    )
-                    snippet = (
-                        props.get("description")
-                        or props.get("summary")
-                        or ""
-                    )
-                    if url:
-                        normalized.append({
-                            "url": url,
-                            "title": title,
-                            "highlights": [snippet] if snippet else [],
-                            "publishedDate": props.get("publishedDate"),
-                        })
-                res = {"results": normalized}
-            else:
-                res = await exa_search(
-                    sub.description,
-                    num_results=max_results_per_sub,
-                    search_type="auto",
-                )
+            res = await exa_search(
+                sub.description,
+                num_results=max_results_per_sub,
+                search_type="auto",
+            )
         except Exception:
             logger.exception(
-                "poll_pending_subscriptions: pull failed user=%s intent=%s mode=%s",
+                "poll_pending_subscriptions: /search failed user=%s intent=%s",
                 user_id[:8] if user_id else "?",
                 sub.intent_key,
-                "webset" if sub.webset_id else "search",
             )
             failed += 1
             continue
+
+        # Bump last_hit_at after EVERY successful /search regardless of
+        # whether any new URLs came back. Otherwise a sub that /search
+        # returns no new results for would stay "due" forever under
+        # cadence-aware polling — and we'd burn ~5 credits/hour on the
+        # same dead query. Done BEFORE the items-check below so the
+        # short-circuit doesn't skip it.
+        async with async_session() as session:
+            await session.execute(
+                update(ProactiveSubscription)
+                .where(ProactiveSubscription.id == sub.id)
+                .values(last_hit_at=_utcnow_naive())
+            )
+            await session.commit()
 
         items = res.get("results") if isinstance(res, dict) else None
         if not isinstance(items, list) or not items:
@@ -200,15 +205,6 @@ async def poll_pending_subscriptions(
             enqueued_for_sub += 1
 
         new_signals += enqueued_for_sub
-
-        if enqueued_for_sub:
-            async with async_session() as session:
-                await session.execute(
-                    update(ProactiveSubscription)
-                    .where(ProactiveSubscription.id == sub.id)
-                    .values(last_hit_at=_utcnow_naive())
-                )
-                await session.commit()
 
     return PollSummary(
         user_id=user_id,

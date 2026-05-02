@@ -143,6 +143,85 @@ async def test_reconcile_enforces_budget_lru(user_with_watches):
 
 
 @pytest.mark.asyncio
+async def test_reconcile_writes_per_watch_cadence_from_derived_watch(
+    user_with_watches,
+):
+    """DerivedWatch.cadence flows into ProactiveSubscription.cadence.
+
+    The deriver picks daily/weekly/monthly per watch shape based on
+    topic velocity; reconcile must persist that choice instead of
+    hardcoding 'daily' for everyone (which is the cost-burn pattern
+    we are trying to eliminate).
+    """
+    from backend.web.proactive.watch_synth import DerivedWatch
+
+    derived = [
+        DerivedWatch(
+            description="ai agent product launches and pricing",
+            rationale="user is building agent products",
+            angle="news_domain",
+            cadence="daily",
+        ),
+        DerivedWatch(
+            description="poke product launches and pricing",
+            rationale="competitor watch",
+            angle="named_entity",
+            cadence="weekly",
+        ),
+        DerivedWatch(
+            description="narrow wedge case studies 2026",
+            rationale="thesis the user is chewing on",
+            angle="thesis",
+            cadence="monthly",
+        ),
+    ]
+    summary = await reconcile_subscriptions(
+        user_with_watches, max_active=5, watches_override=derived
+    )
+    assert summary.created == 3
+
+    async with async_session() as session:
+        rows = (
+            await session.execute(
+                select(ProactiveSubscription).where(
+                    ProactiveSubscription.user_id == user_with_watches,
+                    ProactiveSubscription.active.is_(True),
+                )
+            )
+        ).scalars().all()
+    by_desc = {r.description: r.cadence for r in rows}
+    assert by_desc["ai agent product launches and pricing"] == "daily"
+    assert by_desc["poke product launches and pricing"] == "weekly"
+    assert by_desc["narrow wedge case studies 2026"] == "monthly"
+
+
+@pytest.mark.asyncio
+async def test_reconcile_defaults_string_watches_to_weekly(user_with_watches):
+    """Legacy string-watch path defaults to weekly (not daily anymore).
+
+    Used to default to 'daily' which is the most expensive cadence; the
+    cost-savings change moves the safe default to weekly.
+    """
+    summary = await reconcile_subscriptions(
+        user_with_watches,
+        max_active=5,
+        watches_override=["antler sg batch 13", "openai sora pricing"],
+    )
+    assert summary.created == 2
+
+    async with async_session() as session:
+        rows = (
+            await session.execute(
+                select(ProactiveSubscription).where(
+                    ProactiveSubscription.user_id == user_with_watches,
+                    ProactiveSubscription.active.is_(True),
+                )
+            )
+        ).scalars().all()
+    assert all(r.cadence == "weekly" for r in rows)
+
+
+@pytest.mark.asyncio
 async def test_provision_pending_websets_calls_exa_and_persists_ids(
     monkeypatch, user_with_watches
 ):

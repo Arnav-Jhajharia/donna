@@ -205,7 +205,7 @@ class ExaWebFetcher:
         if not have_exa_key():
             return []
 
-        num_results = int(params.get("num_results") or 10)
+        num_results = int(params.get("num_results") or 5)
         category = self._CATEGORY_BY_TYPE.get(source.type)
         # Domain restriction passes through where the spec set one.
         include_domains = params.get("include_domains")

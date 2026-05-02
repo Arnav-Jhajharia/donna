@@ -52,7 +52,7 @@ You output 0-5 watch topics. Each watch must come from a DISTINCT angle:
 - technical: a specific technology, library, API, or protocol they're
   building on or evaluating
 
-Each watch has three fields:
+Each watch has four fields:
 
 - description: a SEARCH-SHAPED string. Hard rules:
     * Sentence-shaped, not a keyword bag. Exa runs neural search; it
@@ -75,6 +75,32 @@ Each watch has three fields:
   days."
 
 - angle: which of the 5 categories above.
+
+- cadence: one of "daily", "weekly", "monthly". Pick based on how fast
+  the topic actually moves. Each watch becomes a recurring Exa monitor;
+  cadence directly drives credit cost (daily = 30 runs/mo, weekly = 4,
+  monthly = 1). Be honest about velocity:
+
+    * daily — only for genuinely fresh-news beats where missing a day
+      is meaningful: "AI agent product launches", "Anthropic Claude
+      pricing changes", "OpenAI announcements". news_domain angle is
+      the typical daily candidate.
+
+    * weekly — DEFAULT for most watches. Named entities (companies,
+      products), product spaces, technical APIs, peer-product
+      tracking. Most companies don't ship daily, so weekly catches
+      everything material. named_entity, product_space, technical
+      angles default here.
+
+    * monthly — for slow research, thesis-shaped intellectual content,
+      academic papers, deep philosophical questions. thesis angle
+      defaults here. Also right for any topic where the user's
+      reaction window is in weeks (no rush).
+
+  When in doubt, weekly. Daily is expensive and noisy; monthly is
+  cheap and rare. The user gets fewer pings on a weekly cadence and
+  the pings they get are higher-signal because aged content has been
+  filtered by other readers first.
 
 A great watch:
 - ties to a CONCRETE signal in the inputs (a person mentioned, a topic
@@ -196,6 +222,10 @@ class _RawWatch(BaseModel):
     description: str = Field(description="search-shaped topic, named entities preferred")
     rationale: str = Field(description="quoted or paraphrased user signal")
     angle: str = Field(description="product_space|named_entity|thesis|news_domain|technical")
+    cadence: str = Field(
+        default="weekly",
+        description="daily for fresh news beats, weekly for most named entities and product spaces, monthly for slow thesis or research topics",
+    )
 
 
 class _WatchSynthOut(BaseModel):
@@ -206,14 +236,28 @@ _VALID_ANGLES = frozenset({
     "product_space", "named_entity", "thesis", "news_domain", "technical"
 })
 
+_VALID_CADENCES = frozenset({"daily", "weekly", "monthly"})
+
+# Default cadence per angle when the model omits/garbles the field.
+# Aligned with the credit-cost tradeoff: weekly is the safe default,
+# daily only for fast news beats, monthly for slow thesis-shaped work.
+_DEFAULT_CADENCE_BY_ANGLE: dict[str, str] = {
+    "news_domain": "daily",
+    "named_entity": "weekly",
+    "product_space": "weekly",
+    "technical": "weekly",
+    "thesis": "monthly",
+}
+
 
 @dataclass(frozen=True)
 class DerivedWatch:
-    """One external watch with provenance."""
+    """One external watch with provenance and refresh cadence."""
 
     description: str
     rationale: str
     angle: str
+    cadence: str  # daily | weekly | monthly
 
 
 def _format_living_profile(
@@ -320,10 +364,14 @@ def _coerce_watch(raw: _RawWatch) -> DerivedWatch | None:
     angle = (raw.angle or "").strip().lower()
     if angle not in _VALID_ANGLES:
         angle = "product_space"
+    cadence = (raw.cadence or "").strip().lower()
+    if cadence not in _VALID_CADENCES:
+        cadence = _DEFAULT_CADENCE_BY_ANGLE.get(angle, "weekly")
     return DerivedWatch(
         description=desc[:_MAX_DESCRIPTION_CHARS],
         rationale=rat[:_MAX_RATIONALE_CHARS],
         angle=angle,
+        cadence=cadence,
     )
 
 

@@ -192,13 +192,14 @@ async def _run_one(
 
     # After Living Profile is fresh, run the L0 -> L1 fanout: derive
     # external watches from the user's full state (LP + recent chat +
-    # observations + open loops), reconcile them into subscriptions,
-    # and provision pending Exa websets + monitors.
+    # observations + open loops) and reconcile them into subscriptions.
+    # Each sub carries a cadence (daily/weekly/monthly) picked by the
+    # deriver; the cadence-aware /search poller in run_proactive_worker
+    # picks them up. We do NOT provision Exa websets+monitors anymore —
+    # they cost ~10 credits per delivered row vs ~5 credits per
+    # /search call, so polling is 15-30x cheaper for our budget.
     try:
-        from backend.web.proactive.subscriptions import (
-            derive_and_reconcile,
-            provision_pending_websets,
-        )
+        from backend.web.proactive.subscriptions import derive_and_reconcile
         result = await derive_and_reconcile(user_id)
         if result.derived_count or result.reconcile.created or result.reconcile.deactivated:
             logger.info(
@@ -208,7 +209,6 @@ async def _run_one(
                 result.reconcile.deactivated,
                 user_id[:8],
             )
-        await provision_pending_websets(user_id)
     except Exception:
         logger.exception(
             "synthesis_worker: subscriptions reconcile failed user=%s",

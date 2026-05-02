@@ -152,8 +152,14 @@ def test_evidence_to_record_hashes_user_and_preserves_structure():
 
 @pytest.mark.asyncio
 async def test_synthesis_worker_calls_derive_and_reconcile_for_active_user(monkeypatch):
-    """_run_one must call derive_and_reconcile + provision_pending_websets
-    for the user after the morning path runs."""
+    """_run_one must call derive_and_reconcile after morning runs.
+
+    Under the /search-only model the synthesis worker no longer calls
+    provision_pending_websets — that path is deprecated because Exa
+    websets+monitors cost ~10 credits/row vs ~5 credits per /search.
+    The cadence-aware poller in run_proactive_worker handles fanout
+    instead.
+    """
     from backend.memory.jobs import synthesis_worker as sw
     from backend.web.proactive import subscriptions as subs
 
@@ -206,4 +212,5 @@ async def test_synthesis_worker_calls_derive_and_reconcile_for_active_user(monke
         morning_runner=fake_morning_runner,
     )
     assert ("derive_and_reconcile", "u_recon_test") in calls
-    assert ("provision", "u_recon_test") in calls
+    # provisioning is no longer wired in — assert it's NOT called.
+    assert ("provision", "u_recon_test") not in calls

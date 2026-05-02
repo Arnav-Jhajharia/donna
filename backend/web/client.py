@@ -213,7 +213,7 @@ async def exa_research_get(
 async def exa_webset_create(
     search_query: str,
     *,
-    count: int = 10,
+    count: int = 3,
     entity_type: str | None = None,
     enrichments: list[dict[str, Any]] | None = None,
     criteria: list[dict[str, Any]] | None = None,
@@ -277,21 +277,22 @@ async def exa_webset_items(
 
 
 _CADENCE_TO_CRON: dict[str, str] = {
-    # Daily at 00:00 UTC. We can't fire more than once per day on
-    # Starter without burning through quota; daily is the sweet spot
-    # for proactive watch surfaces.
+    # The deriver picks one of these per watch based on topic velocity.
+    # Default for new watches is "weekly" — daily is reserved for fast
+    # news beats only, monthly for slow research / thesis tracking.
+    "hourly": "0 * * * *",
     "daily": "0 0 * * *",
     "weekly": "0 0 * * 0",
-    "hourly": "0 * * * *",
+    "monthly": "0 0 1 * *",
 }
 
 
 async def exa_monitor_create(
     *,
     webset_id: str,
-    cadence: str = "daily",
+    cadence: str = "weekly",
     behavior: str = "search",
-    count: int = 5,
+    count: int = 2,
     behavior_mode: str = "append",
     timezone_name: str = "UTC",
     fields: dict[str, Any] | None = None,
