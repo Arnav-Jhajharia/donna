@@ -5,8 +5,95 @@
  * with richer schema; the rest live here for compactness.
  */
 
+'use client';
+
+import { useState } from 'react';
+import ActionChip from '@/components/ActionChip';
+import type { ActionVerb } from '@/lib/plan';
 import { cIcons, type CatIconName } from './icons';
 import { SERIF, SANS, BORDER, BORDER_STRONG, BORDER_ACCENT, Eyebrow, SectionHead } from './atoms';
+
+// Generic block-footer action chip strip. Composer can decorate any block
+// with ``actions`` and the footer renders them in order. Tone is inferred
+// from verb type — affirmative verbs lean rust, destructive lean
+// destructive, neutral lean paper.
+export function BlockActions({ actions, align = 'right' }: { actions?: ActionVerb[]; align?: 'left' | 'right' | 'center' }) {
+  if (!actions || actions.length === 0) return null;
+  return (
+    <div
+      style={{
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 8,
+        margin: '12px 22px 0',
+        justifyContent:
+          align === 'right' ? 'flex-end' : align === 'center' ? 'center' : 'flex-start',
+      }}
+    >
+      {actions.map((verb, i) => (
+        <ActionChip
+          key={`${verb.v}-${i}`}
+          verb={verb}
+          tone={toneForVerb(verb)}
+          size="sm"
+        >
+          {labelForVerb(verb)}
+        </ActionChip>
+      ))}
+    </div>
+  );
+}
+
+export function toneForVerb(verb: ActionVerb): 'rust' | 'paper' | 'amber' | 'moss' | 'oxblood' | 'destructive' {
+  switch (verb.v) {
+    case 'mark_reminder_done':
+    case 'complete_pick':
+    case 'log_value':
+    case 'quick_log':
+      return 'moss';
+    case 'accept_attention':
+    case 'accept_draft':
+    case 'start_tracker':
+      return 'rust';
+    case 'decide_option':
+      return 'amber';
+    case 'dismiss_attention':
+      return 'destructive';
+    case 'snooze_reminder':
+      return 'paper';
+    case 'open_attention':
+      return 'rust';
+    case 'connect_integration':
+    case 'open_relationship':
+    case 'open_news':
+    case 'open_tracker':
+    case 'reply_chip':
+    default:
+      return 'paper';
+  }
+}
+
+export function labelForVerb(verb: ActionVerb): string {
+  switch (verb.v) {
+    case 'mark_reminder_done': return 'mark done';
+    case 'snooze_reminder':    return 'snooze';
+    case 'complete_pick':      return 'keep';
+    case 'decide_option':      return 'pick this';
+    case 'accept_attention':   return 'yes';
+    case 'dismiss_attention':  return 'not now';
+    case 'accept_draft':       return 'send it';
+    case 'start_tracker':      return `start ${verb.name}`;
+    case 'log_value':          return 'log';
+    case 'quick_log':          return verb.kind || 'log';
+    case 'connect_integration': return `connect ${verb.provider}`;
+    case 'open_relationship':  return 'open';
+    case 'open_news':          return 'open';
+    case 'open_tracker':       return 'see all';
+    case 'open_attention':     return 'open';
+    case 'reply_chip':         return verb.intent;
+    default:                   return 'do';
+  }
+}
 
 // ═════════════════════════════════════════════════════════════════════════
 // 05 · WATCH
@@ -23,6 +110,8 @@ export interface CatWatchSpec {
   variant: 'rows' | 'ticker';
   title?: string;
   items: WatchItem[];
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatWatch({ spec }: { spec: CatWatchSpec }) {
   if (spec.variant === 'ticker') return <WatchTicker spec={spec} />;
@@ -68,6 +157,7 @@ function WatchRows({ spec }: { spec: CatWatchSpec }) {
           <span style={{ fontFamily: SANS, fontSize: 10.5, color: 'var(--ink-400)' }}>{it.at}</span>
         </div>
       ))}
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -142,6 +232,7 @@ function WatchTicker({ spec }: { spec: CatWatchSpec }) {
           </div>
         </div>
       ))}
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -162,6 +253,8 @@ export interface CatBriefSpec {
   chips?: string[];
   // index
   items?: BriefIndexItem[];
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatBrief({ spec }: { spec: CatBriefSpec }) {
   if (spec.variant === 'index') {
@@ -249,6 +342,7 @@ export function CatBrief({ spec }: { spec: CatBriefSpec }) {
           ))}
         </div>
       )}
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -265,6 +359,8 @@ export interface CatPrepSpec {
   items: PrepItem[];
   nextLine?: string;
   meta?: string;
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatPrep({ spec }: { spec: CatPrepSpec }) {
   if (spec.variant === 'card') {
@@ -368,6 +464,7 @@ export function CatPrep({ spec }: { spec: CatPrepSpec }) {
           </div>
         ))}
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -396,6 +493,8 @@ export interface CatScheduleSpec {
   ticks?: string[];
   glance?: string;
   range?: string;
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatSchedule({ spec }: { spec: CatScheduleSpec }) {
   if (spec.variant === 'strip') {
@@ -498,6 +597,7 @@ export function CatSchedule({ spec }: { spec: CatScheduleSpec }) {
           </div>
         ))}
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -511,6 +611,8 @@ export interface CatStreakSpec {
   eyebrow: string;
   body: string;
   count?: number;
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatStreak({ spec }: { spec: CatStreakSpec }) {
   if (spec.variant === 'badge') {
@@ -593,6 +695,7 @@ export function CatStreak({ spec }: { spec: CatStreakSpec }) {
           />
         ))}
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -612,6 +715,8 @@ export interface CatPersonSpec {
   heroBody?: string;
   ctaPrimary?: string;
   ctaSecondary?: string;
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatPerson({ spec }: { spec: CatPersonSpec }) {
   if (spec.variant === 'hero') {
@@ -743,6 +848,7 @@ export function CatPerson({ spec }: { spec: CatPersonSpec }) {
           );
         })}
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -750,13 +856,23 @@ export function CatPerson({ spec }: { spec: CatPersonSpec }) {
 // ═════════════════════════════════════════════════════════════════════════
 // 11 · REMINDER
 // ═════════════════════════════════════════════════════════════════════════
-export interface ReminderItemCat { label: string; at: string; done?: boolean; }
+export interface ReminderItemCat {
+  /** Stable id; required to fire mark_reminder_done / snooze_reminder. */
+  id?: string;
+  label: string;
+  at: string;
+  done?: boolean;
+  /** Optional override action set for this row (advanced use). */
+  actions?: ActionVerb[];
+}
 export interface CatReminderSpec {
   type: 'c-reminder';
   variant: 'editorial' | 'pill';
   title?: string;
   right?: string;
   items: ReminderItemCat[];
+  /** Block-level footer actions (e.g. "see all"). */
+  actions?: ActionVerb[];
 }
 export function CatReminder({ spec }: { spec: CatReminderSpec }) {
   if (spec.variant === 'pill') {
@@ -803,60 +919,113 @@ export function CatReminder({ spec }: { spec: CatReminderSpec }) {
       />
       <div style={{ marginTop: 8 }}>
         {spec.items.map((t, i) => (
-          <div
-            key={i}
-            style={{
-              display: 'grid',
-              gridTemplateColumns: '22px 1fr auto',
-              gap: 12,
-              padding: '10px 0',
-              borderBottom: `1px solid ${BORDER}`,
-              alignItems: 'flex-start',
-            }}
-          >
-            <div
-              style={{
-                width: 18,
-                height: 18,
-                borderRadius: 999,
-                border: `1.4px solid ${t.done ? 'var(--moss-700)' : BORDER_STRONG}`,
-                background: t.done ? 'var(--moss-700)' : 'transparent',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                marginTop: 1,
-              }}
-            >
-              {t.done && <cIcons.check s={10} c="var(--paper-100)" />}
-            </div>
-            <div
-              style={{
-                fontFamily: SANS,
-                fontSize: 14,
-                fontWeight: 500,
-                color: t.done ? 'var(--ink-500)' : 'var(--ink-900)',
-                textDecoration: t.done ? 'line-through' : 'none',
-                textDecorationColor: 'var(--ink-300)',
-              }}
-            >
-              {t.label}
-            </div>
-            <span
-              style={{
-                fontFamily: SANS,
-                fontSize: 11,
-                color: t.done ? 'var(--moss-700)' : 'var(--rust-700)',
-                fontWeight: 500,
-                marginTop: 2,
-              }}
-            >
-              {t.done ? 'done' : t.at}
-            </span>
-          </div>
+          <ReminderRow key={t.id || i} item={t} />
         ))}
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
+}
+
+function ReminderRow({ item: t }: { item: ReminderItemCat }) {
+  // Local optimistic state — when the user taps "done" the row collapses
+  // before the server ack lands so the UI feels instant.
+  const initialDone = !!t.done;
+  const [doneNow, setDoneNow] = useState(initialDone);
+  const itemActions: ActionVerb[] = t.actions ?? (
+    t.id && !doneNow
+      ? [
+          { v: 'mark_reminder_done', reminderId: t.id },
+          {
+            v: 'snooze_reminder',
+            reminderId: t.id,
+            until: snoozeUntil(60 * 60 * 1000), // +1h
+          },
+        ]
+      : []
+  );
+  return (
+    <div
+      style={{
+        display: 'grid',
+        gridTemplateColumns: '22px 1fr auto',
+        gap: 12,
+        padding: '10px 0',
+        borderBottom: `1px solid ${BORDER}`,
+        alignItems: 'flex-start',
+      }}
+    >
+      <div
+        style={{
+          width: 18,
+          height: 18,
+          borderRadius: 999,
+          border: `1.4px solid ${doneNow ? 'var(--moss-700)' : BORDER_STRONG}`,
+          background: doneNow ? 'var(--moss-700)' : 'transparent',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginTop: 1,
+          transition: 'background-color 200ms, border-color 200ms',
+        }}
+      >
+        {doneNow && <cIcons.check s={10} c="var(--paper-100)" />}
+      </div>
+      <div>
+        <div
+          style={{
+            fontFamily: SANS,
+            fontSize: 14,
+            fontWeight: 500,
+            color: doneNow ? 'var(--ink-500)' : 'var(--ink-900)',
+            textDecoration: doneNow ? 'line-through' : 'none',
+            textDecorationColor: 'var(--ink-300)',
+            transition: 'color 200ms',
+          }}
+        >
+          {t.label}
+        </div>
+        {itemActions.length > 0 && (
+          <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+            {itemActions.map((verb, i) => {
+              const tone = toneForVerb(verb);
+              const label = verb.v === 'snooze_reminder' ? 'snooze 1h' : labelForVerb(verb);
+              return (
+                <ActionChip
+                  key={`${verb.v}-${i}`}
+                  verb={verb}
+                  tone={tone}
+                  size="sm"
+                  onResult={(r) => {
+                    if (r.ok && verb.v === 'mark_reminder_done') setDoneNow(true);
+                  }}
+                >
+                  {label}
+                </ActionChip>
+              );
+            })}
+          </div>
+        )}
+      </div>
+      <span
+        style={{
+          fontFamily: SANS,
+          fontSize: 11,
+          color: doneNow ? 'var(--moss-700)' : 'var(--rust-700)',
+          fontWeight: 500,
+          marginTop: 2,
+        }}
+      >
+        {doneNow ? 'done' : t.at}
+      </span>
+    </div>
+  );
+}
+
+function snoozeUntil(deltaMs: number): string {
+  const d = new Date(Date.now() + deltaMs);
+  // Local-formatted "in 1h" wording for the UI is generated by the toast.
+  return d.toISOString();
 }
 
 // ═════════════════════════════════════════════════════════════════════════
@@ -867,6 +1036,8 @@ export interface CatQuickLogSpec {
   type: 'c-quicklog';
   variant: 'chips' | 'tray';
   chips: QuickLogChip[];
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatQuickLog({ spec }: { spec: CatQuickLogSpec }) {
   if (spec.variant === 'tray') {
@@ -960,6 +1131,7 @@ export function CatQuickLog({ spec }: { spec: CatQuickLogSpec }) {
           );
         })}
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -975,6 +1147,8 @@ export interface CatPickSpec {
   body?: string;
   source?: string;
   year?: string;
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatPick({ spec }: { spec: CatPickSpec }) {
   if (spec.variant === 'card') {
@@ -1059,6 +1233,7 @@ export function CatPick({ spec }: { spec: CatPickSpec }) {
         <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>say more</span>
         <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', marginLeft: 'auto' }}>drop</span>
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -1074,6 +1249,8 @@ export interface CatOfferSpec {
   rationale?: string;
   ctaAccept: string;
   ctaDismiss?: string;
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatOffer({ spec }: { spec: CatOfferSpec }) {
   if (spec.variant === 'hero') {
@@ -1175,6 +1352,7 @@ export function CatOffer({ spec }: { spec: CatOfferSpec }) {
           {spec.ctaDismiss ?? 'not now'}
         </span>
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -1188,6 +1366,8 @@ export interface CatDraftSpec {
   recipient: string;
   subject: string;
   preview: string;
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatDraft({ spec }: { spec: CatDraftSpec }) {
   if (spec.variant === 'letter') {
@@ -1270,6 +1450,7 @@ export function CatDraft({ spec }: { spec: CatDraftSpec }) {
         <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>open to edit</span>
         <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', marginLeft: 'auto' }}>drop</span>
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -1284,6 +1465,8 @@ export interface CatDecisionSpec {
   question: string;
   highlight?: string; // italic-rust word inside the question (stack only)
   options: DecisionOption[];
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatDecision({ spec }: { spec: CatDecisionSpec }) {
   if (spec.variant === 'stack') {
@@ -1388,6 +1571,7 @@ export function CatDecision({ spec }: { spec: CatDecisionSpec }) {
           </div>
         ))}
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -1401,6 +1585,8 @@ export interface CatConfrontSpec {
   eyebrow?: string;
   title: string;
   body?: string;
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatConfront({ spec }: { spec: CatConfrontSpec }) {
   if (spec.variant === 'card') {
@@ -1489,6 +1675,7 @@ export function CatConfront({ spec }: { spec: CatConfrontSpec }) {
           talk to me
         </span>
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -1501,6 +1688,8 @@ export interface CatReflectionSpec {
   variant: 'prompt' | 'card';
   eyebrow?: string;
   prompt: string;
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatReflection({ spec }: { spec: CatReflectionSpec }) {
   if (spec.variant === 'card') {
@@ -1582,6 +1771,7 @@ export function CatReflection({ spec }: { spec: CatReflectionSpec }) {
         <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--rust-700)', fontWeight: 500 }}>answer</span>
         <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-500)' }}>skip for today</span>
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -1596,6 +1786,8 @@ export interface CatOpenLoopSpec {
   title?: string;
   right?: string;
   items: OpenLoopItem[];
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatOpenLoop({ spec }: { spec: CatOpenLoopSpec }) {
   if (spec.variant === 'dashed') {
@@ -1669,6 +1861,7 @@ export function CatOpenLoop({ spec }: { spec: CatOpenLoopSpec }) {
           </div>
         ))}
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -1683,6 +1876,8 @@ export interface CatPermissionSpec {
   body: string;
   ctaConnect?: string;
   ctaDismiss?: string;
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatPermission({ spec }: { spec: CatPermissionSpec }) {
   if (spec.variant === 'editorial') {
@@ -1767,6 +1962,7 @@ export function CatPermission({ spec }: { spec: CatPermissionSpec }) {
       >
         {spec.ctaConnect ?? 'connect'}
       </span>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }
@@ -1779,6 +1975,8 @@ export interface CatReadSpec {
   type: 'c-read';
   variant: 'index' | 'card';
   items: ReadItem[];
+  /** Optional footer actions, rendered as ActionChips by BlockActions. */
+  actions?: ActionVerb[];
 }
 export function CatRead({ spec }: { spec: CatReadSpec }) {
   if (spec.variant === 'card') {
@@ -1865,6 +2063,7 @@ export function CatRead({ spec }: { spec: CatReadSpec }) {
           </div>
         ))}
       </div>
+      <BlockActions actions={spec.actions} />
     </div>
   );
 }

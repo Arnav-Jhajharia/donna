@@ -22,6 +22,11 @@ const LINKS: InternalLink[] = [
     blurb: 'turn-by-turn telemetry. tool calls, hook denies, latencies, prompt snapshots.',
   },
   {
+    href: '/observe/attention',
+    label: 'observe.attention',
+    blurb: 'attention runtime. live cards, ticks, proactive messages, pending schedule queue.',
+  },
+  {
     href: '/admin',
     label: 'admin',
     blurb: 'user inspector. integrations, attentions, memory, calendar, raw state.',

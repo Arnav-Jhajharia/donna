@@ -58,6 +58,7 @@ async def deliver_surface(
     resolved_mode = mode or await _resolve_mode(user_id)
 
     # Persist the ChatMessage either way (audit + dashboard).
+    message_id: str | None = None
     async with async_session() as session:
         row = ChatMessage(
             user_id=user_id,
@@ -68,6 +69,8 @@ async def deliver_surface(
             created_at=_utcnow_naive(),
         )
         session.add(row)
+        await session.flush()
+        message_id = row.id
         # Stamp the attention's last_surfaced_at so the dashboard /
         # the runtime can compute silent_for_seconds correctly.
         att_row = (
@@ -78,6 +81,28 @@ async def deliver_surface(
         if att_row is not None:
             att_row.last_surfaced_at = _utcnow_naive()
         await session.commit()
+
+    try:
+        from donna_runtime.observability import emit
+
+        emit(
+            "proactive.delivered",
+            user_id=user_id,
+            source="attention_runtime",
+            surface="memory/attention/delivery",
+            message_id=message_id,
+            mode=resolved_mode,
+            is_shadow=(resolved_mode == "shadow"),
+            attention_id=attention_id,
+            kind=surface.kind,
+            draft_preview=(body or "")[:200],
+        )
+    except Exception:
+        logger.exception(
+            "deliver_surface: proactive.delivered emit failed user=%s attention=%s",
+            user_id[:8],
+            attention_id[:8],
+        )
 
     if resolved_mode == "shadow":
         logger.info(

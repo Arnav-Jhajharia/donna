@@ -6,6 +6,7 @@
 import type { CSSProperties } from 'react';
 import { cIcons, type CatIconName } from './icons';
 import { SERIF, SANS, BORDER, Eyebrow, SectionHead } from './atoms';
+import { BlockActions } from './CatBlocks';
 
 export type TrackerTint = 'amber' | 'paper' | 'rust' | 'moss';
 const tintToBg: Record<TrackerTint, string> = {
@@ -47,12 +48,23 @@ export interface CatTrackerSpec {
   history?: number[]; // 7 values
   todayIndex?: number; // index of today in history
   weekLabels?: string[]; // 7 single-letter day labels
+  /** Optional footer actions, rendered as ActionChips. */
+  actions?: import('@/lib/plan').ActionVerb[];
 }
 
 export default function CatTracker({ spec }: { spec: CatTrackerSpec }) {
-  if (spec.variant === 'borderless') return <Borderless spec={spec} />;
-  if (spec.variant === 'hero') return <Hero spec={spec} />;
-  return <Pair spec={spec} />;
+  return (
+    <>
+      {spec.variant === 'borderless' ? (
+        <Borderless spec={spec} />
+      ) : spec.variant === 'hero' ? (
+        <Hero spec={spec} />
+      ) : (
+        <Pair spec={spec} />
+      )}
+      <BlockActions actions={spec.actions} />
+    </>
+  );
 }
 
 // ─── pair (canonical morning trackers) ────────────────────────────────────

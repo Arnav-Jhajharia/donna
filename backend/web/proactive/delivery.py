@@ -71,7 +71,7 @@ async def deliver_drafts(
     drafts_for_wa: list[str] = []
 
     async with async_session() as session:
-        for _result, draft in sends:
+        for result, draft in sends:
             row = ChatMessage(
                 user_id=user_id,
                 role="assistant",
@@ -81,6 +81,25 @@ async def deliver_drafts(
                 created_at=_utcnow_naive(),
             )
             session.add(row)
+            await session.flush()
+            try:
+                from donna_runtime.observability import emit
+
+                emit(
+                    "proactive.delivered",
+                    user_id=user_id,
+                    source="webset_subscription",
+                    surface="web/proactive/delivery",
+                    message_id=row.id,
+                    mode=mode,
+                    is_shadow=(mode == "shadow"),
+                    intent_key=getattr(result, "intent_key", None),
+                    signal_id=getattr(result, "signal_id", None),
+                    subscription_id=getattr(result, "subscription_id", None),
+                    draft_preview=(draft or "")[:200],
+                )
+            except Exception:
+                logger.exception("deliver_drafts: emit failed user=%s", user_id[:8])
             delivered += 1
             if mode == "live":
                 drafts_for_wa.append(draft)

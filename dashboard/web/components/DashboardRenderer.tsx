@@ -10,6 +10,7 @@ import { Intro } from './Intro';
 import { ScreenRoot } from './ds';
 import TopBar from './TopBar';
 import MumbaiLineArt from './MumbaiLineArt';
+import { DomainRail, ALL_DOMAINS } from './DomainRail';
 import CalendarShapeBlock from './blocks/CalendarShapeBlock';
 import CelebrationBlock from './blocks/CelebrationBlock';
 import ConfrontationBlock from './blocks/ConfrontationBlock';
@@ -257,6 +258,7 @@ function PagedDashboard({ plan }: { plan: DashboardPlan }) {
 }
 
 function PageColumn({ page, index }: { page: DashboardPage; index: number }) {
+  const isTodayPage = page.id === 'today';
   return (
     <motion.section
       initial="hidden"
@@ -308,17 +310,89 @@ function PageColumn({ page, index }: { page: DashboardPage; index: number }) {
           )}
         </motion.div>
       )}
-      {page.blocks.map((block, bidx) => (
-        <motion.div
-          key={`${page.id}-${blockKey(block, bidx)}`}
-          variants={fadeUp}
-          transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
-        >
-          <BlockSwitch block={block} />
-        </motion.div>
-      ))}
+      {isTodayPage ? (
+        <DomainRailedPage page={page} />
+      ) : (
+        page.blocks.map((block, bidx) => (
+          <motion.div
+            key={`${page.id}-${blockKey(block, bidx)}`}
+            variants={fadeUp}
+            transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
+          >
+            <BlockSwitch block={block} />
+          </motion.div>
+        ))
+      )}
     </motion.section>
   );
+}
+
+// Page 2 ("today") groups blocks by their `domain` tag into rails. Blocks
+// without a domain fall into a residual "today" rail at the top so they
+// don't disappear when the composer hasn't tagged them yet.
+function DomainRailedPage({ page }: { page: DashboardPage }) {
+  const grouped = groupByDomain(page.blocks);
+  return (
+    <div>
+      {ALL_DOMAINS.map((domain) => {
+        const blocks = grouped[domain] || [];
+        return (
+          <DomainRail
+            key={domain}
+            domain={domain}
+            hasContent={blocks.length > 0}
+          >
+            {blocks.map((block, bidx) => (
+              <motion.div
+                key={`${page.id}-${domain}-${blockKey(block, bidx)}`}
+                variants={fadeUp}
+                transition={{ duration: 0.45, ease: [0.2, 0.8, 0.2, 1] }}
+              >
+                <BlockSwitch block={block} />
+              </motion.div>
+            ))}
+          </DomainRail>
+        );
+      })}
+    </div>
+  );
+}
+
+function groupByDomain(
+  blocks: Block[],
+): Partial<Record<import('@/lib/plan').Domain, Block[]>> {
+  const out: Partial<Record<import('@/lib/plan').Domain, Block[]>> = {};
+  for (const b of blocks) {
+    const d = (b as { domain?: import('@/lib/plan').Domain }).domain;
+    const key: import('@/lib/plan').Domain =
+      d && (ALL_DOMAINS as readonly string[]).includes(d) ? d : inferDomainFromBlock(b);
+    if (!out[key]) out[key] = [];
+    out[key]!.push(b);
+  }
+  return out;
+}
+
+// Best-effort domain inference for blocks whose composer didn't tag them.
+// Only used as a fallback so rails don't ghost-empty during the prompt
+// rollout. Once the composer reliably emits ``domain``, this is dead.
+function inferDomainFromBlock(b: Block): import('@/lib/plan').Domain {
+  const t = b.type;
+  if (t === 'c-tracker' || t === 'c-streak') return 'body';
+  if (t === 'c-person' || t === 'relationship') return 'people';
+  if (
+    t === 'c-openloop' ||
+    t === 'c-prep' ||
+    t === 'c-draft' ||
+    t === 'c-decision' ||
+    t === 'c-permission' ||
+    t === 'c-capability' ||
+    t === 'c-confront' ||
+    t === 'c-watch'
+  )
+    return 'work';
+  if (t === 'c-reflection' || t === 'c-pick' || t === 'c-read' || t === 'c-quicklog' || t === 'c-brief') return 'mind';
+  if (t === 'c-schedule' || t === 'c-reminder' || t === 'reminders') return 'day';
+  return 'work';
 }
 
 function pageStartsWithHero(page: DashboardPage): boolean {

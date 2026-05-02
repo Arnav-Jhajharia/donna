@@ -20,7 +20,7 @@ from __future__ import annotations
 
 from typing import Annotated, Any, Literal, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 from pydantic.alias_generators import to_camel
 
 
@@ -32,7 +32,11 @@ class _PlanBase(BaseModel):
     model_config = ConfigDict(
         populate_by_name=True,
         alias_generator=to_camel,
-        extra="ignore",
+        # ``allow`` lets new fields like ``domain`` (block surface tag)
+        # flow through the Pydantic round-trip without requiring a touch
+        # on every block class. The renderer reads them directly from the
+        # serialized JSON.
+        extra="allow",
     )
 
 
@@ -153,7 +157,7 @@ MomentTag = Literal[
 # Catalogue iconography — keys of `cIcons` in components/blocks/catalogue/icons.tsx.
 CatIconName = Literal[
     "drop", "flame", "rupee", "envelope", "eye", "book", "link",
-    "chev", "check", "plug", "coffee", "bowl",
+    "chev", "check", "plug", "coffee", "bowl", "moon", "heart",
 ]
 TrackerTint = Literal["amber", "paper", "rust", "moss"]
 QuickLogTint = Literal["amber", "rust", "moss"]
@@ -479,8 +483,20 @@ class CatPrepBlock(_PlanBase):
 class ScheduleSlotItem(_PlanBase):
     at: str
     label: str
+    # The LLM occasionally emits a bare integer (minutes). Accept either
+    # and coerce to a "<n>m" string in the validator so the wire shape
+    # the frontend expects (e.g. "90m") is preserved.
     duration: str
     kind: ScheduleSlotKind
+
+    @field_validator("duration", mode="before")
+    @classmethod
+    def _coerce_duration(cls, v: Any) -> str:
+        if isinstance(v, int):
+            return f"{v}m"
+        if isinstance(v, float):
+            return f"{int(v)}m"
+        return str(v) if v is not None else ""
 
 
 class ScheduleStripItem(_PlanBase):

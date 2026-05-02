@@ -33,9 +33,24 @@ export type ActionVerb =
   | { v: 'open_relationship'; personId: string }
   | { v: 'open_news'; newsId: string }
   | { v: 'open_tracker'; tracker: string }
+  | { v: 'open_attention'; attentionId: string }
   | { v: 'reply_chip'; intent: string };
 
 export type SignalTone = 'ink' | 'rust' | 'moss' | 'amber' | 'oxblood';
+
+// ── Domain ─────────────────────────────────────────────────────────────────
+// User-side surfaces of interest. Blocks on Page 2 carry a domain so the
+// renderer can group them under sticky headers ("body", "people", "work")
+// and collapse rails with no signal. Page 1 blocks may also carry a
+// domain, but the renderer doesn't group them — the editorial cover
+// stays flat.
+export type Domain =
+  | 'body'    // calories, sleep, water, mood, training, weight
+  | 'people'  // last touch, drafts to send, who's on user's mind
+  | 'work'    // open loops, decisions, drafts, projects, meeting prep
+  | 'money'   // spend, runway, recurring subs, refunds
+  | 'mind'   // reflections, patterns, contradictions
+  | 'day';    // schedule, time, what's coming next
 
 export type MomentTag =
   | 'dawn' | 'morning' | 'midday' | 'afternoon' | 'evening' | 'night' | 'late';

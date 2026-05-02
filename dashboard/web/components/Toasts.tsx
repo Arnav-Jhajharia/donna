@@ -38,11 +38,14 @@ export default function Toasts() {
             style={{
               pointerEvents: 'auto',
               cursor: 'pointer',
-              background: 'var(--ink-900)',
+              background:
+                t.tone === 'error'
+                  ? 'var(--oxblood-700, #6a1818)'
+                  : 'var(--ink-900)',
               color: 'var(--paper-100)',
               borderRadius: 12,
               padding: '12px 14px',
-              boxShadow: '0 8px 24px rgba(0,0,0,0.18)',
+              boxShadow: '0 8px 24px rgba(0,0,0,0.22)',
               display: 'flex',
               flexDirection: 'column',
               gap: 4,
@@ -53,7 +56,10 @@ export default function Toasts() {
                 fontSize: 10,
                 letterSpacing: '0.14em',
                 textTransform: 'uppercase',
-                color: 'var(--rust-300)',
+                color:
+                  t.tone === 'error'
+                    ? 'var(--paper-300, #d6b8b8)'
+                    : 'var(--rust-300)',
                 fontWeight: 500,
               }}
             >

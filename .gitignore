@@ -34,6 +34,7 @@ dashboard/**/.next/
 dashboard/**/.next-internal/
 dashboard/**/out/
 dashboard/**/.turbo/
+dashboard/**/tsconfig.tsbuildinfo
 
 # Heavy media — host on Cloudinary (or other CDN), not git/Vercel
 dashboard/web/public/*.mp4

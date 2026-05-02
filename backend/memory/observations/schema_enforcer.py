@@ -62,7 +62,7 @@ async def _enrich_meal_calories(
     if not item:
         return None
     try:
-        kcal, confidence = estimate_calories(item)
+        kcal, confidence = await estimate_calories(item)
     except Exception:
         logger.exception("schema_enforcer: estimator raised for %r", item)
         return None

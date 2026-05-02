@@ -106,13 +106,26 @@ def _lookup_match(item: str) -> int | None:
     return matches[0][1]
 
 
-@lru_cache(maxsize=512)
-def _haiku_estimate(item: str) -> int | None:
-    """Ask Haiku for a per-serving kcal estimate. Cached on input string."""
+# Process-local cache for Haiku results. Keyed by normalised item string.
+# We can't @lru_cache an async function cleanly; this dict is good enough
+# for the dev process and doesn't need cross-process consistency.
+_HAIKU_CACHE: dict[str, int | None] = {}
+_HAIKU_CACHE_MAX = 1024
+
+
+async def _haiku_estimate(item: str) -> int | None:
+    """Ask Haiku for a per-serving kcal estimate.
+
+    Async because the caller (schema_enforcer) is async and we MUST NOT
+    nest asyncio.run inside a running loop. Cached in-process on the
+    normalised item string.
+    """
+    cache_key = item.strip().lower()
+    if cache_key in _HAIKU_CACHE:
+        return _HAIKU_CACHE[cache_key]
     try:
         from anthropic import AsyncAnthropic
         import os
-        import asyncio
 
         api_key = os.environ.get("ANTHROPIC_API_KEY")
         if not api_key:
@@ -125,29 +138,37 @@ def _haiku_estimate(item: str) -> int | None:
             f"If you can't estimate, reply with 0.\n\nItem: {item}"
         )
 
-        async def _call() -> int | None:
-            client = AsyncAnthropic(api_key=api_key)
-            resp = await client.messages.create(
-                model="claude-haiku-4-5",
-                max_tokens=10,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            text = "".join(
-                getattr(b, "text", "") for b in resp.content if hasattr(b, "text")
-            ).strip()
-            m = re.search(r"\d+", text)
-            if not m:
-                return None
-            n = int(m.group(0))
-            return n if 0 < n <= 2000 else None
-
-        return asyncio.run(_call())
+        client = AsyncAnthropic(api_key=api_key)
+        resp = await client.messages.create(
+            model="claude-haiku-4-5",
+            max_tokens=10,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = "".join(
+            getattr(b, "text", "") for b in resp.content if hasattr(b, "text")
+        ).strip()
+        m = re.search(r"\d+", text)
+        if not m:
+            return _cache_haiku(cache_key, None)
+        n = int(m.group(0))
+        return _cache_haiku(cache_key, n if 0 < n <= 2000 else None)
     except Exception:
         logger.exception("calorie_estimator: Haiku call failed for %r", item)
         return None
 
 
-def estimate_calories(item: str) -> tuple[int | None, Confidence]:
+def _cache_haiku(key: str, value: int | None) -> int | None:
+    """Bounded insert. Drops oldest entries when over the cap."""
+    if len(_HAIKU_CACHE) >= _HAIKU_CACHE_MAX:
+        # Cheap eviction: drop the first 64 keys. lru_cache would do
+        # better but we don't want the asyncio.run trap.
+        for k in list(_HAIKU_CACHE.keys())[:64]:
+            _HAIKU_CACHE.pop(k, None)
+    _HAIKU_CACHE[key] = value
+    return value
+
+
+async def estimate_calories(item: str) -> tuple[int | None, Confidence]:
     """Estimate kcal for a meal item string.
 
     Returns ``(calories, confidence)``. ``calories`` is None when we can't
@@ -159,7 +180,7 @@ def estimate_calories(item: str) -> tuple[int | None, Confidence]:
     table_hit = _lookup_match(item)
     if table_hit is not None:
         return table_hit, "high"
-    haiku_hit = _haiku_estimate(item)
+    haiku_hit = await _haiku_estimate(item)
     if haiku_hit is not None:
         return haiku_hit, "medium"
     return None, "low"

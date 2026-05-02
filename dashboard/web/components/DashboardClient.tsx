@@ -1,9 +1,11 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import DashboardRenderer from '@/components/DashboardRenderer';
 import Toasts from '@/components/Toasts';
+import AttentionSheet from '@/components/AttentionSheet';
 import { ActionProvider } from '@/lib/action-context';
+import { AttentionSheetProvider } from '@/lib/attention-sheet-context';
 import type { DashboardPlan } from '@/lib/plan';
 import { resolveUserId } from '@/lib/whoami';
 
@@ -19,6 +21,7 @@ type LoadState =
 export default function DashboardClient() {
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [userId, setUserId] = useState<string | null>(null);
+  const refetchRef = useRef<(() => void) | null>(null);
 
   // Resolve user_id once (cookie or ?user_id= query). Production no
   // longer pretends to be 'aarav' — if there's no user we render an
@@ -61,6 +64,7 @@ export default function DashboardClient() {
         }
       }
     };
+    refetchRef.current = fetchPlan;
     void fetchPlan();
     const pollId = setInterval(fetchPlan, POLL_INTERVAL_MS);
 
@@ -86,6 +90,7 @@ export default function DashboardClient() {
 
     return () => {
       cancelled = true;
+      refetchRef.current = null;
       clearInterval(pollId);
       if (eventSource) {
         eventSource.close();
@@ -93,8 +98,16 @@ export default function DashboardClient() {
     };
   }, [userId]);
 
+  // After any action, re-fetch the manifest so changes show up before
+  // the next 20s poll. Backend SSE will also fire if the action mutated
+  // server-side state — re-fetching here is cheap and idempotent.
+  const handleActionSuccess = useCallback(() => {
+    setTimeout(() => refetchRef.current?.(), 250);
+  }, []);
+
   return (
-    <ActionProvider>
+    <AttentionSheetProvider>
+    <ActionProvider userId={userId} onActionSuccess={handleActionSuccess}>
       <main
         style={{
           minHeight: '100vh',
@@ -107,7 +120,9 @@ export default function DashboardClient() {
         <DashboardSurface state={state} />
       </main>
       <Toasts />
+      <AttentionSheet />
     </ActionProvider>
+    </AttentionSheetProvider>
   );
 }
 

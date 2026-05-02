@@ -171,17 +171,21 @@ async def reconcile_subscriptions(
         for k, desc, cadence in wanted_triples:
             wanted_keys.setdefault(k, (desc, cadence))
 
-        active_rows = list(
+        # Load ALL rows for the user (active + inactive). The unique
+        # constraint is on (user_id, intent_key) regardless of active
+        # state, so we must reactivate inactive rows instead of trying
+        # to INSERT new rows with colliding keys.
+        all_rows = list(
             (
                 await session.execute(
                     select(ProactiveSubscription).where(
                         ProactiveSubscription.user_id == user_id,
-                        ProactiveSubscription.active.is_(True),
                     )
                 )
             ).scalars()
         )
-        active_keys = {r.intent_key: r for r in active_rows}
+        active_keys = {r.intent_key: r for r in all_rows if r.active}
+        inactive_keys = {r.intent_key: r for r in all_rows if not r.active}
 
         # Deactivate rows no longer in the watch list. Capture the
         # webset/monitor ids so we can delete them at Exa after the
@@ -195,8 +199,10 @@ async def reconcile_subscriptions(
                 deactivated += 1
                 to_delete.append((row.webset_id, row.monitor_id))
 
-        # Create rows for new watch lines, respecting the budget
-        active_count_after_deact = sum(1 for r in active_rows if r.active)
+        # Create or reactivate rows for new watch lines, respecting budget.
+        active_count_after_deact = sum(
+            1 for r in all_rows if r.active and r.intent_key in wanted_keys
+        )
         budget_remaining = max(0, int(max_active) - active_count_after_deact)
         created = 0
         skipped = 0
@@ -206,16 +212,31 @@ async def reconcile_subscriptions(
             if budget_remaining <= 0:
                 skipped += 1
                 continue
-            row = ProactiveSubscription(
-                user_id=user_id,
-                intent_key=key,
-                description=desc[:1000],
-                cadence=cadence,
-                created_at=_utcnow_naive(),
-                last_refreshed_at=_utcnow_naive(),
-                active=True,
-            )
-            session.add(row)
+            existing = inactive_keys.get(key)
+            if existing is not None:
+                # Reactivate prior row; the unique constraint forbids a
+                # parallel INSERT. Refresh description + cadence in case
+                # the deriver changed wording or velocity assessment.
+                existing.active = True
+                existing.description = desc[:1000]
+                existing.cadence = cadence
+                existing.last_refreshed_at = _utcnow_naive()
+                # Drop stale Exa pointers — under /search-only model
+                # we don't reuse webset/monitor IDs anyway.
+                existing.webset_id = None
+                existing.monitor_id = None
+                existing.last_hit_at = None
+            else:
+                row = ProactiveSubscription(
+                    user_id=user_id,
+                    intent_key=key,
+                    description=desc[:1000],
+                    cadence=cadence,
+                    created_at=_utcnow_naive(),
+                    last_refreshed_at=_utcnow_naive(),
+                    active=True,
+                )
+                session.add(row)
             created += 1
             budget_remaining -= 1
 

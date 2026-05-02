@@ -298,15 +298,15 @@ async def _ship_draft(
         ping_id = str(uuid.uuid4())
         now = _utcnow()
         async with _session_factory()() as session:
-            session.add(
-                ChatMessage(
-                    user_id=event.user_id,
-                    role="assistant",
-                    content=draft,
-                    is_proactive=True,
-                    created_at=now,
-                )
+            chat_row = ChatMessage(
+                user_id=event.user_id,
+                role="assistant",
+                content=draft,
+                is_proactive=True,
+                created_at=now,
             )
+            session.add(chat_row)
+            await session.flush()
             session.add(
                 ProactivePing(
                     id=ping_id,
@@ -318,6 +318,27 @@ async def _ship_draft(
                 )
             )
             await session.commit()
+            try:
+                from donna_runtime.observability import emit
+
+                emit(
+                    "proactive.delivered",
+                    user_id=event.user_id,
+                    source=event.source,
+                    surface="dispatcher_tier2",
+                    message_id=chat_row.id,
+                    mode="live",
+                    is_shadow=False,
+                    topic_key=event.topic_key,
+                    message_ref=event.source_ref,
+                    ping_id=ping_id,
+                    draft_preview=(draft or "")[:200],
+                )
+            except Exception:
+                logger.exception(
+                    "dispatcher: proactive.delivered emit failed user=%s",
+                    event.user_id,
+                )
     except Exception:
         logger.exception(
             "dispatcher: bookkeeping failed user=%s topic=%s",

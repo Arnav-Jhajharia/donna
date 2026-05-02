@@ -111,6 +111,22 @@ export const cIcons = {
       </svg>
     );
   },
+  moon: ({ s, c }: IconProps = {}) => {
+    const p = def(s, c);
+    return (
+      <svg width={p.s} height={p.s} viewBox="0 0 24 24" fill="none">
+        <path d="M20 14a8 8 0 01-10-10 8 8 0 1010 10z" stroke={p.c} strokeWidth="1.4" strokeLinejoin="round"/>
+      </svg>
+    );
+  },
+  heart: ({ s, c }: IconProps = {}) => {
+    const p = def(s, c);
+    return (
+      <svg width={p.s} height={p.s} viewBox="0 0 24 24" fill="none">
+        <path d="M12 20s-7-4.5-7-10a4 4 0 017-2.5A4 4 0 0119 10c0 5.5-7 10-7 10z" stroke={p.c} strokeWidth="1.4" strokeLinejoin="round"/>
+      </svg>
+    );
+  },
 };
 
 export type CatIconName = keyof typeof cIcons;

@@ -36,7 +36,9 @@ logger = logging.getLogger(__name__)
 
 # ── Dedup (Meta sends duplicate webhooks on retry) ────────────────────────────
 _SEEN_MSG_IDS: dict[str, float] = {}
-_DEDUP_TTL = 60
+# 5 minutes covers the common webhook-burst dedup window. The DB-backed
+# check below catches anything older OR anything across a process restart.
+_DEDUP_TTL = 5 * 60
 _DEDUP_LOCK = asyncio.Lock()
 
 
@@ -310,14 +312,61 @@ async def _download_media(media_id: str) -> bytes | None:
 # ── Dedup ─────────────────────────────────────────────────────────────────────
 
 async def _is_duplicate(wa_message_id: str | None) -> bool:
+    """Two-layer dedup.
+
+    1. In-process memo (cheap, microseconds) — catches webhook bursts of
+       the same message id within seconds, even before the DB write
+       commits.
+    2. Persistent DB check — survives uvicorn ``--reload`` restarts AND
+       any TTL gap. WhatsApp can redeliver minutes-to-hours later when
+       it didn't get our ACK in time; the DB row from the original
+       processing is the durable answer to "have we seen this id
+       before".
+
+    The in-memory layer keeps a 5-min TTL (was 60s — too short).
+    """
     if not wa_message_id:
         return False
     async with _DEDUP_LOCK:
         now = time.monotonic()
+        # Sweep entries older than the (now wider) memo TTL.
         expired = [k for k, ts in _SEEN_MSG_IDS.items() if now - ts > _DEDUP_TTL]
         for k in expired:
             del _SEEN_MSG_IDS[k]
         if wa_message_id in _SEEN_MSG_IDS:
             return True
-        _SEEN_MSG_IDS[wa_message_id] = now
-        return False
+        # Memo miss — fall through to the DB.
+
+    # DB-backed check. We DO NOT take the lock here — db i/o is allowed
+    # to race; the DB UPSERT-equivalent is the chat_messages row that
+    # will land via _save_user_message. If two webhook deliveries race
+    # past the memo, the first one to write the ChatMessage wins; the
+    # second sees the row here on its next call.
+    try:
+        from sqlalchemy import select
+        from db.models import ChatMessage
+        from db.session import async_session
+
+        async with async_session() as session:
+            row = (
+                await session.execute(
+                    select(ChatMessage.id)
+                    .where(ChatMessage.wa_message_id == wa_message_id)
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if row is not None:
+                # Persisted dupe — refresh the memo so subsequent retries
+                # in the next 5 min skip the DB round-trip too.
+                async with _DEDUP_LOCK:
+                    _SEEN_MSG_IDS[wa_message_id] = time.monotonic()
+                return True
+    except Exception:
+        # Don't block ingest on a DB hiccup. Fall through to "not a dupe"
+        # — worst case is we re-process; same as the previous behavior.
+        logger.exception("whatsapp adapter: db dedup check failed")
+
+    # Not a dupe. Stamp memo for the fast path next time.
+    async with _DEDUP_LOCK:
+        _SEEN_MSG_IDS[wa_message_id] = time.monotonic()
+    return False

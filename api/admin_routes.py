@@ -31,18 +31,21 @@ import json
 import logging
 import os
 import secrets
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterable
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.security import HTTPBasic, HTTPBasicCredentials
 from sqlalchemy import desc, func, select
 
 from backend.db.session import async_session
 from db.models import (
+    AttentionRow,
+    AttentionTickRow,
     CalendarEntry,
     ChatMessage,
+    DonnaSchedule,
     EmailMessage,
     Integration,
     Observation,
@@ -807,4 +810,812 @@ async def raw_user(
             else getattr(u, c.name, None)
         )
         for c in User.__table__.columns
+    }
+
+
+# ── Attention observability ─────────────────────────────────────────────────
+
+
+def _short(value: str | None, n: int = 8) -> str | None:
+    if not value:
+        return None
+    return str(value)[:n]
+
+
+def _attention_summary(row: AttentionRow) -> dict[str, Any]:
+    """Compact view of an attention row for the observe table."""
+    payload = dict(row.payload or {})
+    spec = payload.get("spec") or {}
+    state = payload.get("current_state") or {}
+    subject = spec.get("subject") if isinstance(spec, dict) else {}
+    subject_name = (
+        subject.get("name") if isinstance(subject, dict) else None
+    )
+    cadence = spec.get("cadence") if isinstance(spec, dict) else {}
+    cad_type = (
+        cadence.get("type") if isinstance(cadence, dict) else None
+    )
+    cad_params = (
+        cadence.get("params") if isinstance(cadence, dict) else None
+    )
+    surface_policy = (
+        spec.get("surface_policy") if isinstance(spec, dict) else {}
+    )
+    escalations = (
+        surface_policy.get("escalations")
+        if isinstance(surface_policy, dict)
+        else None
+    )
+    nudge_policy = (
+        surface_policy.get("nudge_policy")
+        if isinstance(surface_policy, dict)
+        else None
+    )
+    cursors = payload.get("poller_cursors") or {}
+    return {
+        "id": row.id,
+        "id_short": _short(row.id),
+        "user_id": row.user_id,
+        "user_id_short": _short(row.user_id),
+        "card": row.card,
+        "status": row.status,
+        "title": (spec.get("title") if isinstance(spec, dict) else None),
+        "subject": subject_name,
+        "cadence_type": cad_type,
+        "cadence_params": cad_params,
+        "value": state.get("value"),
+        "value_numeric": state.get("value_numeric"),
+        "target": state.get("target"),
+        "progress": state.get("progress"),
+        "count": state.get("count"),
+        "last_event_at": state.get("last_event_at"),
+        "day": state.get("day"),
+        "rollup": state.get("rollup"),
+        "evidence_ids": state.get("evidence_ids") or [],
+        "escalations_n": (
+            len(escalations) if isinstance(escalations, list) else 0
+        ),
+        "nudge_silent_for": (
+            nudge_policy.get("if_silent_for_seconds")
+            if isinstance(nudge_policy, dict)
+            else None
+        ),
+        "poller_cursors": cursors,
+        "last_update_at": payload.get("last_update_at"),
+        "last_surfaced_at": _iso(row.last_surfaced_at),
+        "created_at": _iso(row.created_at),
+        "current_state": state,
+    }
+
+
+@router.get("/attention/observe")
+async def attention_observe(
+    _admin: str = Depends(_require_admin),
+    user_id: str | None = Query(None, description="filter to one user"),
+    ticks_limit: int = Query(50, ge=1, le=500),
+    proactive_limit: int = Query(50, ge=1, le=500),
+    schedule_limit: int = Query(50, ge=1, le=500),
+    attentions_limit: int = Query(200, ge=1, le=1000),
+):
+    """Single endpoint feeding the /observe/attention page.
+
+    Returns four parallel sections so the UI can render the whole picture
+    in one shot:
+
+      - ``attentions``: per-attention state snapshot (live + paused +
+        recently surfaced). Sorted by ``last_update_at`` desc.
+      - ``ticks``: append-only audit history across the user's attentions
+        (or all users when ``user_id`` is None). Each tick carries the
+        surface kind + rendered message + trigger.
+      - ``proactive``: ChatMessage rows where ``is_proactive=True``,
+        regardless of whether they were delivered (live) or persisted-
+        only (shadow). This is *what Donna decided to say* across runners.
+      - ``schedule``: pending DonnaSchedule rows ordered by ``fire_at``
+        ascending — the "what's about to fire" queue.
+
+    All four sections are scoped to ``user_id`` if provided, otherwise
+    global. No write side-effects.
+    """
+    async with async_session() as session:
+        # Worker pulse: max activity per worker family. Computed from
+        # tick trigger prefixes + DonnaSchedule.fired_at, so we don't need
+        # a heartbeat table.
+        WORKER_LOOKBACK_TICKS = 500
+        worker_stmt = (
+            select(AttentionTickRow)
+            .order_by(desc(AttentionTickRow.at))
+            .limit(WORKER_LOOKBACK_TICKS)
+        )
+        worker_tick_rows = (
+            await session.execute(worker_stmt)
+        ).scalars().all()
+        worker_pulse: dict[str, dict[str, Any]] = {}
+
+        def _bump(name: str, when: datetime | None) -> None:
+            if when is None:
+                return
+            entry = worker_pulse.setdefault(name, {"name": name, "n": 0, "last_at": None})
+            entry["n"] += 1
+            prior = entry["last_at"]
+            if prior is None or when > prior:
+                entry["last_at"] = when
+
+        for t in worker_tick_rows:
+            sc = t.source_counts or {}
+            trigger = str(sc.get("trigger") or "").strip()
+            if not trigger:
+                continue
+            prefix = trigger.split(":", 1)[0]
+            mapping = {
+                "observation": "log_observation_hook",
+                "sweep": "attention_sweep_worker",
+                "nudge_watcher": "attention_nudge_worker",
+                "attention_schedule_materializer": "attention_schedule_materializer",
+                "schedule_worker": "schedule_worker",
+                "manual": "manual_invocation",
+            }
+            name = mapping.get(prefix, prefix)
+            _bump(name, t.at)
+
+        # schedule_worker fires (DonnaSchedule rows transitioning to fired=True)
+        sched_fired = (
+            await session.execute(
+                select(DonnaSchedule)
+                .where(DonnaSchedule.fired.is_(True))
+                .order_by(desc(DonnaSchedule.fired_at))
+                .limit(20)
+            )
+        ).scalars().all()
+        for s in sched_fired:
+            _bump("schedule_worker", s.fired_at)
+
+        now_utc = datetime.now(timezone.utc)
+        workers = []
+        for entry in worker_pulse.values():
+            last_at = entry["last_at"]
+            since = (
+                int((now_utc - last_at.replace(tzinfo=timezone.utc)).total_seconds())
+                if last_at is not None
+                else None
+            )
+            workers.append(
+                {
+                    "name": entry["name"],
+                    "last_at": _iso(last_at),
+                    "since_seconds": since,
+                    "recent_count": entry["n"],
+                }
+            )
+        workers.sort(key=lambda w: (w["since_seconds"] is None, w["since_seconds"] or 0))
+
+        # Attentions
+        att_stmt = select(AttentionRow).order_by(
+            desc(AttentionRow.last_surfaced_at).nullslast(),
+            desc(AttentionRow.created_at),
+        ).limit(attentions_limit)
+        if user_id:
+            att_stmt = att_stmt.where(AttentionRow.user_id == user_id)
+        att_rows = (await session.execute(att_stmt)).scalars().all()
+
+        # Ticks
+        tick_stmt = select(AttentionTickRow).order_by(
+            desc(AttentionTickRow.at)
+        ).limit(ticks_limit)
+        if user_id:
+            scoped_ids = [r.id for r in att_rows] or [""]
+            tick_stmt = tick_stmt.where(
+                AttentionTickRow.attention_id.in_(scoped_ids)
+            )
+        tick_rows = (await session.execute(tick_stmt)).scalars().all()
+
+        # Proactive chat messages
+        msg_stmt = (
+            select(ChatMessage)
+            .where(ChatMessage.is_proactive.is_(True))
+            .order_by(desc(ChatMessage.created_at))
+            .limit(proactive_limit)
+        )
+        if user_id:
+            msg_stmt = msg_stmt.where(ChatMessage.user_id == user_id)
+        msg_rows = (await session.execute(msg_stmt)).scalars().all()
+
+        # Pending schedule
+        sched_stmt = (
+            select(DonnaSchedule)
+            .where(DonnaSchedule.fired.is_(False))
+            .where(DonnaSchedule.status == "pending")
+            .order_by(DonnaSchedule.fire_at.asc())
+            .limit(schedule_limit)
+        )
+        if user_id:
+            sched_stmt = sched_stmt.where(DonnaSchedule.user_id == user_id)
+        sched_rows = (await session.execute(sched_stmt)).scalars().all()
+
+    attentions = [_attention_summary(r) for r in att_rows]
+    by_card: dict[str, int] = {}
+    by_status: dict[str, int] = {}
+    for a in attentions:
+        by_card[a["card"] or "?"] = by_card.get(a["card"] or "?", 0) + 1
+        by_status[a["status"] or "?"] = by_status.get(a["status"] or "?", 0) + 1
+
+    return {
+        "filter": {"user_id": user_id},
+        "counts": {
+            "attentions": len(attentions),
+            "ticks": len(tick_rows),
+            "proactive_messages": len(msg_rows),
+            "pending_schedule": len(sched_rows),
+            "by_card": by_card,
+            "by_status": by_status,
+        },
+        "workers": workers,
+        "attentions": attentions,
+        "ticks": [
+            {
+                "id": t.id,
+                "attention_id": t.attention_id,
+                "attention_id_short": _short(t.attention_id),
+                "at": _iso(t.at),
+                "rendered_markdown": t.rendered_markdown,
+                "warnings": t.warnings or [],
+                "source_counts": t.source_counts or {},
+            }
+            for t in tick_rows
+        ],
+        "proactive": [
+            {
+                "id": m.id,
+                "user_id": m.user_id,
+                "user_id_short": _short(m.user_id),
+                "role": m.role,
+                "content": m.content,
+                "is_shadow": bool(m.is_shadow),
+                "wa_message_id": m.wa_message_id,
+                "created_at": _iso(m.created_at),
+            }
+            for m in msg_rows
+        ],
+        "schedule": [
+            {
+                "id": s.id,
+                "id_short": _short(s.id),
+                "user_id": s.user_id,
+                "user_id_short": _short(s.user_id),
+                "phone": s.phone,
+                "fire_at": _iso(s.fire_at),
+                "origin": s.origin,
+                "recurrence": s.recurrence,
+                "context": s.context or {},
+                "attention_id": s.attention_id,
+                "attention_id_short": _short(s.attention_id),
+                "attempts": s.attempts,
+                "last_error": s.last_error,
+                "created_at": _iso(s.created_at),
+            }
+            for s in sched_rows
+        ],
+        "now": _iso(datetime.now(timezone.utc)),
+    }
+
+
+# ── Attention author + edit ──────────────────────────────────────────────────
+
+
+_VALID_STATUS_TRANSITIONS = {"live", "paused", "resolved", "archived"}
+
+
+@router.post("/attention/compose")
+async def compose_attention(
+    payload: dict = Body(...),
+    _admin: str = Depends(_require_admin),
+):
+    """Author a new attention for a user from the staff dashboard.
+
+    Body:
+        {
+          "user_id": "<uuid>",
+          "raw_intent": "track my calories with a 2000 cal goal",
+          "auto_live": true   # optional, default true
+        }
+
+    Reuses the same Sonnet 4.6 authoring pipeline that BRAIN's ``attend``
+    tool uses, so the resulting AttentionSpec matches what a user would
+    get if they typed the same thing on WhatsApp. Returns the persisted
+    attention id + a dry-run preview (rendered markdown + source counts)
+    so the staff caller can confirm the spec landed correctly.
+    """
+    user_id = str(payload.get("user_id") or "").strip()
+    raw_intent = str(payload.get("raw_intent") or "").strip()
+    auto_live = bool(payload.get("auto_live", True))
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    if not raw_intent:
+        raise HTTPException(status_code=400, detail="raw_intent required")
+
+    try:
+        from donna.attention.tools import create_attention as _create
+    except Exception as e:
+        logger.exception("admin: attention create import failed")
+        raise HTTPException(status_code=503, detail=f"compose pipeline unavailable: {e}")
+
+    try:
+        result = await _create(raw_intent, user_id, auto_live=auto_live)
+    except Exception as e:
+        logger.exception("admin: attention compose failed")
+        raise HTTPException(status_code=500, detail=str(e)[:500])
+
+    spec = result.attention.spec
+    preview = result.preview
+    return {
+        "attention_id": str(result.attention.id),
+        "user_id": str(result.attention.user_id),
+        "reused": result.reused,
+        "authored_via": result.authored_via,
+        "authored_confidence": result.authored_confidence,
+        "spec": spec.model_dump(mode="json"),
+        "preview": {
+            "rendered_markdown": getattr(preview, "rendered_markdown", None),
+            "warnings": list(getattr(preview, "warnings", []) or []),
+            "source_previews": [
+                {
+                    "source_type": p.source_type.value
+                    if hasattr(p.source_type, "value")
+                    else str(p.source_type),
+                    "item_count": p.item_count,
+                }
+                for p in (getattr(preview, "source_previews", []) or [])
+            ],
+        },
+    }
+
+
+# ── Proactive trace: forensics for ANY proactive message ───────────────────
+
+
+def _ts_within(a: datetime | None, b: datetime, *, seconds: int) -> bool:
+    if a is None:
+        return False
+    aa = a if a.tzinfo else a.replace(tzinfo=timezone.utc)
+    bb = b if b.tzinfo else b.replace(tzinfo=timezone.utc)
+    return abs((aa - bb).total_seconds()) <= seconds
+
+
+def _read_events_around(
+    *,
+    user_id: str,
+    center: datetime,
+    window_seconds: int = 300,
+    limit: int = 200,
+) -> list[dict[str, Any]]:
+    """Pull events for ``user_id`` whose ts is within ±window of center.
+
+    Walks the JSONL forward (it's append-only, oldest first); we stop
+    once we go past the upper bound. Cheap when the file is small; for
+    larger files we should index by date later.
+    """
+    if not _EVENTS_LOG_PATH.exists():
+        return []
+    lower = center - timedelta(seconds=window_seconds)
+    upper = center + timedelta(seconds=window_seconds)
+    out: list[dict[str, Any]] = []
+    try:
+        with _EVENTS_LOG_PATH.open("r", encoding="utf-8") as f:
+            for raw in f:
+                if not raw.strip():
+                    continue
+                try:
+                    ev = json.loads(raw)
+                except Exception:
+                    continue
+                ts_raw = ev.get("ts")
+                if not ts_raw:
+                    continue
+                try:
+                    ts = datetime.fromisoformat(
+                        str(ts_raw).replace("Z", "+00:00")
+                    )
+                    if ts.tzinfo is None:
+                        ts = ts.replace(tzinfo=timezone.utc)
+                except Exception:
+                    continue
+                if ts < lower:
+                    continue
+                if ts > upper:
+                    break
+                if ev.get("user_id") and ev.get("user_id") != user_id:
+                    continue
+                out.append(ev)
+                if len(out) > limit * 4:
+                    break
+    except Exception:
+        logger.exception("admin: events.jsonl window read failed")
+    # Keep most recent ``limit`` since we may have logged anonymous
+    # (user_id-less) events from worker subprocesses around the turn.
+    return out[-limit:]
+
+
+@router.get("/proactive/trace")
+async def proactive_trace(
+    message_id: str = Query(..., description="ChatMessage id"),
+    window_seconds: int = Query(300, ge=10, le=3600),
+    _admin: str = Depends(_require_admin),
+):
+    """Causal-chain trace for ONE proactive message.
+
+    Joins everything we have about *why* a proactive message went out:
+
+      1. ChatMessage row itself
+      2. ProactivePing within ±window (only dispatcher writes these)
+      3. proactive_signals fired in ±window for the same user (websets)
+         — best-effort title/content match against the message body
+      4. proactive_subscriptions referenced by intent_key
+      5. DonnaSchedule rows fired in ±window (schedule_worker path)
+      6. AttentionRow surfaces matching the topic_key, last_surfaced_at
+         in window, or referenced by a fired DonnaSchedule
+      7. events.jsonl entries in ±window: turn.start, prompt.snapshot,
+         tool.call, turn.end (cost), errors
+
+    Returns ``probable_source`` ("dispatcher" | "webset" | "schedule" |
+    "attention" | "unknown") based on which signal lines up best in time.
+    """
+    async with async_session() as session:
+        msg = (
+            await session.execute(
+                select(ChatMessage).where(ChatMessage.id == message_id)
+            )
+        ).scalar_one_or_none()
+        if msg is None:
+            raise HTTPException(status_code=404, detail="message not found")
+        if not msg.is_proactive:
+            raise HTTPException(
+                status_code=400,
+                detail="message is not proactive — trace surface is for proactive only",
+            )
+        user_id = msg.user_id
+        center_naive = msg.created_at
+        center = center_naive.replace(tzinfo=timezone.utc) if center_naive.tzinfo is None else center_naive
+        lower = center_naive - timedelta(seconds=window_seconds)
+        upper = center_naive + timedelta(seconds=window_seconds)
+
+        # Sibling proactive messages in the same window (helps see bursts)
+        siblings = (
+            await session.execute(
+                select(ChatMessage)
+                .where(ChatMessage.user_id == user_id)
+                .where(ChatMessage.is_proactive.is_(True))
+                .where(ChatMessage.created_at >= lower)
+                .where(ChatMessage.created_at <= upper)
+                .order_by(ChatMessage.created_at)
+            )
+        ).scalars().all()
+
+        # ProactivePing rows in window
+        pings = (
+            await session.execute(
+                select(ProactivePing)
+                .where(ProactivePing.user_id == user_id)
+                .where(ProactivePing.fired_at >= lower)
+                .where(ProactivePing.fired_at <= upper)
+                .order_by(ProactivePing.fired_at)
+            )
+        ).scalars().all()
+
+        # DonnaSchedule rows fired in window
+        sched_fired = (
+            await session.execute(
+                select(DonnaSchedule)
+                .where(DonnaSchedule.user_id == user_id)
+                .where(DonnaSchedule.fired.is_(True))
+                .where(DonnaSchedule.fired_at.is_not(None))
+                .where(DonnaSchedule.fired_at >= lower)
+                .where(DonnaSchedule.fired_at <= upper)
+                .order_by(DonnaSchedule.fired_at)
+            )
+        ).scalars().all()
+
+        # proactive_signals + their owning subscriptions
+        from sqlalchemy import text as _text
+
+        sig_rows = (
+            await session.execute(
+                _text(
+                    "SELECT id, intent_key, payload, arrived_at, consumed_at, subscription_id "
+                    "FROM proactive_signals "
+                    "WHERE user_id = :u AND arrived_at BETWEEN :lo AND :hi "
+                    "ORDER BY arrived_at"
+                ),
+                {"u": user_id, "lo": lower, "hi": upper},
+            )
+        ).fetchall()
+        signals: list[dict[str, Any]] = []
+        intent_keys: set[str] = set()
+        for r in sig_rows:
+            payload = r[2] if isinstance(r[2], dict) else {}
+            title = (payload.get("title") or payload.get("summary") or "")
+            url = payload.get("url") or ""
+            highlights = payload.get("highlights") or []
+            if isinstance(highlights, list):
+                highlights = highlights[:3]
+            signals.append({
+                "id": r[0],
+                "intent_key": r[1],
+                "subscription_id": r[5],
+                "arrived_at": _iso(r[3]),
+                "consumed_at": _iso(r[4]),
+                "title": str(title)[:240],
+                "url": str(url)[:300],
+                "highlights": [str(h)[:240] for h in highlights] if isinstance(highlights, list) else [],
+            })
+            if r[1]:
+                intent_keys.add(str(r[1]))
+
+        subs: list[dict[str, Any]] = []
+        if intent_keys:
+            sub_rows = (
+                await session.execute(
+                    _text(
+                        "SELECT id, intent_key, description, webset_id, monitor_id, cadence, "
+                        "       active, created_at, last_refreshed_at, last_hit_at "
+                        "FROM proactive_subscriptions "
+                        "WHERE user_id = :u AND intent_key = ANY(:keys)"
+                    ),
+                    {"u": user_id, "keys": list(intent_keys)},
+                )
+            ).fetchall()
+            for r in sub_rows:
+                subs.append({
+                    "id": r[0],
+                    "intent_key": r[1],
+                    "description": r[2],
+                    "webset_id": r[3],
+                    "monitor_id": r[4],
+                    "cadence": r[5],
+                    "active": bool(r[6]),
+                    "created_at": _iso(r[7]),
+                    "last_refreshed_at": _iso(r[8]),
+                    "last_hit_at": _iso(r[9]),
+                })
+
+        # Attentions whose last_surfaced_at falls in this window OR whose
+        # id matches a sibling DonnaSchedule.attention_id.
+        att_ids: set[str] = set()
+        for s in sched_fired:
+            if s.attention_id:
+                att_ids.add(s.attention_id)
+        att_stmt = (
+            select(AttentionRow)
+            .where(AttentionRow.user_id == user_id)
+            .where(AttentionRow.last_surfaced_at >= lower)
+            .where(AttentionRow.last_surfaced_at <= upper)
+        )
+        attns = (await session.execute(att_stmt)).scalars().all()
+        for a in attns:
+            att_ids.add(a.id)
+        if att_ids:
+            attn_rows = (
+                await session.execute(
+                    select(AttentionRow).where(AttentionRow.id.in_(list(att_ids)))
+                )
+            ).scalars().all()
+        else:
+            attn_rows = []
+
+    # events.jsonl in the same window — turn lifecycle + tool calls + cost
+    events = _read_events_around(
+        user_id=user_id, center=center, window_seconds=window_seconds, limit=200
+    )
+    turns: dict[str, dict[str, Any]] = {}
+    for e in events:
+        tid = e.get("turn_id") or ""
+        if not tid:
+            continue
+        bucket = turns.setdefault(
+            tid,
+            {
+                "turn_id": tid,
+                "started_at": None,
+                "ended_at": None,
+                "mode": None,
+                "tools": [],
+                "in_tokens": None,
+                "out_tokens": None,
+                "cache_read": None,
+                "cache_creation": None,
+                "cost_usd": None,
+                "model": None,
+                "errors": [],
+                "prompt_snapshot": None,
+            },
+        )
+        ev = e.get("event", "")
+        ts = e.get("ts")
+        if ev == "turn.start":
+            bucket["started_at"] = ts
+            bucket["mode"] = e.get("mode")
+        elif ev == "turn.end":
+            bucket["ended_at"] = ts
+            for k in ("in_tokens", "out_tokens", "cache_read", "cache_creation", "cost_usd", "model"):
+                if e.get(k) is not None:
+                    bucket[k] = e.get(k)
+        elif ev == "tool.call":
+            bucket["tools"].append({
+                "ts": ts,
+                "tool": e.get("tool"),
+                "short": e.get("short"),
+                "input_keys": e.get("input_keys") or [],
+            })
+        elif ev == "prompt.snapshot":
+            bucket["prompt_snapshot"] = {
+                "system_len": e.get("system_prompt_len"),
+                "user_len": e.get("wrapped_user_prompt_len"),
+                "model": e.get("model"),
+                "tool_mode": e.get("tool_mode"),
+            }
+        elif ev == "error":
+            bucket["errors"].append({"ts": ts, "msg": str(e.get("msg") or e.get("detail") or "")[:300]})
+
+    # Best-effort source classification
+    probable_source = "unknown"
+    confidence = 0.0
+    rationale: list[str] = []
+    msg_text_low = (msg.content or "").lower()
+
+    # 1. dispatcher Tier 2 → ProactivePing
+    matching_pings = [p for p in pings if _ts_within(p.fired_at, center, seconds=120)]
+    if matching_pings:
+        probable_source = "dispatcher_tier2"
+        confidence = 0.9
+        rationale.append(f"ProactivePing in window: {[p.source for p in matching_pings]}")
+
+    # 2. webset → proactive_signals + subscription, by title overlap
+    matched_signals = []
+    for s in signals:
+        title = (s.get("title") or "").lower()
+        if not title:
+            continue
+        # rough token overlap: any 4+ char word from title appears in message
+        words = [w for w in title.split() if len(w) >= 4]
+        if any(w in msg_text_low for w in words):
+            matched_signals.append(s)
+    if matched_signals:
+        if confidence < 0.8:
+            probable_source = "webset_subscription"
+            confidence = 0.85
+        rationale.append(
+            f"webset signal title overlap: {len(matched_signals)} match(es)"
+        )
+
+    # 3. schedule worker fire
+    if sched_fired and probable_source == "unknown":
+        probable_source = "schedule_worker"
+        confidence = 0.7
+        rationale.append(f"DonnaSchedule fired in window: {len(sched_fired)}")
+
+    # 4. attention surface
+    if attn_rows and probable_source == "unknown":
+        probable_source = "attention_runtime"
+        confidence = 0.6
+        rationale.append(
+            f"AttentionRow.last_surfaced_at in window: {len(attn_rows)}"
+        )
+
+    return {
+        "message": {
+            "id": msg.id,
+            "user_id": msg.user_id,
+            "role": msg.role,
+            "content": msg.content,
+            "is_proactive": bool(msg.is_proactive),
+            "is_shadow": bool(msg.is_shadow),
+            "wa_message_id": msg.wa_message_id,
+            "created_at": _iso(msg.created_at),
+        },
+        "window_seconds": window_seconds,
+        "probable_source": probable_source,
+        "confidence": confidence,
+        "rationale": rationale,
+        "siblings": [
+            {
+                "id": s.id,
+                "content": (s.content or "")[:240],
+                "is_shadow": bool(s.is_shadow),
+                "created_at": _iso(s.created_at),
+                "self": s.id == msg.id,
+            }
+            for s in siblings
+        ],
+        "proactive_pings": [
+            {
+                "id": p.id,
+                "source": p.source,
+                "topic_key": p.topic_key,
+                "message_ref": p.message_ref,
+                "suppressed_reason": p.suppressed_reason,
+                "fired_at": _iso(p.fired_at),
+            }
+            for p in pings
+        ],
+        "schedule_fired": [
+            {
+                "id": s.id,
+                "fire_at": _iso(s.fire_at),
+                "fired_at": _iso(s.fired_at),
+                "origin": s.origin,
+                "attention_id": s.attention_id,
+                "context": s.context or {},
+                "last_error": s.last_error,
+            }
+            for s in sched_fired
+        ],
+        "signals": signals,
+        "subscriptions": subs,
+        "attentions": [
+            {
+                "id": a.id,
+                "card": a.card,
+                "status": a.status,
+                "title": (a.payload or {}).get("spec", {}).get("title")
+                if isinstance((a.payload or {}).get("spec"), dict)
+                else None,
+                "last_surfaced_at": _iso(a.last_surfaced_at),
+                "current_state": (a.payload or {}).get("current_state") or {},
+            }
+            for a in attn_rows
+        ],
+        "turns": list(turns.values()),
+        "now": _iso(datetime.now(timezone.utc)),
+    }
+
+
+@router.post("/attention/{attention_id}/status")
+async def update_attention_status(
+    attention_id: str,
+    payload: dict = Body(...),
+    _admin: str = Depends(_require_admin),
+):
+    """Transition an attention's lifecycle status.
+
+    Body: ``{"status": "live" | "paused" | "resolved" | "cancelled"}``.
+
+    Maps to the existing single-purpose helpers so the side effects
+    (cancel materialized fires, etc.) stay in one place.
+    """
+    new_status = str(payload.get("status") or "").strip().lower()
+    if new_status not in _VALID_STATUS_TRANSITIONS:
+        raise HTTPException(
+            status_code=400,
+            detail=f"status must be one of {sorted(_VALID_STATUS_TRANSITIONS)}",
+        )
+
+    try:
+        from donna.attention.schema import AttentionStatus
+        from donna.attention.store import AttentionStore
+    except Exception as e:
+        logger.exception("admin: status import failed")
+        raise HTTPException(status_code=503, detail=f"store unavailable: {e}")
+
+    status_map = {
+        "live": AttentionStatus.LIVE,
+        "paused": AttentionStatus.PAUSED,
+        "resolved": AttentionStatus.RESOLVED,
+        "archived": AttentionStatus.QUIETLY_ARCHIVED,
+    }
+    target = status_map.get(new_status)
+    if target is None:
+        raise HTTPException(status_code=400, detail=f"unsupported status {new_status}")
+
+    try:
+        store = AttentionStore()
+        updated = store.update_status(attention_id, target)
+    except Exception as e:
+        logger.exception("admin: status update failed id=%s", attention_id[:8])
+        raise HTTPException(status_code=500, detail=str(e)[:500])
+
+    if updated is None:
+        raise HTTPException(status_code=404, detail="attention not found")
+
+    return {
+        "attention_id": str(updated.id),
+        "status": target.value,
+        "now": _iso(datetime.now(timezone.utc)),
     }

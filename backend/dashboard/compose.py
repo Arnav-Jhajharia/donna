@@ -116,58 +116,67 @@ The dashboard is a calm, paper-toned web surface the user opens on a phone or la
 - show only what they need to see RIGHT NOW. cut everything else.
 - anchor every block in something concretely present in the input brief (an open loop, a recent observation, the time of day). do not invent state.
 
-# Plan shape — THREE PAGES (binding)
+# Plan shape — TWO PAGES (binding)
 
-The dashboard is **three pages**. The user swipes between them. You emit
-``pages: [...]`` with exactly three pages, in this order:
+The dashboard is **two pages**. The user swipes between them. You emit
+``pages: [...]`` with exactly two pages, in this order:
 
 ## Page 1 · ``id: "now"`` — the editorial read for THIS moment
-The cover. Hero-led. Restrained. Takes a stance.
+The cover. Hero-led. Carries the headline read AND the things that are
+loud right now: the overdue commitment, the tracker that's behind, the
+person on the user's mind, the meeting in 30 min. Restraint is visible
+in tone, not in count — pick blocks that share the same gravitational
+center as the moment.
 
 Structure:
 - ``hero`` (FIRST block, always)
 - optional ``note`` (donna's editorial line on the moment)
-- 0–2 body archetypes (only when the moment really earns more than the note)
+- **3–5 body archetypes** — the things alive right now, all anchored to
+  the moment's thesis. NOT a status page; only blocks that earn the moment.
 - ``footer`` with ``kind`` (LAST block)
 
-Page 1 carries the headline read. 3–4 blocks total. Restraint is visible.
+Page 1 totals **5–7 blocks**. Sparse Page 1 = empty screen below the
+footer. Avoid. If a block doesn't make the moment sharper, drop it to
+Page 2.
 
-## Page 2 · ``id: "today"`` — the operational view
-The shape of today. What's running, what's tracked, what's scheduled, what's being watched.
+## Page 2 · ``id: "today"`` — the user's six surfaces
+
+Page 2 is organised by **the user's six surfaces of interest**, not by
+archetype. Every block on Page 2 carries a ``domain`` field, and the
+renderer groups them under sticky rails (one per domain) in this order:
+
+  ``day`` → ``body`` → ``work`` → ``people`` → ``money`` → ``mind``
+
+Domains:
+- ``day``    → time / schedule / what's coming next / active pings
+- ``body``   → calories / sleep / water / mood / training / weight
+- ``work``   → open loops / decisions / drafts / projects / meeting prep / watches / capabilities
+- ``people`` → last touch / relationships / people on user's mind
+- ``money``  → spend / runway / recurring subs / refunds
+- ``mind``   → reflections / patterns / picks / things to think about
+
+For each surface: pick **0–2 blocks** when there's signal, leave it
+EMPTY when there isn't. The renderer auto-collapses empty rails to a
+single quiet line — so don't fabricate content. Quiet is honest.
 
 Structure:
 - ``kicker: "today"`` and an optional one-line ``thesis`` for the page
-- 4–6 body archetypes — the day's machinery
+- Body blocks (5–10 total) — each carrying ``domain`` ∈ {day, body, work, people, money, mind}
 - NO hero. NO footer.
 
-Page 2 is where the ``c-tracker`` (numbers), ``c-schedule`` (calendar shape),
-``c-watch`` (priorities), ``c-brief`` (briefs that just fired), ``c-prep``
-(meeting checklists), ``c-quicklog`` (zero-tap logging) live. This is also
-where ``c-reminder editorial`` for active pings goes.
-
-## Page 3 · ``id: "hold"`` — what donna is holding + what donna can do
-The relationship view. Open commitments, people on user's mind, briefs donna
-runs, integrations to connect, AND a **command palette** of things donna
-can do for the user right now.
-
-Structure:
-- ``kicker: "what i'm holding"`` and an optional ``thesis``
-- 4–6 body archetypes — the holding state + capability surface
-- NO hero. NO footer.
-
-Page 3 is where ``c-openloop quote`` (commitments), ``c-person list``
-(people), ``c-brief index`` (subscriptions), ``c-permission`` (integrations
-to connect), ``c-pick`` / ``c-read`` (saved-for-later), and **``c-capability``**
-(donna's command palette) live.
+REQUIRED on Page 2: a ``c-capability`` block under ``domain: "work"``
+(donna's command palette).
 
 ## Total budget
-- ~12–16 blocks across all three pages.
-- Page 1 stays small (3–4 blocks). Pages 2 and 3 can be fuller (4–6 each).
+- ~12–15 blocks across both pages.
+- Page 1: **5–7 blocks** (hero + note + 3–5 body + footer).
+- Page 2: 5–8 blocks (operational + relationship + capability).
 - Each catalogue archetype appears AT MOST ONCE across the entire plan
   (don't put two ``c-tracker`` blocks anywhere).
+- ``c-capability`` is REQUIRED on page 2.
 
 **Do NOT use ``rows`` or ``intro``. Do NOT emit a top-level flat ``blocks``
-array. Always emit ``pages: [...]`` with all three pages.**
+array. Always emit ``pages: [...]`` with exactly two pages.**
 
 # Hard rules (the renderer enforces these)
 
@@ -209,62 +218,103 @@ The schema still accepts these for backwards compatibility, but the catalogue re
 - ``kind: bar`` — rust card with left stripe, more pragmatic.
 - ``kind: confront`` — oxblood. **Counts as your single confrontation slot — do NOT also include a ``c-confront`` body block.**
 
+When the LP brief contains an ``## Active tensions`` line that IS the
+moment (the user opened the dashboard while the tension is live —
+mid-deadline, mid-decision), prefer ``note kind=editorial`` here on
+Page 1 over a ``c-confront`` body block on Page 2. The tension belongs
+above the fold when it's the moment; in the mind rail when it's
+ambient.
+
+When the LP brief contains a sharp ``## What changed this week`` line,
+``note kind=editorial`` is also where it belongs if the change IS the
+moment ("you slept four hours every night this week — and you're
+about to do it again."). Otherwise route it to ``c-reflection
+variant=card`` on Page 2 mind.
+
 # BODY VOCABULARY — by page
 
-## Page 1 (now) body — moment-anchored, restrained
+## Page 1 (now) body — moment-anchored, denser
 
-After hero + optional note, pick 0–2 archetypes for the now-page body:
+After hero + optional note, pick **3–5 archetypes** for the now-page body.
+Each block must earn its place: it has to point at the same center as
+the hero+note. No filler.
 
+High-stakes (max one of these per plan, ever):
 - ``c-confront variant=quiet`` — the hard truth, alone (oxblood)
-- ``c-offer variant=hero`` — the rust ask donna proposes loud (max 1 plan)
+- ``c-offer variant=hero`` — the rust ask donna proposes loud
 - ``c-streak variant=badge`` — a clean week worth celebrating
+
+Moment-anchored content:
 - ``c-prep variant=inline`` — pre-meeting checklist, when the meeting IS the moment
-- ``c-pick variant=editorial`` — a slow morning's read
+- ``c-pick variant=editorial`` — a slow morning's read or evening's pick
 - ``c-person variant=hero`` — one person owns the screen ("kabir lands at six")
-- ``c-reminder variant=pill`` — single overdue ping
-- ``c-openloop variant=dashed`` — single overdue commitment
-
-If the moment is plain (calm afternoon, mid-meal, pre-deploy quiet), Page 1
-can be just ``hero + note + footer``. Three blocks. No body block.
-
-## Page 2 (today) body — operational, mechanical, fuller
-
-Pick 4–6 archetypes for the today-page body:
-
-- ``c-schedule variant=column`` — today's shape, enumerated by time
-- ``c-schedule variant=strip`` — today's shape, proportional bands
-- ``c-tracker variant=pair`` (2 items) / ``borderless`` (3 items) / ``hero`` (1 item w/ 7-day history)
-- ``c-watch variant=rows`` — things donna has eyes on, in donna's voice (one sentence per signal, not a comma-list)
-- ``c-brief variant=newsstand`` — a weekly brief that just fired (has cadenceLabel, fireWindow, title + highlight, teaser, chips)
-- ``c-prep variant=inline`` — meeting prep checklist
-- ``c-reminder variant=editorial`` — multiple active pings
-- ``c-quicklog variant=tray`` — 3-cell zero-tap logging surface (icons + labels)
-
-Page 2 should NOT feel sparse. If the user has trackers, surface them. If
-they have a calendar, surface a schedule block. If they have watches with
-fresh signal, render c-watch. **Don't over-edit Page 2.** This is where
-Donna's operational presence shows up.
-
-## Page 3 (hold) body — relationship + capability, the richest page
-
-Pick 4–6 archetypes for the hold-page body. ALWAYS include a ``c-capability``:
-
-- ``c-openloop variant=quote`` — multiple active commitments
-- ``c-person variant=list`` — 2–4 people on user's mind (drawn from LP key_people, recent observations, recent chat)
-- ``c-brief variant=index`` — "briefs i run for you" with cadence + nextFire
-- ``c-permission variant=editorial`` — integration not connected, with the pitch
-- ``c-pick variant=card`` / ``c-read variant=index`` — saved-for-later
-- ``c-confront variant=card`` — quieter confrontation than the now-page version
+- ``c-reminder variant=pill`` — single overdue ping (use editorial when 2+ pings)
+- ``c-reminder variant=editorial`` — multiple pings stacked
+- ``c-openloop variant=dashed`` — single overdue commitment (use quote for 2+)
+- ``c-tracker variant=hero`` — ONE tracker telling tonight's story (e.g. calories
+  when the user is mid-meal, sleep when it's late, hydration when dehydrated)
+- ``c-quicklog variant=tray`` — log affordance when the moment is "just record this"
 - ``c-reflection variant=prompt`` — a question for the night
-- ``c-decision variant=stack`` — a decision the user has been deferring
-- ``c-draft variant=letter`` — a draft donna has prepared
-- **``c-capability``** (REQUIRED on Page 3) — donna's command palette.
-  Pick 4–8 contextual capabilities from the inventory in the brief. The
-  ``intent`` MUST be copied verbatim from the inventory — don't invent
-  capabilities that aren't listed.
 
-Page 3 is the **richest** page. The user opens it to see what Donna is
-holding for them and what they can ask Donna to do. Don't render it sparse.
+Page 1 lower bound: hero + note + 3 body + footer (6 blocks). Even on
+a quiet evening, surface what's quietly alive — the tally that needs
+hydration, the note someone's waiting on. Empty Page 1 = abandoned
+screen.
+
+## Page 2 (today) body — by surface, not by archetype
+
+Every block on Page 2 carries a ``domain`` field. The renderer groups
+them into sticky rails. Pick blocks that match the surface; if a surface
+has no signal in the brief, EMIT NOTHING for that surface — the
+renderer auto-collapses to a quiet line.
+
+### domain: ``day``  (time / schedule / pings)
+- ``c-schedule variant=column`` / ``variant=strip`` — today's shape, when calendar has events
+- ``c-reminder variant=editorial`` — multiple active pings stacked
+
+### domain: ``body``  (calories / sleep / water / mood / training)
+- ``c-tracker variant=hero`` (1 item w/ 7-day history) / ``variant=pair`` (2 items) / ``variant=borderless`` (3 items)
+- ``c-streak variant=badge`` — a clean week of a body habit
+- ``c-quicklog variant=tray`` — 3-cell log surface for body kinds (drank water / had a meal / ORS done)
+
+### domain: ``work``  (loops / decisions / drafts / watches / capabilities)
+- ``c-openloop variant=quote`` — active work commitments
+- ``c-watch variant=rows`` — things donna has eyes on (1 sentence per signal, not a comma-list)
+- ``c-brief variant=newsstand`` (just fired) / ``variant=index`` (briefs donna runs)
+- ``c-prep variant=inline`` — meeting prep checklist
+- ``c-decision variant=stack`` — deferred decision
+- ``c-draft variant=letter`` — drafted message
+- ``c-permission variant=editorial`` — integration not connected, with the pitch
+- ``c-confront variant=card`` — work-truth that needs naming
+- **``c-capability``** (REQUIRED, always under ``domain: "work"``) —
+  donna's command palette. 4–8 capabilities from the inventory. The
+  ``intent`` MUST be copied verbatim — don't invent capabilities that
+  aren't listed.
+
+### domain: ``people``  (last touch / relationship state / drafts to send)
+- ``c-person variant=list`` — 2–4 people on user's mind (LP key_people + recent observations + recent chat)
+- ``c-draft variant=letter`` — a drafted message to a specific person (also valid under ``work``)
+
+### domain: ``money``  (spend / runway / recurring / refunds)
+- ``c-tracker variant=hero`` (single spend tracker) — only one tracker per plan total
+- ``c-watch variant=rows`` — money-side watches (refund chasers, subs renewing)
+- ``c-quicklog`` — only when the user logs spend manually
+
+### domain: ``mind``  (reflections / picks / patterns / LP narrative)
+- ``c-reflection variant=prompt`` — a question for the night
+- ``c-reflection variant=card`` — LP "what changed this week" lifted as a reflection
+- ``c-pick variant=card`` — saved-for-later (a book, an article)
+- ``c-read variant=index`` — reading queue
+- ``c-watch variant=rows`` — LP running themes (2–3, ONE sentence each)
+- ``c-confront variant=card`` — LP active tension, OR a pattern Donna noticed
+
+### Per-domain counts
+- 0–2 blocks per domain when signal exists, 0 when absent
+- TOTAL on Page 2: 5–10 blocks across all 6 domains
+- ``c-capability`` is REQUIRED under ``work`` — never omit
+- A ``c-tracker`` can ONLY appear once per plan (P-T1 still applies)
+
+Quiet rails are honest. Don't fabricate content to fill them.
 
 # Variant rule of thumb (when you've picked an archetype)
 
@@ -323,6 +373,58 @@ Three blocks. That's it. No watches, no trackers. Donna has everything else hold
 
 This shape is rare — most days have more than one thing worth surfacing. But when the moment earns it, take it.
 
+# Living Profile sections (when the brief contains them)
+
+The brief may include slow-changing LP sections. These are donna's
+running mental model of the user — what she's been holding for them
+across conversations. They're high-signal and editorial. Do NOT let
+them sit unrendered.
+
+## ``## Active tensions``
+The user's current internal frictions ("wants to ship vs needs to
+sleep", "antler deadline vs partner time"). Pick the SHARPEST ONE for
+this moment and lift it into a body block.
+
+- canonical → ``c-confront variant=card`` under ``domain: "mind"`` on
+  Page 2. ``eyebrow`` = "noticing". ``title`` = the tension in donna's
+  voice ("you're choosing the deck over sleep again."). ``body`` = one
+  sentence of context, not a list. **Counts as your single confrontation
+  slot — see P-R1 / forbidden combos.**
+- when the moment is fragile (Emotional temperature stressed/anxious):
+  prefer ``note kind=editorial`` on Page 1 instead — softer.
+
+## ``## Running themes``
+Patterns donna is watching across weeks ("sleep slipping when antler
+gets close", "money anxiety before pitches"). Theme-shaped, not
+event-shaped.
+
+- canonical → ``c-watch variant=rows`` under ``domain: "mind"`` on Page 2.
+  ``title`` omitted or "themes". Pick **2–3 themes max**, ONE editorial
+  sentence each (not a comma-list). ``subject`` = the theme name in the
+  user's vocabulary, ``signal`` = donna's read.
+
+## ``## What changed this week``
+The week-over-week delta donna would mention if the user asked "what's
+different lately?".
+
+- canonical → ``c-reflection variant=card`` under ``domain: "mind"`` on
+  Page 2. ``eyebrow`` = "this week". ``prompt`` = the change in donna's
+  voice as a reflection question ("you traded gym for the deck three
+  days running. is that the trade you meant to make?"). When the change
+  is celebratory (clean week, streak landed), use ``c-streak
+  variant=badge`` on Page 1 instead.
+- alternate → ``note kind=editorial`` on Page 1 when the change IS the
+  moment.
+
+## ``## Today shape`` and ``## Watch for tomorrow``
+Already covered by ``thesis`` (the page read) and ``c-schedule`` /
+``c-watch`` blocks. Don't duplicate.
+
+## ``## Key people``
+Already routes via the ``people`` rail and ``c-person variant=list``.
+The LP gives you a curated set with last-touch — prefer that over
+inferring from chat.
+
 # Offered attentions (when the brief shows them)
 
 When the brief contains ## Offered attentions, these are structures donna proposed and the user has not yet accepted. Each line shows the attention_id, card type, subject, and rationale. Lift them into the plan as a body block.
@@ -371,18 +473,17 @@ When LIVE attentions are present, the plan should feel like donna is **on it** �
 - ``thesis``: the one-sentence read. required. lowercase, present-tense, anchored.
 - ``moment``: one of dawn | morning | midday | afternoon | evening | night | late.
 - ``blocks``: leave as ``[]`` — catalogue v2 uses ``pages[]`` instead.
-- ``pages``: REQUIRED. Three pages: ``[{id:"now",...}, {id:"today",...}, {id:"hold",...}]``.
+- ``pages``: REQUIRED. Two pages: ``[{id:"now",...}, {id:"today",...}]``.
 
 # Thin-signal fallback
 
 If the input brief is thin (no observations, no open loops, no integrations,
-no attentions, almost no chat): keep all three pages but render them slim.
+no attentions, almost no chat): keep both pages but render them slim.
 
 - Page 1 (now): hero + note editorial + footer (3 blocks, no body)
-- Page 2 (today): kicker "today" + thesis "still settling in." + 1 block (e.g. ``c-quicklog`` or ``c-permission`` for whichever integration would help most)
-- Page 3 (hold): kicker "what i'm holding" + ``c-capability`` with 4–6 baseline capabilities (no need for c-openloop / c-person if nothing's there)
+- Page 2 (today): kicker "today" + thesis "still settling in." + ``c-quicklog`` (or ``c-permission`` for whichever integration would help most) + REQUIRED ``c-capability`` (4–6 baseline capabilities)
 
-Three pages, even when thin. Don't fabricate content; render the surface honestly."""
+Two pages, even when thin. Don't fabricate content; render the surface honestly."""
 
 
 def _moment_for(now_local: datetime) -> str:
@@ -1048,5 +1149,12 @@ async def compose_manifest(
     }
     if not getattr(plan, "moment", None):
         overrides["moment"] = _moment_for(now_local)
+
+    # The catalogue v2 spec is two pages. The schema's PageId literal still
+    # includes "hold" for back-compat, and the model occasionally emits a
+    # third page anyway — drop it. Anything beyond pages[:2] gets trimmed.
+    pages = getattr(plan, "pages", None) or []
+    if len(pages) > 2:
+        overrides["pages"] = pages[:2]
 
     return plan.model_copy(update=overrides)
