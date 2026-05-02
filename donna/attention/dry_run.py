@@ -165,99 +165,93 @@ class UserElicitationFetcher:
 class ExaWebFetcher:
     """Real fetcher for web-shaped attention sources.
 
-    Replaces the StubFetcher fixture path for SourceType.WEB_EXA,
-    WEB_GOOGLE_NEWS, WEB_HN, WEB_REDDIT, WEB_X_TWITTER, WEB_RSS,
-    WEB_SUBSTACK, WEB_PRODUCTHUNT, WEB_YOUTUBE, WEB_GITHUB_TRENDING,
-    WEB_GITHUB_REPO, WEB_ARXIV, WEB_DOMAIN, WEB_PODCAST_TRANSCRIPT,
-    WEB_SEARCH_GOOGLE.
+    Backs SourceType.WEB_EXA, WEB_GOOGLE_NEWS, WEB_HN, WEB_REDDIT,
+    WEB_X_TWITTER, WEB_RSS, WEB_SUBSTACK, WEB_PRODUCTHUNT, WEB_YOUTUBE,
+    WEB_GITHUB_TRENDING, WEB_GITHUB_REPO, WEB_ARXIV, WEB_DOMAIN,
+    WEB_PODCAST_TRANSCRIPT, WEB_SEARCH_GOOGLE.
 
-    All of these used to return canned data via StubFetcher. They now
-    call ``backend.web.client.exa_search`` with the source's ``query``
-    param. The Source.type effectively becomes a hint we mostly ignore -
-    Exa's neural index covers all of these flavors. We pass the search
-    category when it maps cleanly (news for WEB_GOOGLE_NEWS, code for
-    WEB_GITHUB_*).
+    Routes through System B's fetcher (``backend.web.proactive.system_b``)
+    so attention specs benefit from the same neighbor-expansion behavior
+    proactive subs get: one ``/search`` plus an optional ``/findSimilar``
+    on the top hit (~5 credits each) for ~2x richer results vs a single
+    /search per source.
+
+    The spec's frozen query is preserved verbatim — we do NOT regenerate
+    it from current LP. The author committed to that watch; the upgrade
+    is in HOW we resolve it, not WHAT it asks. Spec authors can set
+    ``params.expand_with_similar=False`` on a source to opt out of the
+    findSimilar layer if they want thinner / cheaper results.
+
+    Cross-cycle dedup (against proactive_signals) is DISABLED here —
+    attention is the committed surface; it should see everything on its
+    topic regardless of what proactive subs already surfaced. Within-tick
+    dedup (same URL across the spec's multiple sources) still applies.
     """
-
-    _CATEGORY_BY_TYPE: dict[SourceType, str] = {
-        SourceType.WEB_GOOGLE_NEWS: "news",
-        SourceType.WEB_X_TWITTER: "tweet",
-        SourceType.WEB_GITHUB_REPO: "github",
-        SourceType.WEB_GITHUB_TRENDING: "github",
-        SourceType.WEB_ARXIV: "research paper",
-        SourceType.WEB_PODCAST_TRANSCRIPT: "podcast",
-    }
 
     def fetch(self, source: Source, user_id: str | None) -> list[dict[str, Any]]:
         params = source.params or {}
         query = (params.get("query") or "").strip()
         if not query:
             return []
-        # The fetcher Protocol is sync but exa_search is async. Run a
-        # short event loop; this matches CalendarFetcher's pattern of
-        # adapting async code to the sync proposer surface.
+        # The Fetcher Protocol is sync; System B's fetcher is async.
+        # Same async-to-sync bridge as the legacy implementation.
         import asyncio
-        from backend.web.client import exa_search, have_exa_key
+        from backend.web.client import have_exa_key
         from backend.web.proactive.cost_gate import exa_automation_paused
+        from backend.web.proactive.system_b.fetcher import fetch_for_queries
+        from backend.web.proactive.system_b.query_gen import GeneratedQuery
 
         if exa_automation_paused():
             return []
         if not have_exa_key():
             return []
 
-        num_results = int(params.get("num_results") or 5)
-        category = self._CATEGORY_BY_TYPE.get(source.type)
-        # Domain restriction passes through where the spec set one.
-        include_domains = params.get("include_domains")
-        max_age_hours = params.get("max_age_hours")
+        # Wrap the spec's frozen query as a single GeneratedQuery so it
+        # flows through fetch_for_queries. Angle/cadence are placeholders
+        # since legacy specs predate System B's metadata; the only field
+        # that affects fetch behavior is expand_with_similar.
+        expand = bool(params.get("expand_with_similar", True))
+        gq = GeneratedQuery(
+            text=query,
+            angle="direct",
+            cadence="weekly",
+            ties_to=f"attention spec source {source.type.value}",
+            expand_with_similar=expand,
+        )
 
-        async def _run() -> dict[str, Any]:
-            return await exa_search(
-                query,
-                num_results=num_results,
-                search_type="auto",
-                category=category if category in {"news", "company", "people", "code"} else None,
-                include_domains=include_domains if isinstance(include_domains, list) else None,
-                max_age_hours=int(max_age_hours) if max_age_hours else None,
+        async def _run() -> list[Any]:
+            items, _summary = await fetch_for_queries(
+                [gq],
+                user_id=user_id or "",
+                skip_dedup=True,  # attention sees everything on its topic
             )
+            return items
 
         try:
-            res = asyncio.run(_run())
+            fetched = asyncio.run(_run())
         except RuntimeError:
-            # Already in an event loop - rare in the sync proposer
-            # surface, but defensively run in a thread.
+            # Already in an event loop - rare in sync proposer surface,
+            # but defensively run in a thread with a wider timeout
+            # (System B may make 1 /search + 1 /findSimilar in series).
             import concurrent.futures
             with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
                 future = pool.submit(asyncio.run, _run())
-                res = future.result(timeout=15)
+                fetched = future.result(timeout=30)
         except Exception:
             logger.exception("ExaWebFetcher failed for %s", source.type.value)
             return []
 
-        items = res.get("results") if isinstance(res, dict) else None
-        if not isinstance(items, list):
-            return []
-        normalized: list[dict[str, Any]] = []
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            url = str(item.get("url") or "").strip()
-            if not url:
-                continue
-            highlights = item.get("highlights") or []
-            snippet = ""
-            if isinstance(highlights, list) and highlights:
-                snippet = " | ".join(str(h).strip() for h in highlights[:2])
-            elif item.get("text"):
-                snippet = str(item.get("text"))[:300]
-            normalized.append({
-                "title": item.get("title") or url,
-                "url": url,
-                "snippet": snippet,
-                "publishedDate": item.get("publishedDate"),
+        return [
+            {
+                "title": it.title,
+                "url": it.url,
+                "snippet": it.snippet,
+                "publishedDate": it.published_date,
                 "source_type": source.type.value,
-            })
-        return normalized
+                "via_similar": it.via_similar,
+            }
+            for it in fetched
+        ]
 
 
 _EXA_FETCHER = ExaWebFetcher()
