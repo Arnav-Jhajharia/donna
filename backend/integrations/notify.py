@@ -251,6 +251,10 @@ async def notify_integration_complete(
         await _write_notified_map(
             user_id, [_dedupe_key(t, stage) for t in fresh]
         )
+        logger.info(
+            "notify_integration_complete: sent user=%s stage=%s toolkits=%s",
+            user_id[:8], stage, fresh,
+        )
         return {
             "status": "sent",
             "stage": stage,

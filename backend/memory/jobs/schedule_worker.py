@@ -78,6 +78,28 @@ def fired_reminder_chat_rows(
     return rows
 
 
+def _build_fallback_outbound(context: dict | None) -> list:
+    """Build OutboundMessages from a schedule row's ``context.messages``.
+
+    Used as the deterministic floor when the brain returns empty outbound
+    for a user-requested fire — see Fix 9 in the plan. Returns an empty
+    list when context lacks a renderable ``messages`` array. Callers
+    decide what to do with the empty case (intentional skip vs alert).
+    """
+    payload = context or {}
+    raw_items = payload.get("messages") if isinstance(payload, dict) else None
+    if not isinstance(raw_items, list) or not raw_items:
+        return []
+    from donna_runtime.tool_logic import _build_outbound
+
+    out: list = []
+    for item in raw_items:
+        msg = _build_outbound(item)
+        if msg is not None:
+            out.append(msg)
+    return out
+
+
 def _worker_id() -> str:
     return f"{socket.gethostname()}:{os.getpid()}"
 
@@ -109,15 +131,15 @@ async def _hydrate_attention(attention_id: str | None):
         return None
 
 
-async def _fire_attention(row: DonnaSchedule) -> list:
+async def _fire_attention(row: DonnaSchedule) -> tuple[list, bool]:
     """Route an attention-linked fire through the dispatcher.
 
-    Returns the outbound buffer the worker should ship via WhatsApp. An
-    empty list means either:
-      - the dispatcher already shipped (Tier 2 ping in gated mode), or
-      - the dispatcher held / dropped / suppressed the event,
-    in which case the worker must NOT send anything but should still
-    mark the row ``fired=true``.
+    Returns ``(outbound, already_shipped)``:
+      - ``outbound`` is the buffer the worker should ship via WhatsApp
+        (empty for shipped/held/dropped paths)
+      - ``already_shipped`` is True when the dispatcher itself sent the
+        message (Tier 2 ship path); the caller must NOT double-send and
+        must NOT fire any deterministic-body fallback.
 
     Mirror mode (``DONNA_PROACTIVE_TIERED`` unset / 0) collapses to the
     legacy ``fire_attention_via_brain`` path so existing behavior is
@@ -137,7 +159,7 @@ async def _fire_attention(row: DonnaSchedule) -> list:
 
     if not is_tiered_active():
         # Mirror mode — preserve today's path unchanged.
-        return await fire_attention_via_brain(row)
+        return await fire_attention_via_brain(row), False
 
     attention = await _hydrate_attention(row.attention_id)
     event = make_event(row, attention)
@@ -161,13 +183,13 @@ async def _fire_attention(row: DonnaSchedule) -> list:
             "falling back to legacy brain path",
             row.attention_id,
         )
-        return await fire_attention_via_brain(row)
+        return await fire_attention_via_brain(row), False
 
     action = outcome.action
 
     if action == "shipped":
         # Dispatcher already shipped + wrote ChatMessage + ProactivePing.
-        return []
+        return [], True
 
     if action == "held":
         # Pending-note row exists. Mirror the held draft into chat_messages
@@ -210,14 +232,18 @@ async def _fire_attention(row: DonnaSchedule) -> list:
                     "attention=%s",
                     row.attention_id,
                 )
-        return []
+        # Held: dispatcher wrote a ``[held]`` chat row but did NOT send
+        # WhatsApp. Treat this as already-handled — the fallback path
+        # would double up on user-visible content.
+        return [], True
 
     if action in ("dropped", "suppressed"):
-        return []
+        # Dispatcher decided to skip. No send, no fallback.
+        return [], True
 
     if action == "escalated":
         # Brain decided. Outbound is the buffer the worker ships.
-        return list(outcome.outbound or ())
+        return list(outcome.outbound or ()), False
 
     if action == "errored":
         # Brain wiring blew up inside the dispatcher. Fall back to the
@@ -228,11 +254,11 @@ async def _fire_attention(row: DonnaSchedule) -> list:
             outcome.reason,
             row.attention_id,
         )
-        return await fire_attention_via_brain(row)
+        return await fire_attention_via_brain(row), False
 
     if action == "mirror_logged":
         # Defensive — should not happen with is_tiered_active=True.
-        return await fire_attention_via_brain(row)
+        return await fire_attention_via_brain(row), False
 
     # Unknown action. Be conservative — do nothing.
     logger.warning(
@@ -240,7 +266,7 @@ async def _fire_attention(row: DonnaSchedule) -> list:
         action,
         row.attention_id,
     )
-    return []
+    return [], False
 
 
 async def run_once(*, batch_size: int = 25, lock_timeout_s: int = 300) -> int:
@@ -299,7 +325,88 @@ async def run_once(*, batch_size: int = 25, lock_timeout_s: int = 300) -> int:
                 # mode (default) the dispatcher returns ``mirror_logged``
                 # and we fall back to the legacy ``fire_attention_via_brain``
                 # path so behavior is bit-for-bit identical to today.
-                constructed = await _fire_attention(fresh)
+                constructed, already_shipped = await _fire_attention(fresh)
+
+                # Floor-level reliability: if the brain returned empty
+                # outbound for a USER-requested fire (origin='user'), fall
+                # back to the deterministic context body. Silent drops on
+                # explicit user requests are the worst failure mode —
+                # CLAUDE.md: "a reminder that doesn't fire is not a bug,
+                # it's a betrayal." Brain composition is the upgrade path;
+                # the deterministic body is the floor. Donna-initiated
+                # proactive fires (origin='donna') with empty outbound are
+                # intentional skips by the dispatcher / brain — we trust
+                # that decision and stay silent. ``already_shipped=True``
+                # means the dispatcher itself sent the message (Tier 2
+                # ship path); we must NOT double-send a fallback.
+                if (
+                    not constructed
+                    and not already_shipped
+                    and (fresh.origin or "").lower() == "user"
+                ):
+                    constructed = _build_fallback_outbound(fresh.context)
+                    if constructed:
+                        logger.warning(
+                            "schedule_worker: brain empty for user-requested fire "
+                            "id=%s attention=%s, falling back to context body",
+                            fresh.id,
+                            fresh.attention_id,
+                        )
+                        try:
+                            from donna_runtime.observability import emit
+
+                            emit(
+                                "proactive.fallback_fired",
+                                user_id=fresh.user_id,
+                                source="schedule_worker",
+                                surface="schedule_worker/fallback",
+                                attention_id=fresh.attention_id,
+                                schedule_id=str(fresh.id),
+                            )
+                        except Exception:
+                            logger.exception(
+                                "schedule_worker: fallback_fired emit failed"
+                            )
+
+                # If still empty AND the dispatcher didn't itself ship,
+                # distinguish intentional skip (origin=donna) from silent-
+                # drop class (origin=user with no context body — alert).
+                # When ``already_shipped`` is True the dispatcher already
+                # delivered to WhatsApp so there is nothing to skip.
+                if not constructed and not already_shipped:
+                    skip_kind = (
+                        "alert_silent_drop"
+                        if (fresh.origin or "").lower() == "user"
+                        else "intentional_skip"
+                    )
+                    try:
+                        from donna_runtime.observability import emit
+
+                        emit(
+                            "proactive.skipped_silent",
+                            user_id=fresh.user_id,
+                            source="schedule_worker",
+                            surface="schedule_worker/empty",
+                            attention_id=fresh.attention_id,
+                            schedule_id=str(fresh.id),
+                            origin=fresh.origin,
+                            kind=skip_kind,
+                        )
+                    except Exception:
+                        logger.exception(
+                            "schedule_worker: skipped_silent emit failed"
+                        )
+                    if skip_kind == "alert_silent_drop":
+                        logger.error(
+                            "schedule_worker: SILENT DROP id=%s attention=%s "
+                            "user=%s origin=%s — user-requested fire "
+                            "produced no outbound and no fallback content. "
+                            "This is a reliability alert.",
+                            fresh.id,
+                            fresh.attention_id,
+                            fresh.user_id,
+                            fresh.origin,
+                        )
             else:
                 payload = fresh.context or {}
                 raw_items = payload.get("messages") if isinstance(payload, dict) else None

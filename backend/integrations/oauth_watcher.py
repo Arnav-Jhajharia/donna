@@ -92,14 +92,25 @@ async def watch_oauth_and_bootstrap(
     if not requested:
         return
 
+    logger.info(
+        "oauth_watcher: started user=%s toolkits=%s timeout=%ds",
+        user_id[:8], requested, timeout_seconds,
+    )
+
     try:
         deadline = asyncio.get_event_loop().time() + timeout_seconds
         active: dict[str, str] = {}
+        poll_count = 0
         # Always poll at least once even if timeout==0 — the OAuth chain
         # may already have completed by the time the watcher runs.
         while True:
             active = await _list_active_connections(user_id, requested)
+            poll_count += 1
             if all(t in active for t in requested):
+                logger.info(
+                    "oauth_watcher: all active user=%s toolkits=%s polls=%d",
+                    user_id[:8], list(active.keys()), poll_count,
+                )
                 break
             if asyncio.get_event_loop().time() >= deadline:
                 break
@@ -151,6 +162,26 @@ async def watch_oauth_and_bootstrap(
             except Exception:
                 logger.exception(
                     "oauth_watcher: notify failed user=%s", user_id
+                )
+
+        # Drain any pending integration intents whose toolkit dependencies
+        # are now all met. This is the resume-after-OAuth path: the user
+        # asked for something that needed gmail, we sent them the link, they
+        # tapped — now we answer the original ask without waiting for them
+        # to re-prompt.
+        for toolkit in active:
+            try:
+                from backend.integrations.pending_intents import drain_for_toolkit
+                fired = await drain_for_toolkit(user_id, toolkit)
+                if fired:
+                    logger.info(
+                        "oauth_watcher: drained %d pending intents user=%s toolkit=%s",
+                        fired, user_id[:8], toolkit,
+                    )
+            except Exception:
+                logger.exception(
+                    "oauth_watcher: drain failed user=%s toolkit=%s",
+                    user_id, toolkit,
                 )
 
         if not google_active:
