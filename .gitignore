@@ -57,3 +57,22 @@ archive/
 
 # Git worktrees
 .worktrees/
+
+# Local script outputs (smoke tests, replays, traces)
+scripts/_out/
+
+# Codemap + research artifacts
+graphify-out/
+minimal_prompt_traces.jsonl
+
+# Background process logs
+nohup.out
+
+# Local pasted/generated HTML (not source)
+*.html
+
+# Local tooling state
+.donna/
+.envrc
+.superpowers/
+.claude/skills/

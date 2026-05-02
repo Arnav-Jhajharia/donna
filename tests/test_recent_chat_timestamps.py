@@ -57,9 +57,10 @@ def test_format_truncates_long_content():
     when = datetime(2026, 4, 26, 7, 45, tzinfo=timezone.utc)
     row = _row(role="user", content="x" * 1000, when=when)
     line = _format_recent_chat_line(row, "UTC")
-    # _MAX_CHAT_CHARS is 180; full row including timestamp + role stays
-    # bounded.
-    assert len(line) < 260
+    # Fix 3 bumped _MAX_CHAT_CHARS from 180 → 240 (and added a
+    # 800-char fulltext window for the most recent two messages,
+    # protected separately). Total line stays bounded under 320.
+    assert len(line) < 320
 
 
 def test_format_handles_missing_created_at():

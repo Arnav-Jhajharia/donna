@@ -145,7 +145,10 @@ async def test_mark_reminder_done_missing_id_returns_400():
 
 @pytest.mark.asyncio
 async def test_unknown_verb_returns_501(monkeypatch):
-    request = routes.ActionRequest(action={"v": "log_value", "tracker": "x", "value": 1})
+    # The dashboard action endpoint now handles ``log_value`` (and many
+    # other generic verbs) by routing to ``log_observation``. Use a
+    # genuinely unknown verb to exercise the 501 path.
+    request = routes.ActionRequest(action={"v": "fluffernutter_verb_does_not_exist"})
     with pytest.raises(HTTPException) as exc:
         await routes.execute_action(user_id="user-1", request=request)
     assert exc.value.status_code == 501

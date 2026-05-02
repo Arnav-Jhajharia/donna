@@ -398,9 +398,12 @@ async def test_fire_attention_mirror_mode_calls_legacy_brain(
         "donna.attention.firing.fire_attention_via_brain", fake_legacy
     )
 
-    out = await schedule_worker._fire_attention(_row())
+    out, already_shipped = await schedule_worker._fire_attention(_row())
     assert invoked["row"] is not None
     assert out == ["legacy-buffer-item"]
+    # Mirror mode = brain returned a buffer the worker still ships;
+    # dispatcher did not pre-ship it.
+    assert already_shipped is False
 
 
 @pytest.mark.asyncio
@@ -431,8 +434,9 @@ async def test_fire_attention_dispatcher_error_falls_back_to_legacy(
 
     monkeypatch.setattr(schedule_worker, "_hydrate_attention", fake_hydrate)
 
-    out = await schedule_worker._fire_attention(_row())
+    out, already_shipped = await schedule_worker._fire_attention(_row())
     assert out == ["fallback-item"]
+    assert already_shipped is False
     assert invoked
 
 
@@ -452,8 +456,11 @@ async def test_fire_attention_gated_held_returns_empty_and_writes_chat(
 
     monkeypatch.setattr(schedule_worker, "_hydrate_attention", fake_hydrate)
 
-    out = await schedule_worker._fire_attention(_row())
+    out, already_shipped = await schedule_worker._fire_attention(_row())
     assert out == []
+    # Held → dispatcher wrote the [held] chat row; worker must NOT
+    # double-up by shipping a fallback.
+    assert already_shipped is True
 
     async with db() as s:
         notes = (
@@ -479,8 +486,10 @@ async def test_fire_attention_gated_dropped_returns_empty(
 
     monkeypatch.setattr(schedule_worker, "_hydrate_attention", fake_hydrate)
 
-    out = await schedule_worker._fire_attention(_row())
+    out, already_shipped = await schedule_worker._fire_attention(_row())
     assert out == []
+    # Dropped is an intentional dispatcher decision — no fallback.
+    assert already_shipped is True
 
 
 # -- Promote-cycle dispatch gating -----------------------------------------
