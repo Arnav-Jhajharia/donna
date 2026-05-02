@@ -30,7 +30,7 @@ from typing import Any
 
 from sqlalchemy import select, update
 
-from backend.web.client import exa_search, have_exa_key
+from backend.web.client import have_exa_key
 from backend.web.proactive.store import SignalQueueRepo
 from db.models import ProactiveSignal, ProactiveSubscription
 from db.session import async_session
@@ -149,29 +149,39 @@ async def poll_pending_subscriptions(
     new_signals = 0
     failed = 0
 
+    # System B routing: each due sub gets wrapped as a single-element
+    # GeneratedQuery batch and resolved through fetch_for_queries (one
+    # /search + one /findSimilar per sub). Cost per due sub: ~10 credits.
+    from backend.web.proactive.system_b.fetcher import fetch_for_queries
+    from backend.web.proactive.system_b.query_gen import GeneratedQuery
+
     for sub in due_rows:
         polled += 1
+        gq = GeneratedQuery(
+            text=sub.description,
+            angle="direct",
+            cadence=(sub.cadence or "weekly"),
+            ties_to=f"proactive_subscription intent={sub.intent_key}",
+            expand_with_similar=True,
+        )
         try:
-            res = await exa_search(
-                sub.description,
-                num_results=max_results_per_sub,
-                search_type="auto",
+            fetched_items, _summary = await fetch_for_queries(
+                [gq], user_id=user_id, skip_dedup=True
             )
         except Exception:
             logger.exception(
-                "poll_pending_subscriptions: /search failed user=%s intent=%s",
+                "poll_pending_subscriptions: System B fetch failed user=%s intent=%s",
                 user_id[:8] if user_id else "?",
                 sub.intent_key,
             )
             failed += 1
             continue
 
-        # Bump last_hit_at after EVERY successful /search regardless of
-        # whether any new URLs came back. Otherwise a sub that /search
-        # returns no new results for would stay "due" forever under
-        # cadence-aware polling — and we'd burn ~5 credits/hour on the
-        # same dead query. Done BEFORE the items-check below so the
-        # short-circuit doesn't skip it.
+        # Bump last_hit_at after EVERY successful fetch regardless of
+        # whether any new URLs came back. Otherwise a sub that returns
+        # no new results would stay "due" forever under cadence-aware
+        # polling — and we'd burn ~10 credits/hour on the same dead
+        # query.
         async with async_session() as session:
             await session.execute(
                 update(ProactiveSubscription)
@@ -180,28 +190,22 @@ async def poll_pending_subscriptions(
             )
             await session.commit()
 
-        items = res.get("results") if isinstance(res, dict) else None
-        if not isinstance(items, list) or not items:
+        if not fetched_items:
             continue
 
         seen = await _existing_urls_for_subscription(sub.id)
 
         enqueued_for_sub = 0
-        for item in items:
-            if not isinstance(item, dict):
-                continue
-            url = str(item.get("url") or "").strip()
-            if not url:
-                continue
-            if url in seen:
+        for it in fetched_items:
+            if it.url in seen:
                 continue
             await queue.enqueue(
                 user_id=user_id,
                 subscription_id=sub.id,
                 intent_key=sub.intent_key,
-                payload=item,
+                payload=it.to_signal_payload(),
             )
-            seen.add(url)
+            seen.add(it.url)
             enqueued_for_sub += 1
 
         new_signals += enqueued_for_sub

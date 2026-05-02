@@ -169,17 +169,30 @@ async def test_poll_only_searches_due_subs(monkeypatch, user_with_subs):
         session.add_all([s1, s2, s3])
         await session.commit()
 
-    # Capture every /search invocation. Return 0 results so we can
-    # assert call counts cleanly without dealing with the enqueue path.
-    search_calls: list[str] = []
+    # The poller now routes through System B's fetch_for_queries.
+    # Patch that to capture every fetch call. Return empty so we don't
+    # have to deal with the enqueue path.
+    from backend.web.proactive.system_b import fetcher as fetcher_mod
 
-    async def fake_search(query, **kwargs):
-        search_calls.append(query)
-        return {"results": []}
+    fetch_calls: list = []
 
-    monkeypatch.setattr(poller_mod, "exa_search", fake_search)
+    async def fake_fetch(queries, *, user_id, skip_dedup=False):
+        for q in queries:
+            fetch_calls.append(q.text)
+        return [], fetcher_mod.FetchSummary(
+            queries_run=len(queries),
+            search_calls=len(queries),
+            similar_calls=0,
+            raw_items=0,
+            deduped_items=0,
+        )
+
     monkeypatch.setattr(poller_mod, "have_exa_key", lambda: True)
-    # Make sure the cost gate isn't tripping the test.
+    monkeypatch.setattr(
+        "backend.web.proactive.system_b.fetcher.fetch_for_queries", fake_fetch
+    )
+    # The poller imports fetch_for_queries inside the function to avoid
+    # circular imports; patch it on the module.
     monkeypatch.setenv("DONNA_EXA_AUTOMATION_PAUSE", "0")
 
     summary = await poll_pending_subscriptions(user_with_subs)
@@ -187,7 +200,7 @@ async def test_poll_only_searches_due_subs(monkeypatch, user_with_subs):
     # 2 due subs (s2, s3), 1 not due (s1).
     assert summary.polled == 2
     assert summary.failed == 0
-    assert len(search_calls) == 2
+    assert len(fetch_calls) == 2
 
 
 @pytest.mark.asyncio
@@ -207,11 +220,21 @@ async def test_poll_bumps_last_hit_at_even_with_no_results(
         await session.commit()
         sub_id = sub.id
 
-    async def fake_search(query, **kwargs):
-        return {"results": []}  # no new URLs
+    from backend.web.proactive.system_b import fetcher as fetcher_mod
 
-    monkeypatch.setattr(poller_mod, "exa_search", fake_search)
+    async def fake_fetch(queries, *, user_id, skip_dedup=False):
+        return [], fetcher_mod.FetchSummary(
+            queries_run=len(queries),
+            search_calls=len(queries),
+            similar_calls=0,
+            raw_items=0,
+            deduped_items=0,
+        )
+
     monkeypatch.setattr(poller_mod, "have_exa_key", lambda: True)
+    monkeypatch.setattr(
+        "backend.web.proactive.system_b.fetcher.fetch_for_queries", fake_fetch
+    )
     monkeypatch.setenv("DONNA_EXA_AUTOMATION_PAUSE", "0")
 
     await poll_pending_subscriptions(user_with_subs)
@@ -243,16 +266,20 @@ async def test_poll_no_op_when_paused(monkeypatch, user_with_subs):
         session.add(sub)
         await session.commit()
 
-    search_calls: list[str] = []
+    fetch_calls: list = []
 
-    async def fake_search(query, **kwargs):
-        search_calls.append(query)
-        return {"results": []}
+    async def fake_fetch(queries, *, user_id, skip_dedup=False):
+        from backend.web.proactive.system_b import fetcher as fetcher_mod
+        for q in queries:
+            fetch_calls.append(q.text)
+        return [], fetcher_mod.FetchSummary(0, 0, 0, 0, 0)
 
-    monkeypatch.setattr(poller_mod, "exa_search", fake_search)
     monkeypatch.setattr(poller_mod, "have_exa_key", lambda: True)
+    monkeypatch.setattr(
+        "backend.web.proactive.system_b.fetcher.fetch_for_queries", fake_fetch
+    )
     monkeypatch.setenv("DONNA_EXA_AUTOMATION_PAUSE", "1")
 
     summary = await poll_pending_subscriptions(user_with_subs)
     assert summary.polled == 0
-    assert search_calls == []
+    assert fetch_calls == []

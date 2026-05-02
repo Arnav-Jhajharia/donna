@@ -152,6 +152,12 @@ async def reconcile_subscriptions(
             if isinstance(item, DerivedWatch):
                 desc = (item.description or "").strip()
                 cadence = (item.cadence or "weekly").strip().lower()
+            elif hasattr(item, "text") and hasattr(item, "cadence"):
+                # GeneratedQuery from System B (ambitious query gen).
+                desc = (getattr(item, "text", "") or "").strip()
+                cadence = (
+                    (getattr(item, "cadence", "weekly") or "weekly").strip().lower()
+                )
             else:
                 desc = str(item or "").strip()
                 cadence = "weekly"
@@ -478,25 +484,36 @@ class DeriveAndReconcileSummary:
 async def derive_and_reconcile(
     user_id: str,
     *,
-    max_active: int = 3,
+    max_active: int = 8,
 ) -> DeriveAndReconcileSummary:
-    """Run the full fanout: Living Profile -> derived watches -> subs.
+    """Run the full fanout: Living Profile -> ambitious queries -> subs.
 
     This is the entry point a worker / cron should call. It:
-      1. asks Haiku what to watch for THIS user RIGHT NOW (watch_synth)
+      1. asks Haiku via System B's ``generate_ambitious_queries`` for
+         8-12 search-shaped queries spanning 8 angles (direct, neighbor,
+         postmortem, problem, research, rhythm, person, open_loop)
       2. reconciles those into proactive_subscriptions rows (each row
-         carries the deriver-picked cadence)
-      3. returns the derived watches inline so the caller can log them
-    """
-    from backend.web.proactive.watch_synth import derive_external_watches
+         carries the deriver-picked cadence: daily/weekly/monthly)
+      3. returns the queries inline so the caller can log them
 
-    derived = await derive_external_watches(user_id, max_watches=max_active)
+    Each query becomes its own subscription. Per-query cadence is
+    honored downstream by the cadence-aware poller. Default budget of
+    8 active subs comfortably accommodates the typical 8-12 ambitious
+    queries; over-budget queries get LRU-skipped.
+    """
+    from backend.web.proactive.system_b.query_gen import (
+        generate_ambitious_queries,
+    )
+
+    queries = await generate_ambitious_queries(
+        user_id, max_queries=max(max_active, 12)
+    )
     summary = await reconcile_subscriptions(
-        user_id, max_active=max_active, watches_override=list(derived)
+        user_id, max_active=max_active, watches_override=list(queries)
     )
     return DeriveAndReconcileSummary(
         user_id=user_id,
-        derived_count=len(derived),
+        derived_count=len(queries),
         reconcile=summary,
-        watches=list(derived),
+        watches=list(queries),
     )
