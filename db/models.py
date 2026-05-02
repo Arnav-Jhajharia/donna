@@ -428,6 +428,30 @@ class Integration(Base):
     )
 
 
+class PendingIntegrationIntent(Base):
+    """User's original ask captured at ``connect_integration`` time, so we
+    can fire a proactive brain turn that *answers it* once OAuth lands.
+
+    See ``backend.integrations.pending_intents`` for enqueue/drain helpers
+    and ``backend.db.migrations.versions.0017_pending_integration_intents``
+    for the migration rationale.
+    """
+    __tablename__ = "pending_integration_intents"
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False, index=True)
+    toolkits: Mapped[list] = mapped_column(JSONB, nullable=False)
+    intent: Mapped[str] = mapped_column(Text, nullable=False)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="pending")
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+    fired_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    __table_args__ = (
+        Index("idx_pending_intents_user_status", "user_id", "status"),
+    )
+
+
 class EmailMessage(Base):
     """Local mirror of Gmail messages. Body stored only when label-router
     classified the message as 'full'. Bodies for 'metadata' rows are lazy-

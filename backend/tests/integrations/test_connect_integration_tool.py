@@ -49,6 +49,38 @@ def stub_chain(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_connect_integration_passes_donna_final_callback_when_set(
+    db, stub_chain, monkeypatch
+) -> None:
+    """After OAuth completes, the chain must redirect back to Donna —
+    not Composio's dashboard. We pass ``DASHBOARD_BASE_URL`` through as
+    ``final_callback_url`` so the user lands on itsmedonna.com."""
+    monkeypatch.setenv("DASHBOARD_BASE_URL", "https://itsmedonna.com")
+
+    res = await connect_integration(user_id="u1", toolkits=["gmail"])
+
+    assert res["status"] == "url_sent"
+    assert (
+        stub_chain["initiate"]["final_callback_url"]
+        == "https://itsmedonna.com/?integration=connected"
+    )
+
+
+@pytest.mark.asyncio
+async def test_connect_integration_omits_final_callback_when_unset(
+    db, stub_chain, monkeypatch
+) -> None:
+    """If DASHBOARD_BASE_URL is unset (e.g. dev sandboxes), don't override
+    the default — let the SDK fall back to whatever it picks."""
+    monkeypatch.delenv("DASHBOARD_BASE_URL", raising=False)
+
+    res = await connect_integration(user_id="u1", toolkits=["gmail"])
+
+    assert res["status"] == "url_sent"
+    assert stub_chain["initiate"]["final_callback_url"] is None
+
+
+@pytest.mark.asyncio
 async def test_connect_integration_two_google_toolkits_uses_chain(
     db, stub_chain
 ) -> None:

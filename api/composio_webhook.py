@@ -163,6 +163,19 @@ async def _handle_v3_connected_account_created(payload: dict, data: dict) -> dic
             "composio_webhook v3: notify spawn failed user=%s", user_id
         )
 
+    # Resume any pending intents that were blocked on this toolkit.
+    # Fires a proactive brain turn that answers the user's original ask
+    # without waiting for them to re-prompt.
+    try:
+        from backend.integrations.pending_intents import drain_for_toolkit
+
+        asyncio.create_task(drain_for_toolkit(user_id, toolkit_slug))
+    except Exception:
+        logger.exception(
+            "composio_webhook v3: drain spawn failed user=%s toolkit=%s",
+            user_id, toolkit_slug,
+        )
+
     # Fire bootstrap only when google lands. Idempotent — duplicate
     # webhooks within the dedupe window become no-ops. Bootstrap fires
     # its own post-bootstrap "read through your inbox" ping.
@@ -549,6 +562,19 @@ async def composio_webhook(
                 user_id=user_id,
                 connection_id=connection_id,
                 trigger_names=triggers,
+            )
+        # Resume any pending intents that were blocked on this google
+        # toolkit (legacy v1/v2 envelope path; mirrors the v3 handler).
+        try:
+            from backend.integrations.pending_intents import drain_for_toolkit
+
+            slug_map = {"gmail": "gmail", "calendar": "googlecalendar", "drive": "googledrive"}
+            slug = slug_map.get(product, product)
+            asyncio.create_task(drain_for_toolkit(user_id, slug))
+        except Exception:
+            logger.exception(
+                "composio_webhook: drain spawn failed user=%s product=%s",
+                user_id, product,
             )
         asyncio.create_task(run_bootstrap_async(user_id))
         return {"ok": True}

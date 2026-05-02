@@ -17,10 +17,26 @@ the toolkit slug as the product.
 """
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from backend.integrations import composio_meta, state
 from donna_runtime.observability import instrument_memory_op
+
+
+def _donna_final_callback() -> str | None:
+    """Where the OAuth chain lands after the last toolkit completes.
+
+    Without this, ``initiate_oauth_chain`` defaults to Composio's own
+    dashboard ``platform.composio.dev/dashboard`` — which is jarring for
+    the user (they expect to land back on Donna). We point at the Donna
+    dashboard root: authed users see their canvas, unauthed users see
+    the landing page. Either is better than Composio's UI.
+    """
+    base = (os.environ.get("DASHBOARD_BASE_URL") or "").rstrip("/")
+    if not base:
+        return None
+    return f"{base}/?integration=connected"
 
 DESCRIPTION = (
     "Generate a one-tap connect link for one or more Composio toolkits. "
@@ -212,10 +228,14 @@ async def connect_integration(
     toolkit_to_ac = await composio_meta.resolve_auth_configs(
         toolkits=pending_toolkits, user_id=user_id
     )
-    chain = await composio_meta.initiate_oauth_chain(
-        user_id=user_id,
-        toolkit_to_auth_config=toolkit_to_ac,
-    )
+    chain_kwargs: dict[str, Any] = {
+        "user_id": user_id,
+        "toolkit_to_auth_config": toolkit_to_ac,
+    }
+    final_callback = _donna_final_callback()
+    if final_callback:
+        chain_kwargs["final_callback_url"] = final_callback
+    chain = await composio_meta.initiate_oauth_chain(**chain_kwargs)
 
     toolkit_links: list[tuple[str, str]] = []
     for entry in chain["chain"]:
@@ -225,7 +245,7 @@ async def connect_integration(
         return {
             "status": "error",
             "url": None,
-            "message": "composio returned no redirect urls",
+            "message": "couldn't generate the connect link, try again in a sec",
         }
 
     # Cache the chain HEAD URL on every requested-toolkit row so any
