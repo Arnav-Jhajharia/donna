@@ -198,7 +198,10 @@ class ExaWebFetcher:
         # adapting async code to the sync proposer surface.
         import asyncio
         from backend.web.client import exa_search, have_exa_key
+        from backend.web.proactive.cost_gate import exa_automation_paused
 
+        if exa_automation_paused():
+            return []
         if not have_exa_key():
             return []
 

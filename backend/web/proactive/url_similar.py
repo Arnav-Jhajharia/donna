@@ -165,8 +165,13 @@ async def poll_url_similar_signals(
 
     Never raises. No-op when ``EXA_API_KEY`` missing, no URLs in chat,
     or no active subscriptions on this user (the proactive_signals FK
-    requires a subscription_id).
+    requires a subscription_id). Also no-ops when the operator has set
+    DONNA_EXA_AUTOMATION_PAUSE=1 (emergency cost stop).
     """
+    from backend.web.proactive.cost_gate import exa_automation_paused
+
+    if exa_automation_paused():
+        return UrlSimilarSummary(user_id, seeds_used=0, new_signals=0, failed=0)
     if not have_exa_key():
         return UrlSimilarSummary(user_id, seeds_used=0, new_signals=0, failed=0)
 

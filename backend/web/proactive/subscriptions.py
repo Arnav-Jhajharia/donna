@@ -253,9 +253,18 @@ async def provision_pending_websets(user_id: str) -> ProvisionSummary:
     Exa webset and attach a monitor. Persists the IDs back to the row.
 
     No-op when EXA_API_KEY is missing — the Exa client refuses to call.
+    Also no-ops when DONNA_EXA_AUTOMATION_PAUSE=1 (operator emergency
+    stop; see backend/web/proactive/cost_gate.py).
     Failures are logged and counted; the row is left pending so the next
     reconcile pass retries.
     """
+    from backend.web.proactive.cost_gate import exa_automation_paused
+
+    if exa_automation_paused():
+        logger.info(
+            "provision_pending_websets: paused via DONNA_EXA_AUTOMATION_PAUSE"
+        )
+        return ProvisionSummary(user_id, provisioned=0, failed=0)
     if not have_exa_key():
         logger.info(
             "provision_pending_websets: no EXA_API_KEY, skipping user=%s",

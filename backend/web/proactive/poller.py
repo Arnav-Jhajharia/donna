@@ -87,8 +87,13 @@ async def poll_pending_subscriptions(
         Free-tier fallback for subs that haven't been provisioned yet.
 
     Never raises - failures per subscription are logged and counted.
-    No-op when EXA_API_KEY is missing.
+    No-op when EXA_API_KEY is missing or when the operator has set
+    DONNA_EXA_AUTOMATION_PAUSE=1 (emergency cost stop).
     """
+    from backend.web.proactive.cost_gate import exa_automation_paused
+
+    if exa_automation_paused():
+        return PollSummary(user_id, polled=0, new_signals=0, failed=0)
     if not have_exa_key():
         return PollSummary(user_id, polled=0, new_signals=0, failed=0)
 
