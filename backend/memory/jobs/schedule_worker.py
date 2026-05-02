@@ -54,6 +54,27 @@ def fired_reminder_chat_rows(
                 is_proactive=True,
             )
         )
+    # Emit observability event per row so the trace dashboard can pick
+    # these up. Done outside the persistence path so failures here never
+    # block the worker.
+    try:
+        from donna_runtime.observability import emit
+
+        for r in rows:
+            emit(
+                "proactive.delivered",
+                user_id=user_id,
+                source="schedule_worker",
+                surface="schedule_worker/sent",
+                mode="live",
+                is_shadow=False,
+                draft_preview=(r.content or "")[:200],
+            )
+    except Exception:
+        logger.exception(
+            "schedule_worker: proactive.delivered emit failed user=%s",
+            user_id,
+        )
     return rows
 
 
@@ -154,15 +175,35 @@ async def _fire_attention(row: DonnaSchedule) -> list:
         if outcome.draft:
             try:
                 async with _session_factory()() as session:
-                    session.add(
-                        ChatMessage(
-                            user_id=row.user_id,
-                            role="assistant",
-                            content=f"[held] {outcome.draft}",
-                            is_proactive=True,
-                        )
+                    held = ChatMessage(
+                        user_id=row.user_id,
+                        role="assistant",
+                        content=f"[held] {outcome.draft}",
+                        is_proactive=True,
                     )
+                    session.add(held)
+                    await session.flush()
                     await session.commit()
+                try:
+                    from donna_runtime.observability import emit
+
+                    emit(
+                        "proactive.delivered",
+                        user_id=row.user_id,
+                        source="schedule_worker_held",
+                        surface="schedule_worker/held",
+                        message_id=held.id,
+                        mode="held",
+                        is_shadow=True,
+                        attention_id=row.attention_id,
+                        schedule_id=row.id,
+                        draft_preview=(outcome.draft or "")[:200],
+                    )
+                except Exception:
+                    logger.exception(
+                        "schedule_worker: held emit failed attention=%s",
+                        row.attention_id,
+                    )
             except Exception:
                 logger.exception(
                     "schedule_worker: held chat-row insert failed "
@@ -202,7 +243,7 @@ async def _fire_attention(row: DonnaSchedule) -> list:
     return []
 
 
-async def run_once(*, batch_size: int = 25, lock_timeout_s: int = 60) -> int:
+async def run_once(*, batch_size: int = 25, lock_timeout_s: int = 300) -> int:
     """Send any due schedules. Returns number of schedules attempted."""
     now = utcnow_naive()
     wid = _worker_id()
@@ -507,36 +548,140 @@ async def _maybe_enqueue_next_fire(row: DonnaSchedule) -> None:
     # patch.
     from backend.db.session import async_session as _session_factory
 
-    try:
-        async with _session_factory() as session:
-            session.add(
-                DonnaSchedule(
-                    user_id=row.user_id,
-                    phone=row.phone,
-                    fire_at=fire_at_naive,
-                    origin=row.origin,
-                    recurrence=row.recurrence,
-                    context=dict(row.context or {}),
-                    attention_id=row.attention_id,
-                    recurrence_meta=dict(row.recurrence_meta),
-                    fired=False,
-                    status="pending",
+    # Retry the enqueue on transient DB blips. A single failure here used to
+    # kill recurring reminders forever — the user delivery already succeeded
+    # so there's no upstream retry. 3 attempts with backoff catches the
+    # 99% case (connection reset, lock contention) without unbounded delay.
+    last_exc: Exception | None = None
+    for attempt in range(3):
+        try:
+            async with _session_factory() as session:
+                session.add(
+                    DonnaSchedule(
+                        user_id=row.user_id,
+                        phone=row.phone,
+                        fire_at=fire_at_naive,
+                        origin=row.origin,
+                        recurrence=row.recurrence,
+                        context=dict(row.context or {}),
+                        attention_id=row.attention_id,
+                        recurrence_meta=dict(row.recurrence_meta),
+                        fired=False,
+                        status="pending",
+                    )
                 )
-            )
-            await session.commit()
-    except Exception:
-        logger.exception(
-            "failed to enqueue next fire for attention=%s after schedule=%s",
-            row.attention_id,
-            row.id,
+                await session.commit()
+            return
+        except Exception as exc:
+            last_exc = exc
+            if attempt < 2:
+                await asyncio.sleep(0.5 * (2 ** attempt))
+                continue
+    # All retries exhausted. Emit a high-signal event so the recurring
+    # reminder isn't silently dropped — operators must know to re-enqueue
+    # by hand or the user loses this attention's recurrence.
+    try:
+        from donna_runtime.observability import emit
+
+        emit(
+            "proactive.recurrence_enqueue_failed",
+            user_id=row.user_id,
+            attention_id=row.attention_id,
+            schedule_id=row.id,
+            next_fire_at=fire_at_naive.isoformat() if fire_at_naive else None,
+            error=f"{type(last_exc).__name__}: {str(last_exc)[:300]}" if last_exc else "unknown",
         )
+    except Exception:
+        pass
+    logger.error(
+        "RECURRENCE LOST: failed to enqueue next fire for attention=%s after schedule=%s next_fire=%s err=%s",
+        row.attention_id,
+        row.id,
+        fire_at_naive,
+        type(last_exc).__name__ if last_exc else "unknown",
+    )
+
+
+async def _check_missed_fires(*, threshold_s: int = 60) -> int:
+    """Detect DonnaSchedule rows that should have fired but didn't.
+
+    A row is "missed" when ``fire_at + threshold_s`` is in the past, the
+    row is not yet ``fired``, and its status is one we'd otherwise expect
+    the worker to drain (``pending`` or ``running``). ``cancelled`` /
+    ``paused`` / ``done`` are excluded.
+
+    Per CLAUDE.md non-negotiable: "A DonnaSchedule row that hasn't fired
+    by fire_at + 60s is an alert." This is that alert. Each missed row
+    emits a structured ``proactive.missed_fire`` event AND an ERROR-level
+    log line so it surfaces in any aggregator without further plumbing.
+
+    Returns the number of missed rows detected this cycle. Does NOT modify
+    the rows — the worker's normal lock/retry path still owns them, this
+    is purely a visibility hook so silent failures stop being silent.
+    """
+    cutoff = utcnow_naive() - timedelta(seconds=threshold_s)
+    try:
+        async with _session_factory()() as session:
+            rows = (
+                await session.execute(
+                    select(DonnaSchedule)
+                    .where(DonnaSchedule.fired.is_(False))
+                    .where(DonnaSchedule.fire_at < cutoff)
+                    .where(DonnaSchedule.status.in_(("pending", "running")))
+                    .order_by(DonnaSchedule.fire_at.asc())
+                    .limit(100)
+                )
+            ).scalars().all()
+    except Exception:
+        logger.exception("missed-fire check: query failed")
+        return 0
+
+    if not rows:
+        return 0
+
+    try:
+        from donna_runtime.observability import emit
+    except Exception:
+        emit = None  # type: ignore[assignment]
+
+    now = utcnow_naive()
+    for row in rows:
+        overdue_s = int((now - row.fire_at).total_seconds()) if row.fire_at else None
+        if emit is not None:
+            try:
+                emit(
+                    "proactive.missed_fire",
+                    schedule_id=row.id,
+                    user_id=row.user_id,
+                    attention_id=row.attention_id,
+                    fire_at=row.fire_at.isoformat() if row.fire_at else None,
+                    overdue_seconds=overdue_s,
+                    status=row.status,
+                    attempts=row.attempts,
+                    last_error=row.last_error,
+                    locked_by=row.locked_by,
+                )
+            except Exception:
+                pass
+        logger.error(
+            "MISSED FIRE: schedule=%s user=%s attn=%s overdue=%ss status=%s attempts=%s last_err=%s",
+            row.id,
+            (row.user_id or "")[:8],
+            (row.attention_id or "")[:8] if row.attention_id else "—",
+            overdue_s,
+            row.status,
+            row.attempts,
+            (row.last_error or "")[:120] if row.last_error else None,
+        )
+    return len(rows)
 
 
 async def run_forever(
     *,
     poll_interval_s: float = 5.0,
     batch_size: int = 25,
-    lock_timeout_s: int = 60,
+    lock_timeout_s: int = 300,
+    missed_fire_threshold_s: int = 60,
 ) -> None:
     while True:
         try:
@@ -545,5 +690,11 @@ async def run_forever(
             raise
         except Exception:
             logger.exception("schedule worker tick failed")
+        try:
+            await _check_missed_fires(threshold_s=missed_fire_threshold_s)
+        except asyncio.CancelledError:
+            raise
+        except Exception:
+            logger.exception("missed-fire check failed")
         await asyncio.sleep(poll_interval_s)
 
