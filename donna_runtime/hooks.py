@@ -97,6 +97,7 @@ def trace_hook_context(
     user_token = _CURRENT_USER_ID.set(user_id)
     chat_token = _CHAT_ALREADY_PERSISTED.set(chat_already_persisted)
     sig_token = _TURN_WRITE_SIGNATURES.set(set())
+    ack_token = _SLOW_ACK_FIRED.set(False)
     try:
         yield
     finally:
@@ -104,6 +105,7 @@ def trace_hook_context(
         _CURRENT_USER_ID.reset(user_token)
         _CHAT_ALREADY_PERSISTED.reset(chat_token)
         _TURN_WRITE_SIGNATURES.reset(sig_token)
+        _SLOW_ACK_FIRED.reset(ack_token)
 
 
 def set_image_prompt_hash(prompt_hash: str | None) -> None:
@@ -220,6 +222,8 @@ async def pre_tool_hook(input_data, tool_use_id, context):
             if deny is not None:
                 return deny
             _fire_image_ack(trace)
+        if short in _SLOW_TOOL_NAMES:
+            _fire_slow_tool_ack(trace)
         if short in _IDEMPOTENCY_GUARDED_TOOLS:
             signatures = _TURN_WRITE_SIGNATURES.get()
             if signatures is not None:
@@ -321,6 +325,67 @@ def _maybe_inject_voice_response(
 
 _IMAGE_ACK_TEXT = "drawing this, one sec"
 _IMAGE_ACK_EMOJI = "🎨"
+
+# Tools that take >5s in the median case. Reacting ⏳ on the user's
+# inbound message gives them a non-verbal "i saw this, working on it"
+# without breaking the prompt rule against announcing tool calls.
+_SLOW_TOOL_NAMES: frozenset[str] = frozenset({
+    "recall",
+    "recall_episodic",
+    "recall_graph",
+    "recall_chat_thread",
+    "research",
+    "agentic_web_search",
+    "web_search",
+    "composio_search_tools",
+    "composio_execute_tool",
+    "read_gmail_thread",
+})
+_SLOW_TOOL_ACK_EMOJI = "⏳"
+# Per-turn flag (via ContextVar) so the slow-tool ack only fires once
+# per inbound message even when the BRAIN calls multiple slow tools in
+# a row. Cleared by ``trace_hook_context`` between turns.
+_SLOW_ACK_FIRED: ContextVar[bool] = ContextVar(
+    "donna_slow_ack_fired", default=False
+)
+
+
+def _fire_slow_tool_ack(trace: TurnTrace | None) -> None:
+    """React ⏳ on the user's inbound message when a slow tool starts.
+
+    Idempotent per (user, message) — only the first slow-tool call in a
+    turn fires the reaction. Subsequent calls in the same turn are
+    silently skipped so we don't burn API quota overwriting the same
+    emoji on the same message.
+    """
+    if trace is None:
+        return
+    phone = getattr(trace, "user_phone", None)
+    inbound_msg_id = getattr(trace, "inbound_wa_message_id", None)
+    if not (phone and inbound_msg_id):
+        return
+    if _SLOW_ACK_FIRED.get():
+        return
+    _SLOW_ACK_FIRED.set(True)
+
+    async def _do_react() -> None:
+        try:
+            from delivery.whatsapp import WhatsAppChannel
+        except Exception:
+            logger.exception("slow tool ack: import failed (non-fatal)")
+            return
+        wa = WhatsAppChannel()
+        try:
+            await wa.send_reaction(phone, inbound_msg_id, _SLOW_TOOL_ACK_EMOJI)
+        except Exception:
+            logger.warning("slow tool ack: react failed (non-fatal)")
+
+    try:
+        task = asyncio.create_task(_do_react())
+        _PENDING_HOOK_TASKS.add(task)
+        task.add_done_callback(_PENDING_HOOK_TASKS.discard)
+    except RuntimeError:
+        pass
 
 
 def _fire_image_ack(trace: TurnTrace | None) -> None:

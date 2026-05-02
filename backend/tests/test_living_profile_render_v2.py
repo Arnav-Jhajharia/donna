@@ -120,20 +120,61 @@ def test_v2_render_drops_bullet_sections():
         assert forbidden not in block, f"{forbidden} should not render"
 
 
+def test_v2_render_drops_time_anchored_sections():
+    """today_shape and watch_for_tomorrow can carry absolute-time framing
+    ("today's deploy at 6pm", "tomorrow's flight") that goes stale by
+    the next day. Donna reads the LP at unknown future times, so any
+    "today/tomorrow" claim is a time-bomb. These fields stay in the
+    structured profile for downstream code (proactive triggers,
+    pattern miners) but MUST NOT render into the LIVING PROFILE block.
+    """
+    block = render_living_profile_block(_full_v2_profile())
+    # The fixture has both today_shape and watch_for_tomorrow populated.
+    # Neither should appear in the rendered block.
+    assert "today:" not in block, "today_shape must not render (time-anchored, goes stale)"
+    assert "watch:" not in block, "watch_for_tomorrow must not render (time-anchored, goes stale)"
+    # Negative spot-checks: content from those fields must also not leak.
+    assert "design review at 14:00" not in block
+    assert "principal follow-up email" not in block
+
+
 def test_v2_render_caps_narrative_when_long():
     profile = _full_v2_profile()
     profile["narrative"] = "x" * 5000
     block = render_living_profile_block(profile)
     narrative_line = block.split("\n", 2)[1]
-    # Narrative cap is 850 chars + ellipsis tail.
-    assert len(narrative_line) <= 860, f"narrative not capped ({len(narrative_line)} chars)"
+    # Narrative cap is now 1200 chars (Fix 3 — raised from 800 + sentence-
+    # boundary truncation). Worst-case (no boundaries in input) hard-caps
+    # at limit with `...` tail. Real narratives are 280-480 chars so the
+    # cap is a safety net, not a stylist.
+    assert len(narrative_line) <= 1200, f"narrative not capped ({len(narrative_line)} chars)"
+
+
+def test_v2_render_narrative_truncates_at_sentence_boundary():
+    """Fix 3 — when a long narrative is capped, it lands on a sentence
+    boundary, never mid-word. Mid-word truncation makes the model read
+    `(4-6am cluster...` and parse half a thought."""
+    profile = _full_v2_profile()
+    # Build a narrative that overflows the cap, with sentence boundaries.
+    sentence = "this is one sentence that contains some words. "  # 47 chars
+    profile["narrative"] = sentence * 50  # 2350 chars total, well over 1200
+    block = render_living_profile_block(profile)
+    narrative_line = block.split("\n", 2)[1]
+    # Should end with a complete sentence (period), not mid-word "...".
+    assert narrative_line.endswith("."), (
+        f"narrative did not land on sentence boundary: ...{narrative_line[-40:]!r}"
+    )
+    # And no `...` mid-word marker.
+    assert not narrative_line.endswith("..."), (
+        f"narrative ends with mid-word ellipsis: ...{narrative_line[-40:]!r}"
+    )
 
 
 def test_v2_render_total_block_under_budget():
     block = render_living_profile_block(_full_v2_profile())
-    # Narrative paragraph (~850 cap) + people line + rhythm line.
-    # Should comfortably stay under the planned ~1.5KB ceiling.
-    assert len(block) < 1700, f"v2 block too long ({len(block)} chars)"
+    # Narrative paragraph (~1200 cap) + people line + rhythm line + read.
+    # Should stay well under the wrapped-prompt total budget (3600).
+    assert len(block) < 2200, f"v2 block too long ({len(block)} chars)"
 
 
 def test_v2_render_falls_back_to_current_situation_when_narrative_missing():

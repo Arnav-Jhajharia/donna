@@ -17,10 +17,16 @@ from .data import LIVING_PROFILE
 
 logger = logging.getLogger(__name__)
 
-_MAX_CONTEXT_CHARS = 3600
+_MAX_CONTEXT_CHARS = 4500
 _MAX_URL_TEXT_CHARS = 700
 _MAX_REPLY_CHARS = 700
-_MAX_CHAT_CHARS = 180
+# Older chat messages get sentence-boundary truncation at this cap so the
+# gist survives. The most recent N messages bypass the per-line cap
+# entirely so continuity from the immediately prior beat is preserved
+# verbatim — see _RECENT_CHAT_FULLTEXT_TAIL below.
+_MAX_CHAT_CHARS = 240
+_MAX_CHAT_CHARS_RECENT = 800
+_RECENT_CHAT_FULLTEXT_TAIL = 2
 _MAX_RECENT_CHAT = 15
 _MAX_TODAY_CALENDAR = 6
 _MAX_TODAY_OBSERVATIONS = 8
@@ -649,7 +655,9 @@ async def render_turn_context(state: dict[str, Any]) -> str:
         )
         lines.extend(["", header, *recent])
 
-    return _cap("\n".join(lines).strip(), _MAX_CONTEXT_CHARS)
+    return _drop_sections_until_under_cap(
+        "\n".join(lines).strip(), _MAX_CONTEXT_CHARS
+    )
 
 
 async def _maybe_reconcile_integrations(
@@ -728,10 +736,147 @@ def _local_time(tz_name: str | None, injected_now: str | None = None) -> str:
 
 
 def _cap(value: str, limit: int) -> str:
+    """Hard fallback cap. Use _drop_sections_until_under_cap or
+    _trim_at_sentence first; this exists only for the worst-case path
+    where a single non-droppable, non-sentence-aware string overflows.
+
+    Mid-text truncation with `<truncated>` makes the model read garbage at
+    the end of the prompt — see Fix 3. Callers should virtually never hit
+    this code path; if they do, that's a bug upstream.
+    """
     text = str(value or "").strip()
     if len(text) <= limit:
         return text
     return text[: max(0, limit - 24)].rstrip() + " ... <truncated>"
+
+
+# Sections that can be cleanly dropped when the total wrapped context
+# overflows ``_MAX_CONTEXT_CHARS``. Listed lowest to highest priority —
+# entries earlier in the list get dropped first. Header strings must
+# match the exact line that introduces the section in the rendered
+# output (see render_*_block functions). Keep header substrings unique
+# enough that they won't accidentally match content.
+_DROPPABLE_SECTIONS_BY_PRIORITY = (
+    "## PENDING NOTES",
+    "## ATTENTIONS WAITING",
+    "URL CONTEXT",
+    "[OAUTH IN FLIGHT]",
+    "[INTEGRATIONS_SIGNALS]",
+    "[INTEGRATIONS]",
+)
+
+
+def _drop_sections_until_under_cap(text: str, cap: int) -> str:
+    """When the joined context exceeds ``cap``, drop low-priority sections
+    cleanly until under budget. Beats appending ``... <truncated>`` mid-
+    string — that leaks the marker into the model's input and chops
+    higher-priority surfaces (RECENT CHAT, TODAY) at the tail.
+
+    Drop strategy, in order:
+      1. Drop low-priority whole sections (PENDING NOTES, ATTENTIONS
+         WAITING, URL CONTEXT, OAUTH IN FLIGHT, INTEGRATIONS_SIGNALS,
+         INTEGRATIONS).
+      2. If still over, drop OLDEST RECENT CHAT lines one at a time —
+         the latest 1-2 turns are continuity-critical and stay verbatim;
+         older entries are rhythm signal and can be shed.
+      3. If still over (extreme case — TODAY block alone exceeds cap),
+         hard-cap as a last resort. Should never happen in practice.
+    """
+    if len(text) <= cap:
+        return text
+    # Step 1 — drop low-priority sections.
+    for header in _DROPPABLE_SECTIONS_BY_PRIORITY:
+        if header not in text:
+            continue
+        idx = text.find(header)
+        section_start = text.rfind("\n\n", 0, idx)
+        section_start = 0 if section_start < 0 else section_start
+        section_end = text.find("\n\n", idx)
+        section_end = len(text) if section_end < 0 else section_end
+        text = (text[:section_start] + text[section_end:]).strip()
+        if len(text) <= cap:
+            return text
+
+    # Step 2 — peel oldest RECENT CHAT lines off the head of the chat
+    # block. Preserves the latest 2 messages (continuity-critical) at
+    # all costs.
+    text = _shed_oldest_recent_chat_until_fits(text, cap)
+    if len(text) <= cap:
+        return text
+
+    # Step 3 — hard cap. This indicates a single section is bigger than
+    # the budget which shouldn't happen with the per-section truncation
+    # already in place. Logged as a last-resort path.
+    logger.warning(
+        "render_turn_context: hard-cap fired — dropped sections + chat "
+        "still over budget (len=%d cap=%d)",
+        len(text),
+        cap,
+    )
+    return _cap(text, cap)
+
+
+def _shed_oldest_recent_chat_until_fits(text: str, cap: int) -> str:
+    """Iteratively drop the oldest line of the RECENT CHAT block until
+    under cap. Never drops the last 2 lines (continuity floor).
+
+    The RECENT CHAT block is structured as a header line followed by
+    one bullet line (``- [timestamp] role: content``) per message. The
+    OLDEST messages render FIRST (chronological), so 'shed oldest' =
+    drop lines right after the header, one at a time.
+    """
+    if len(text) <= cap:
+        return text
+    header_marker = "RECENT CHAT (last "
+    header_idx = text.rfind(header_marker)
+    if header_idx < 0:
+        return text
+    # Find the end of the header line.
+    line_end = text.find("\n", header_idx)
+    if line_end < 0:
+        return text
+    block_start = line_end + 1
+    # Block ends at the next blank line (or end of string). Currently
+    # RECENT CHAT is the last section appended, so end-of-string is the
+    # common case.
+    block_end = text.find("\n\n", block_start)
+    if block_end < 0:
+        block_end = len(text)
+    chat_lines = text[block_start:block_end].split("\n")
+    chat_lines = [ln for ln in chat_lines if ln.strip()]
+    # Floor: never drop the last 2 chat lines (continuity-critical).
+    while len(chat_lines) > 2 and len(text) > cap:
+        # Drop the first (oldest) line.
+        chat_lines = chat_lines[1:]
+        rebuilt_block = "\n".join(chat_lines)
+        text = (text[:block_start] + rebuilt_block + text[block_end:]).strip()
+        # Recompute block_end since text length changed.
+        block_end = text.find("\n\n", block_start)
+        if block_end < 0:
+            block_end = len(text)
+    return text
+
+
+def _trim_at_sentence(value: str, limit: int) -> str:
+    """Sentence-boundary truncation. Mirrors the LP rendering helper.
+
+    Looks for a sentence boundary in the back ~40% of the cap window;
+    falls back to a word boundary; only hard-caps with `...` if the
+    text is one continuous token. Never leaves Donna reading mid-word.
+    """
+    text = str(value or "").strip()
+    if len(text) <= limit:
+        return text
+    head = text[:limit]
+    soft_floor = int(limit * 0.6)
+    for boundary in (". ", "? ", "! ", ".\n", "?\n", "!\n"):
+        idx = head.rfind(boundary, soft_floor)
+        if idx > 0:
+            return text[: idx + 1].rstrip()
+    space_idx = head.rfind(" ", soft_floor)
+    if space_idx > 0:
+        return text[:space_idx].rstrip()
+    return text[: max(0, limit - 3)].rstrip() + "..."
 
 
 def _render_reply_context(state: dict[str, Any]) -> str:
@@ -739,7 +884,7 @@ def _render_reply_context(state: dict[str, Any]) -> str:
     if not content:
         return ""
     role = state.get("reply_to_role") or "unknown"
-    return f"REPLY CONTEXT\nreply_to_role: {role}\nreply_to_content: {_cap(content, _MAX_REPLY_CHARS)}"
+    return f"REPLY CONTEXT\nreply_to_role: {role}\nreply_to_content: {_trim_at_sentence(content, _MAX_REPLY_CHARS)}"
 
 
 def _render_url_context(url_contents: Any) -> str:
@@ -755,7 +900,7 @@ def _render_url_context(url_contents: Any) -> str:
         text = item.get("text") or item.get("error") or ""
         lines.append(f"- {title} ({status}) {url}")
         if text:
-            lines.append(f"  {_cap(str(text), _MAX_URL_TEXT_CHARS)}")
+            lines.append(f"  {_trim_at_sentence(str(text), _MAX_URL_TEXT_CHARS)}")
     return "\n".join(lines) if len(lines) > 1 else ""
 
 
@@ -804,15 +949,33 @@ async def _safe_recent_chat(
         return []
     kept = [r for r in rows if r.content and not _is_poisoned_fallback(r)]
     kept = kept[:_MAX_RECENT_CHAT]
-    return [_format_recent_chat_line(row, timezone_name) for row in reversed(kept)]
+    # `kept` is newest-first; the most recent _RECENT_CHAT_FULLTEXT_TAIL
+    # messages get full-text rendering for continuity from the immediate
+    # prior beat. Older messages get sentence-boundary truncation at the
+    # smaller cap so RECENT CHAT carries rhythm without bloating context.
+    fulltext_ids = {id(row) for row in kept[:_RECENT_CHAT_FULLTEXT_TAIL]}
+    return [
+        _format_recent_chat_line(
+            row,
+            timezone_name,
+            cap=_MAX_CHAT_CHARS_RECENT if id(row) in fulltext_ids else _MAX_CHAT_CHARS,
+        )
+        for row in reversed(kept)
+    ]
 
 
-def _format_recent_chat_line(row: Any, timezone_name: str | None) -> str:
+def _format_recent_chat_line(
+    row: Any, timezone_name: str | None, *, cap: int = _MAX_CHAT_CHARS
+) -> str:
     """Render one ChatMessage line with a user-local timestamp prefix.
 
     Format: ``[YYYY-MM-DD HH:MM] role: content``. Timestamp lets the model
     do its own rhythm/affect inference without needing a separate
     pre-rendered block.
+
+    Caller passes ``cap`` to set per-line truncation; the most recent N
+    turns get a higher cap so the immediately prior beat survives
+    verbatim. Truncation lands at sentence boundary (never mid-word).
     """
     from backend.memory.time import format_local
 
@@ -820,5 +983,5 @@ def _format_recent_chat_line(row: Any, timezone_name: str | None) -> str:
     role = getattr(row, "role", "?") or "?"
     is_proactive = getattr(row, "is_proactive", False)
     role_marker = f"{role}*" if is_proactive else role
-    return f"- [{when}] {role_marker}: {_cap(row.content, _MAX_CHAT_CHARS)}"
+    return f"- [{when}] {role_marker}: {_trim_at_sentence(row.content, cap)}"
 

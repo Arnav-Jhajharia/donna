@@ -1,46 +1,39 @@
-"""Lightweight assertions on the in-turn intent-capture prompt change.
+"""Lightweight assertions on the prompt's intent-capture rules.
 
-The full eval-suite test (does the brain actually call attend on a concrete
-future utterance?) is deferred — that needs the full SDK loop and a recorded
-trace. This test pins the prompt language so a regression is loud at unit-test
-time.
+The READ → ACT block enforces the agency split: clocks-named
+events get attend(), no-clock vague intentions get
+remember(kind="commitment"). Both patterns must be present in the
+prompt so the brain has a clear signal for which path to take.
 """
 from __future__ import annotations
-
-import pytest
 
 from donna_runtime.prompt import STAGE_0_5_PROMPT
 
 
-def test_prompt_has_concrete_event_capture_section():
-    assert "CAPTURING CONCRETE FUTURE COMMITMENTS" in STAGE_0_5_PROMPT
+def test_prompt_has_attend_silently_pattern():
+    """Stated future event with a clock → call attend in the same turn."""
+    body = STAGE_0_5_PROMPT
+    assert "Attend silently" in body or "attend silently" in body.lower()
+    # The pattern names the trigger conditions (clock named).
+    body_lower = body.lower()
+    assert "clock" in body_lower
+    assert "exam" in body_lower or "flight" in body_lower or "doctor" in body_lower
 
 
-def test_prompt_distinguishes_attend_from_open_loop():
+def test_prompt_distinguishes_attend_from_commitment():
+    """The directive splits clocks-named (attend) from vague (commitment)."""
     body = STAGE_0_5_PROMPT.lower()
-    # The directive must explicitly mention attend vs track_open_loop.
     assert "attend" in body
-    assert "track_open_loop" in body
-    # The bias for stated-time events must be explicit.
-    assert "without asking" in body or "without asking." in body
+    # Post-retirement the brain uses remember(kind="commitment"), not track_open_loop.
+    assert "commitment" in body
+    assert "track_open_loop" not in body
 
 
-@pytest.mark.parametrize(
-    "phrase",
-    [
-        "midterm",
-        "flight friday",
-        "dentist wednesday",
-    ],
-)
-def test_prompt_carries_at_least_three_voice_examples(phrase):
-    assert phrase.lower() in STAGE_0_5_PROMPT.lower()
-
-
-def test_prompt_keeps_open_loop_for_vague_intentions():
-    # The contrasting example with "call mom" prevents the bias from
-    # collapsing into "always attend, never track_open_loop".
-    assert "call mom" in STAGE_0_5_PROMPT.lower()
+def test_prompt_keeps_call_mom_example_for_no_clock_case():
+    """The contrasting example with "call mom" prevents the bias from
+    collapsing into "always attend"."""
+    body = STAGE_0_5_PROMPT.lower()
+    assert "call mom" in body
 
 
 def test_prompt_voice_rules_unchanged():

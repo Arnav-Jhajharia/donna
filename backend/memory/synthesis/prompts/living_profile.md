@@ -43,13 +43,40 @@ now_local: {now_local}
 Produce a JSON object with these fields:
 
 - `narrative` — **THE PRIMARY FIELD.** A single paragraph, 280 to 480
-  characters. This is what Donna reads at turn time. Plain declarative
-  sentences. Events, schedules, decisions, who is doing what, what is
-  in the air right now.
+  characters. This is what Donna reads at turn time. It captures who
+  this user is *this week* — the slow ambient layer of their life that
+  does not change between hours.
 
-  DO write: what is happening, what is pulling on them, what is
-  upcoming, who is active in their life this week, yesterday's
-  specifics if material for today.
+  **CRITICAL: time-anchor-free.** Donna reads this paragraph at
+  unknown future times (sometimes 6 hours after synthesis, sometimes
+  longer). Any claim anchored to a specific clock or day will go
+  stale and Donna will assert wrong things. Write durationally, by
+  state, by arc — not by absolute time.
+
+  WRITE THIS WAY:
+  - DURATIONAL: "8 days into the donna build sprint", "for the past
+    two weeks fundraise has been the dominant thread", "since
+    mid-april integrations work has been the recurring blocker"
+  - STATE-BASED: "running on health debt this week — diarrhea + low
+    food + dehydration stacking", "high-focus mode, sleep cut short
+    to push code", "fragile mood floor, picks up under stress"
+  - RELATIONAL: "maya is active in his life this week, weekly design
+    syncs", "saurabh is the unresolved offer thread"
+  - ARC: "rhythm is heavy early-morning engagement (4-6am cluster),
+    winding down by midnight"
+
+  DO NOT WRITE (these go stale within hours):
+  - "today / tonight / this morning / right now / as of [N]:[M]"
+  - "today's deploy", "this evening's plan", "in 4 hours"
+  - "yesterday he X" framed as still-active or implying "and now today..."
+  - Any sentence anchored to a specific clock or day. The narrative
+    is read at unknown future times — by the time Donna reads it,
+    "today" has shifted.
+
+  Yesterday's specific events go in the `yesterday` field, not the
+  narrative. What's on today's plate goes in `today_shape`, not the
+  narrative. The narrative is the slow read of WHO this user is right
+  now, not WHAT they are doing this hour.
 
   DO NOT write: psychological diagnoses, personality reads, character
   traits ("he tends to...", "his pattern is..."), interpretations of

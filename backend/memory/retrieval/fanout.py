@@ -4,7 +4,8 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import logging
-from datetime import timedelta
+import re
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from backend.memory.clients.graphiti import search_facts as graphiti_search
@@ -22,6 +23,16 @@ logger = logging.getLogger(__name__)
 _PER_QUERY_LIMIT = 6
 _LANE_TIMEOUT = 8.0
 
+# A chunk that looks like a USER:/DONNA: chat fragment AND was ingested
+# inside this window gets its score halved at the documents lane. Rationale:
+# the wrapped prompt already includes RECENT CHAT, so surfacing the same
+# fragments through recall both crowds out long-term memories AND duplicates
+# context the model already sees. PDFs/notes/emails don't match the chat
+# regex so they keep their full weight.
+_CHAT_FRAGMENT_RECENT_DAYS = 30
+_CHAT_FRAGMENT_DOWNWEIGHT = 0.5
+_CHAT_FRAGMENT_RE = re.compile(r"(?im)^\s*(user|donna)\s*:")
+
 
 async def fanout(
     *,
@@ -35,6 +46,7 @@ async def fanout(
     use_open_loops: bool = True,
     use_situation_brief: bool = True,
     use_documents: bool = True,
+    use_calendar: bool = True,
 ) -> list[RetrievalResult]:
     tasks: list[asyncio.Task] = []
     hints = detect_structured_hints(original_message, queries)
@@ -56,6 +68,12 @@ async def fanout(
         tasks.append(
             asyncio.create_task(
                 _search_situation_brief(user_id, structured_query)
+            )
+        )
+    if use_calendar:
+        tasks.append(
+            asyncio.create_task(
+                _search_calendar(user_id, structured_query, hints, per_query_limit)
             )
         )
 
@@ -233,6 +251,11 @@ async def _search_open_loops(
         logger.exception("fanout.open_loops failed")
         return []
 
+    # When the user explicitly asks "open loops" / "what am i tracking" the
+    # rows must survive rerank against the multi-group RRF noise from docs +
+    # supermemory. structured_priority is added directly into rrf score by
+    # the reranker (see backend/memory/retrieval/rerank.py).
+    structured_priority = 0.20 if hints.wants_open_loops else 0.0
     return [
         RetrievalResult(
             id=f"loop:{row.id}",
@@ -244,6 +267,7 @@ async def _search_open_loops(
                 "status": row.status,
                 "created_at": row.created_at.isoformat() if row.created_at else None,
                 "source_message": row.source_message,
+                "structured_priority": structured_priority,
             },
         )
         for idx, row in enumerate(rows[:limit])
@@ -294,6 +318,105 @@ async def _search_situation_brief(user_id: str, query: str) -> list[RetrievalRes
             },
         )
     ]
+
+
+async def _search_calendar(
+    user_id: str,
+    query: str,
+    hints: StructuredHints,
+    limit: int,
+) -> list[RetrievalResult]:
+    """Calendar lane: searches CalendarEntry rows around the query period.
+
+    Closes the recall fanout coverage gap noted in CLAUDE.md
+    ("Calendar [...] NOT yet in the fanout"). Defaults to a +/-7d window
+    when the query has no explicit period; uses period bounds when present.
+    Term-matches against title and location.
+    """
+    try:
+        from sqlalchemy import or_, select
+
+        from backend.db.models import CalendarEntry, User
+        from backend.db.session import async_session
+    except Exception:
+        logger.exception("fanout.calendar imports failed")
+        return []
+
+    terms = query_terms(query)
+    if not hints.wants_calendar and not terms:
+        return []
+
+    try:
+        async with async_session() as session:
+            user = (
+                await session.execute(select(User).where(User.id == user_id))
+            ).scalar_one_or_none()
+            timezone_name = user.timezone if user else None
+            bounds = period_bounds(hints.period, timezone_name)
+            if bounds:
+                since, until = bounds
+            else:
+                now = utcnow_naive()
+                since = now - timedelta(days=7)
+                until = now + timedelta(days=7)
+
+            stmt = (
+                select(CalendarEntry)
+                .where(CalendarEntry.user_id == user_id)
+                .where(CalendarEntry.start_time >= since)
+                .where(CalendarEntry.start_time < until)
+                .order_by(CalendarEntry.start_time.asc())
+                .limit(max(limit, 8))
+            )
+            # If the user didn't explicitly invoke calendar phrasing, gate on
+            # term overlap with title/location so we don't dump random events
+            # into every recall.
+            if not hints.wants_calendar and terms:
+                clauses = []
+                for term in terms[:5]:
+                    pat = f"%{term}%"
+                    clauses.append(CalendarEntry.title.ilike(pat))
+                    clauses.append(CalendarEntry.location.ilike(pat))
+                stmt = stmt.where(or_(*clauses))
+
+            rows = (
+                await asyncio.wait_for(session.execute(stmt), timeout=_LANE_TIMEOUT)
+            ).scalars().all()
+    except asyncio.TimeoutError:
+        return []
+    except Exception:
+        logger.exception("fanout.calendar failed")
+        return []
+
+    if not rows:
+        return []
+
+    results: list[RetrievalResult] = []
+    for idx, row in enumerate(rows[:limit]):
+        when = format_local(row.start_time, timezone_name) or "unknown time"
+        location = f" @ {row.location}" if row.location else ""
+        content = f"calendar: {row.title} at {when}{location}"
+        # wants_calendar queries get a structured priority bump so calendar
+        # results compete with supermemory/graphiti at rerank time.
+        base = 1.4 if hints.wants_calendar else 0.7
+        results.append(
+            RetrievalResult(
+                id=f"cal:{row.id}",
+                source="calendar",
+                content=content,
+                score=max(0.2, base - idx * 0.05),
+                retrieved_via=query,
+                metadata={
+                    "start_time": row.start_time.isoformat() if row.start_time else None,
+                    "end_time": row.end_time.isoformat() if row.end_time else None,
+                    "location": row.location,
+                    "title": row.title,
+                    "category": row.category,
+                    "structured_priority": 0.05 if hints.wants_calendar else 0.0,
+                },
+            )
+        )
+    return results
 
 
 async def _search_sm(user_id: str, query: str, limit: int) -> list[RetrievalResult]:
@@ -349,17 +472,77 @@ async def _search_docs(user_id: str, query: str, limit: int) -> list[RetrievalRe
         chunk_id = f"doc:{c.doc_id or 'unknown'}:{_hash(c.content)}"
         meta = dict(c.metadata or {})
         meta.setdefault("doc_id", c.doc_id)
+        score = float(c.score or 0.0)
+        # Behavioral change: chunks that look like USER:/DONNA: chat fragments
+        # AND were ingested in the last 30d are halved. The wrapped prompt
+        # already shows RECENT CHAT to the model, so surfacing those same
+        # fragments through recall is doubly redundant AND outranks real
+        # long-term hits (PDFs, notes, supermemory narrative). Real document
+        # bodies don't match _CHAT_FRAGMENT_RE so they keep full weight.
+        if _is_recent_chat_fragment(c.content, meta):
+            score *= _CHAT_FRAGMENT_DOWNWEIGHT
+            meta["chat_fragment_downweight"] = _CHAT_FRAGMENT_DOWNWEIGHT
         results.append(
             RetrievalResult(
                 id=chunk_id,
                 source="documents",
                 content=c.content,
-                score=float(c.score or 0.0),
+                score=score,
                 retrieved_via=query,
                 metadata=meta,
             )
         )
     return results
+
+
+def _is_recent_chat_fragment(content: str, meta: dict[str, Any]) -> bool:
+    """True iff content looks like a chat transcript AND is fresh.
+
+    "Looks like chat" = at least one ``USER:`` or ``DONNA:`` line prefix.
+    "Fresh" = ingested/created within ``_CHAT_FRAGMENT_RECENT_DAYS``. If we
+    can't determine freshness from metadata, default to True (treat as fresh)
+    so the downweight applies — the goal is to suppress chat-style fragments,
+    not preserve old ones.
+    """
+    if not content or not _CHAT_FRAGMENT_RE.search(content):
+        return False
+    candidates = (
+        meta.get("created_at"),
+        meta.get("updated_at"),
+        meta.get("ingested_at"),
+        meta.get("date"),
+    )
+    raw_meta = meta.get("metadata") if isinstance(meta.get("metadata"), dict) else None
+    if raw_meta:
+        candidates = candidates + (
+            raw_meta.get("created_at"),
+            raw_meta.get("updated_at"),
+            raw_meta.get("ingested_at"),
+            raw_meta.get("date"),
+        )
+    cutoff = datetime.now(timezone.utc) - timedelta(days=_CHAT_FRAGMENT_RECENT_DAYS)
+    for value in candidates:
+        ts = _parse_iso_dt(value)
+        if ts is None:
+            continue
+        return ts >= cutoff
+    # No timestamp available — assume the chunk is fresh enough to downweight.
+    return True
+
+
+def _parse_iso_dt(value: Any) -> datetime | None:
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        return value if value.tzinfo else value.replace(tzinfo=timezone.utc)
+    if not isinstance(value, str):
+        return None
+    raw = value.strip().replace("Z", "+00:00")
+    try:
+        dt = datetime.fromisoformat(raw)
+    except ValueError:
+        return None
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
 
 
 async def _search_gt(user_id: str, query: str, limit: int) -> list[RetrievalResult]:

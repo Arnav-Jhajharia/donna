@@ -96,15 +96,12 @@ _PER_SECTION_CAP = 4
 # they would feel like a database to the model and dilute the narrative.
 # Only narrative + a small set of orienting one-liners (people roster,
 # rhythm) reach the system prompt.
-_V2_NARRATIVE_CAP = 800
+_V2_NARRATIVE_CAP = 1200
 _V2_PEOPLE_CAP = 4
 _V2_THEMES_CAP = 3
 _V2_THEME_CHARS_CAP = 60
 _V2_TENSIONS_CAP = 3
 _V2_TENSION_CHARS_CAP = 60
-_V2_TODAY_CAP = 280
-_V2_WATCH_CAP = 4
-_V2_WATCH_CHARS_CAP = 60
 _V2_KEYS = (
     "narrative",
     "running_themes",
@@ -130,9 +127,31 @@ def _v2_present(profile: dict) -> bool:
 
 
 def _trim(text: str, limit: int) -> str:
+    """Truncate text to <= limit chars at a sentence or word boundary.
+
+    Mid-word truncation with `...` makes the rendered LP read like a
+    redacted document — Donna sees `(4-6am cluster...` and tries to
+    parse half a thought. This trim looks for a sentence boundary
+    (`. `, `? `, `! `, or newline equivalents) in the back ~40% of the
+    window; falls back to the last word boundary; only as a final
+    resort does it hard-cap and append `...`. The caller sets `limit`
+    high enough that this latter case is rare in practice.
+    """
     text = (text or "").strip()
     if len(text) <= limit:
         return text
+    head = text[:limit]
+    soft_floor = int(limit * 0.6)
+    # Try sentence boundary first — keeps the rendered field readable.
+    for boundary in (". ", "? ", "! ", ".\n", "?\n", "!\n"):
+        idx = head.rfind(boundary, soft_floor)
+        if idx > 0:
+            return text[: idx + 1].rstrip()
+    # No sentence boundary in window — fall back to word boundary.
+    space_idx = head.rfind(" ", soft_floor)
+    if space_idx > 0:
+        return text[:space_idx].rstrip()
+    # Worst case: text is one giant token. Hard-cap with marker.
     return text[: max(0, limit - 3)].rstrip() + "..."
 
 
@@ -226,24 +245,14 @@ def _render_v2_living_profile(profile: dict) -> list[str]:
             bits.append("(" + ", ".join(cleaned_tensions) + ")")
         lines.append("read: " + " ".join(bits))
 
-    # today_shape — the synth's read of today specifically. Capped
-    # tight so it doesn't repeat the narrative or eclipse it.
-    today_shape = (profile.get("today_shape") or "").strip()
-    if today_shape:
-        lines.append("today: " + _trim(today_shape, _V2_TODAY_CAP))
-
-    # watch_for_tomorrow — what donna should be ready to surface next.
-    # Most useful at morning turns; harmless other turns.
-    watch = profile.get("watch_for_tomorrow") or []
-    cleaned_watch: list[str] = []
-    if isinstance(watch, list):
-        for w in watch[:_V2_WATCH_CAP]:
-            phrase = str(w).strip()
-            if not phrase:
-                continue
-            cleaned_watch.append(_trim(phrase, _V2_WATCH_CHARS_CAP))
-    if cleaned_watch:
-        lines.append("watch: " + "; ".join(cleaned_watch))
+    # today_shape and watch_for_tomorrow are intentionally NOT rendered.
+    # Both can carry absolute-time framing ("today's deploy at 6pm",
+    # "tomorrow's flight") that goes stale by the next day. Donna reads
+    # the LP at unknown future times, so any "today/tomorrow" claim is a
+    # time-bomb. The TODAY block (live DB read each turn) carries actual
+    # current state; the LP narrative carries the slow ambient knowing
+    # of who the user is this week. Both fields stay in the structured
+    # profile for downstream pattern miners and proactive triggers.
 
     return lines if len(lines) > 1 else []
 

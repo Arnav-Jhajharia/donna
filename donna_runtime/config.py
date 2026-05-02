@@ -116,7 +116,14 @@ class DonnaAgentConfig:
     model: str = MODEL_NAME
     max_turns: int = 6
     proactive_max_turns: int = 12
-    request_timeout_s: float = 45.0
+    # Bumped 45 → 120. The 45s ceiling was killing turns mid-tool-loop:
+    # a chain of attend()/recall() calls (each ~6-8s) blew past it after
+    # 5-7 invocations, the SDK subprocess got cancelled before any
+    # terminator (send_burst) emitted, and the user saw silence — which
+    # they read as "donna didn't reply" and retyped, creating a redelivery
+    # loop. 120s covers a healthy 12-call chain. Pair with proactive_max_turns
+    # (12) so the model can't chew this budget on a single runaway loop.
+    request_timeout_s: float = 120.0
     trace_file: Path = TRACE_FILE
     session_store_file: Path = SESSION_STORE_FILE
     tool_mode: ToolMode = "real"

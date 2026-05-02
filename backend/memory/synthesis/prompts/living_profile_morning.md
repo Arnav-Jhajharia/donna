@@ -30,12 +30,37 @@ now_local: {now_local}
 Produce a JSON object with these fields:
 
 - `narrative` — **THE PRIMARY FIELD.** A single paragraph, 240 to 420
-  characters. This is what Donna reads at turn time.
+  characters. This is what Donna reads at turn time. It captures who
+  this user is *this week* — the slow ambient layer that does not
+  change between hours.
 
-  Plain declarative sentences. Events, schedules, decisions. Anchor on
-  what's happening this morning — yesterday's actual events, the
-  shape of today, what's pulling. Use the existing profile as
-  background, not as a script.
+  **CRITICAL: time-anchor-free.** Donna reads this paragraph at
+  unknown future times. Any claim anchored to a specific clock or
+  day will go stale and Donna will assert wrong things. Write
+  durationally, by state, by arc — not by absolute time.
+
+  WRITE THIS WAY:
+  - DURATIONAL: "9 days into the donna sprint", "for the past two
+    weeks fundraise has been the dominant thread"
+  - STATE-BASED: "running on health debt this week, dehydration
+    stacking", "high-focus mode, sleep cut short to push code"
+  - RELATIONAL: "maya is active in his life this week, weekly design
+    syncs"
+  - ARC: "rhythm is heavy early-morning engagement (4-6am cluster)"
+
+  DO NOT WRITE (these go stale):
+  - "today / tonight / this morning / right now / as of [N]:[M]"
+  - "today's deploy", "this evening's plan", "in 4 hours"
+  - "yesterday he X" framed as still-active or implying "and now today..."
+  - Any sentence anchored to a specific clock or day
+
+  Yesterday's specific events go in the `yesterday` field, not the
+  narrative. What's on today's plate goes in `today_shape`, not the
+  narrative. The narrative is the slow read of WHO this user is, not
+  WHAT they are doing this hour. Use the existing profile as
+  background; refresh the narrative to reflect material evolution
+  (new arcs, state shifts, new people) without re-anchoring it to
+  "this morning."
 
   DO NOT write: psychological diagnoses, character traits, witty
   framings, literary metaphors, em dashes, or interpretations of

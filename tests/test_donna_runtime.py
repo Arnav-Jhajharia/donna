@@ -32,11 +32,14 @@ from donna_runtime.runner import _is_missing_resume_error, _should_retry_without
 class DonnaRuntimeTests(unittest.TestCase):
     def test_prompt_keeps_terminal_contract(self) -> None:
         prompt = build_system_prompt(runtime_context="## Runtime Context\nUser id: test-user")
+        # Terminal contract: every turn ends with send_burst.
         self.assertIn("send_burst", prompt)
-        self.assertIn("Do not fabricate", prompt)
-        self.assertIn("Tools are affordances", prompt)
+        # No-fabrication rule (Fix 4 rephrased to match Donna's contraction
+        # style — "don't fabricate" instead of "do not fabricate").
+        self.assertIn("Don't fabricate", prompt)
+        # High agency stays load-bearing.
         self.assertIn("Default to high agency", prompt)
-        # runtime_context is intentionally ignored now — prefix must stay
+        # runtime_context is intentionally ignored — prefix must stay
         # byte-stable across turns for SDK prefix caching. Volatile context
         # is injected via wrap_user_message_with_context instead.
         self.assertNotIn("User id: test-user", prompt)
@@ -217,7 +220,75 @@ class DonnaRuntimeTests(unittest.TestCase):
         # Concrete example shape included to steer the next call.
         self.assertIn("alcohol", text)
 
-    def test_close_open_loop_missing_id_tells_agent_how_to_get_one(self) -> None:
+    def test_commitment_kind_routes_to_log_observation(self) -> None:
+        """``kind='commitment'`` is the new path for "user said they'll do
+        X without a clock." It must dispatch to log_observation with
+        type='commitment' so the LP synthesizer can surface unresolved
+        ones — NOT to the retired track_open_loop."""
+        import unittest.mock as _mock
+
+        from donna_runtime import tools as runtime_tools
+        from donna_runtime.hooks import _CURRENT_USER_ID
+
+        captured: dict = {}
+
+        async def _fake_log(**kwargs):
+            captured.update(kwargs)
+            return {"status": "ok", "content": []}
+
+        token = _CURRENT_USER_ID.set("test-user")
+        try:
+            with _mock.patch(
+                "backend.memory.tools.log_observation.log_observation", _fake_log
+            ):
+                asyncio.run(
+                    runtime_tools.remember.handler(
+                        {"kind": "commitment", "content": "i'll send the doc by friday"}
+                    )
+                )
+        finally:
+            _CURRENT_USER_ID.reset(token)
+
+        assert captured["type"] == "commitment"
+        assert captured["fields"] == {"text": "i'll send the doc by friday"}
+        assert captured["tags"]["resolved"] is False
+        assert captured["tags"]["source"] == "stated"
+
+    def test_open_loop_kind_routes_to_commitment_path(self) -> None:
+        """Legacy ``kind='open_loop'`` keeps working but lands as a
+        commitment observation — no new rows in the legacy open_loops
+        table get created."""
+        import unittest.mock as _mock
+
+        from donna_runtime import tools as runtime_tools
+        from donna_runtime.hooks import _CURRENT_USER_ID
+
+        captured: dict = {}
+
+        async def _fake_log(**kwargs):
+            captured.update(kwargs)
+            return {"status": "ok", "content": []}
+
+        token = _CURRENT_USER_ID.set("test-user")
+        try:
+            with _mock.patch(
+                "backend.memory.tools.log_observation.log_observation", _fake_log
+            ):
+                asyncio.run(
+                    runtime_tools.remember.handler(
+                        {"kind": "open_loop", "content": "should call mom sometime"}
+                    )
+                )
+        finally:
+            _CURRENT_USER_ID.reset(token)
+
+        assert captured["type"] == "commitment"
+
+    def test_loop_closed_kind_is_retired_with_clear_message(self) -> None:
+        """``kind='loop_closed'`` no longer dispatches — open_loops as a
+        separate concept retired. Resolution of stated commitments is now
+        detected automatically by the post-turn extractor; the brain should
+        drop the call rather than try to close anything."""
         from donna_runtime import tools as runtime_tools
         from donna_runtime.hooks import _CURRENT_USER_ID
 
@@ -230,9 +301,8 @@ class DonnaRuntimeTests(unittest.TestCase):
             _CURRENT_USER_ID.reset(token)
 
         text = result["content"][0]["text"]
-        self.assertIn("loop_id", text)
-        # must tell the agent how to acquire a loop_id, not just that it's missing
-        self.assertIn("recall", text.lower())
+        self.assertIn("removed", text.lower())
+        self.assertIn("automatic", text.lower())
 
     def test_attend_missing_intent_gives_example(self) -> None:
         """The single creation tool must steer the agent on missing intent

@@ -13,36 +13,52 @@ from donna_runtime.prompt import STAGE_0_5_PROMPT, STAGE_0_PROMPT
 from donna_runtime import tools as runtime_tools
 
 
-class TestStanceBlockLanded:
-    def test_stage_0_5_prompt_has_whatsapp_interface_section(self) -> None:
-        assert "# WHATSAPP IS THE INTERFACE" in STAGE_0_5_PROMPT
+class TestPromptStructureV3:
+    """Fix 4 — distilled prompt around the four non-negotiables.
 
-    def test_stage_0_prompt_has_whatsapp_interface_section(self) -> None:
-        assert "# WHATSAPP IS THE INTERFACE" in STAGE_0_PROMPT
+    The old "WHATSAPP IS THE INTERFACE" stance block (with worked image
+    examples like "meds eleven days") was removed as part of the
+    compression. Image guidance now lives in WHAT YOU CAN DO and the
+    image tool's own description. These tests assert the new structure.
+    """
 
-    def test_stance_block_appears_before_tools_section(self) -> None:
+    def test_prompt_has_identity_and_four_non_negotiables(self) -> None:
         p = STAGE_0_5_PROMPT
-        assert p.index("# WHATSAPP IS THE INTERFACE") < p.index("# TOOLS")
+        assert "# WHO YOU ARE" in p
+        assert "stay on top of their life" in p
+        assert "handle things" in p
+        assert "know their situation" in p
+        assert "doing your best" in p
 
-    def test_stance_carries_canonical_examples(self) -> None:
+    def test_prompt_has_read_to_act_block(self) -> None:
         p = STAGE_0_5_PROMPT
-        assert "meds eleven days" in p
-        assert "show me" in p
-        assert "paint the picture" in p
+        assert "# READ → ACT" in p
+        assert "Recall on disagreement" in p
+        assert "Attend silently" in p
+        assert "Speak what you did" in p
 
-    def test_stance_names_default_to_text(self) -> None:
-        assert "Everything else is text" in STAGE_0_5_PROMPT
-
-    def test_stance_block_is_stance_not_mechanics(self) -> None:
-        """Sanity: stance block must not leak tool-description mechanics."""
+    def test_prompt_has_whatsapp_shape_block(self) -> None:
+        """Widget catalog renamed from 'WHATSAPP IS THE INTERFACE' to
+        'WHATSAPP SHAPE'. Still carries the widget rules."""
         p = STAGE_0_5_PROMPT
-        stance_start = p.index("# WHATSAPP IS THE INTERFACE")
-        stance_end = p.index("# TOOLS", stance_start)
-        stance = p[stance_start:stance_end]
-        assert "cooldown" not in stance.lower()
-        assert "media_id" not in stance.lower()
-        assert "intent=" not in stance.lower()
-        assert "caption=" not in stance.lower()
+        assert "# WHATSAPP SHAPE" in p
+        assert "voice_response" in p
+        assert "cta_url" in p
+
+    def test_prompt_size_under_budget(self) -> None:
+        """Compression target: _DONNA_CORE under 13000 chars (down from
+        ~19,862 in the previous version, ~35% reduction). Most of the
+        floor is the INTEGRATIONS block (precise composio parsing +
+        connect-with-intent rule) and the BURST SHAPE block (necessary
+        for multi-bubble rhythm)."""
+        assert len(STAGE_0_5_PROMPT) < 13000, (
+            f"prompt grew past budget ({len(STAGE_0_5_PROMPT)} chars)"
+        )
+
+    def test_stage_aliases_are_identical(self) -> None:
+        """STAGE_0_PROMPT and STAGE_0_5_PROMPT now alias the same content
+        (Fix 4 — Stage 0 / no-memory-tools path was dead in production)."""
+        assert STAGE_0_PROMPT == STAGE_0_5_PROMPT
 
 
 class TestImageToolStub:

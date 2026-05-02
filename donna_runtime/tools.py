@@ -641,8 +641,10 @@ async def set_timezone(args):
     "asks for something requiring it, or asks to connect explicitly. Do NOT "
     "use when the toolkit is already connected, when status is 'pending' (a "
     "link is already in flight — do not nag), or when the user is mid-task "
-    "and a connect prompt would derail them. Returns a one-line consent "
-    "message containing a single URL — forward it verbatim.",
+    "and a connect prompt would derail them. Pass ``intent`` with the "
+    "user's actual ask in plain words — once the connection lands, that "
+    "ask gets answered automatically without the user re-prompting. Returns "
+    "a one-line consent message containing a single URL — forward verbatim.",
     {
         "type": "object",
         "properties": {
@@ -654,6 +656,17 @@ async def set_timezone(args):
                     "Composio toolkit slug(s). Examples: gmail, "
                     "googlecalendar, googledrive, slack, notion, linear, "
                     "github, asana, hubspot, salesforce."
+                ),
+            },
+            "intent": {
+                "type": "string",
+                "description": (
+                    "What the user actually wants done once connected, in "
+                    "their words. E.g. 'summarize my gmail this week', "
+                    "'check if i have anything tomorrow morning'. Leave "
+                    "empty when the user only asked to connect (no task "
+                    "behind it). When set, this exact ask is replayed as a "
+                    "fresh turn the moment the integration lands."
                 ),
             },
         },
@@ -682,6 +695,8 @@ async def connect_integration(args):
     if not toolkits:
         return text_content("Cannot connect: 'toolkits' is required.")
 
+    intent = str(args.get("intent") or "").strip() or None
+
     res = await _connect(user_id=user_id, toolkits=toolkits)
     status = res.get("status")
     if status == "already_connected":
@@ -689,6 +704,17 @@ async def connect_integration(args):
     if status == "error":
         msg = (res.get("message") or "unknown").strip()
         return text_content(f"connect failed: {msg}. try again in a sec.")
+
+    if intent:
+        try:
+            from backend.integrations.pending_intents import enqueue_intent
+            await enqueue_intent(user_id=user_id, toolkits=toolkits, intent=intent)
+        except Exception:
+            logger.exception(
+                "connect_integration: pending intent enqueue failed user=%s",
+                user_id,
+            )
+
     # Backend `_consent_message` is already Donna-voice; forward verbatim.
     return text_content(res.get("message") or f"tap: {res.get('url')}")
 
@@ -913,27 +939,31 @@ async def recall(args):
 @tool(
     "remember",
     (
-        "Record a user-stated observation, open thread, thread resolution, or "
-        "timezone into memory. This wrapper routes to the right backend. Bias "
-        "toward using it when the current user message gives information Donna "
-        "should hold onto. "
+        "Record a user-stated observation, commitment, or timezone into memory. "
+        "This wrapper routes to the right backend. Bias toward using it when "
+        "the current user message gives information Donna should hold onto. "
         "For kind='observation': always pass observation_type. Pass fields when "
         "the event has obvious numeric/structured data — expense {amount_usd: 6}, "
         "meal {item, calories}, sleep {hours: 7}, mood {score: 4}, exercise "
         "{minutes, type}, alcohol {count, unit}. For casual observations with no "
         "natural numeric shape (notes, social events, ambient feelings), "
         "fields may be empty {} — the `content` text captures the meaning. "
+        "For kind='commitment': use when the user states they will do something "
+        "with no clock attached (\"i'll send the doc\", \"need to call mom\"). "
+        "When a clock is named (\"by friday\", \"tonight\", \"in an hour\"), "
+        "use attend() instead. Resolution is detected automatically from chat. "
         "Profile facts (name, city, profession, age, etc.) are handled "
         "automatically by a pre-turn detector and the post-turn extractor — "
         "do NOT call this with kind='fact' or kind='preference'. Those kinds "
-        "are removed. "
+        "are removed. The legacy kinds 'open_loop' and 'loop_closed' are also "
+        "removed — use 'commitment' instead, and never try to close one. "
         "Do NOT call this to re-save things that only came from USER MODEL, "
         "SITUATION BRIEF, runtime context, or a recall result. "
         "Do NOT invent values the user did not state (no fabricated amounts, "
         "timezones). "
         "Do NOT use for timed reminders (use schedule) or for things better "
         "surfaced as a dashboard attention (use watch). "
-        "Do NOT call twice for the same observation/loop/timezone within one turn."
+        "Do NOT call twice for the same observation/commitment/timezone within one turn."
     ),
     {
         "type": "object",
@@ -941,14 +971,13 @@ async def recall(args):
         "properties": {
             "kind": {
                 "type": "string",
-                "description": "observation, open_loop, commitment, loop_closed, or timezone.",
+                "description": "observation, commitment, or timezone.",
             },
             "content": {"type": "string"},
             "observation_type": {"type": "string"},
             "fields": {"type": "object"},
             "tags": {"type": "object"},
             "event_time": {"type": "string"},
-            "loop_id": {"type": "string"},
             "timezone": {"type": "string"},
             "confidence": {"type": "string", "description": "low, medium, or high."},
         },
@@ -967,8 +996,7 @@ async def remember(args):
     if not kind:
         return text_content(
             "Memory not recorded: 'kind' is required. Valid kinds: "
-            + ", ".join(["observation", "open_loop", "commitment", "loop_closed",
-                         "timezone"])
+            + ", ".join(["observation", "commitment", "timezone"])
             + "."
         )
     if kind in {"fact", "preference"}:
@@ -1024,23 +1052,34 @@ async def remember(args):
         )
 
     if kind in {"open_loop", "commitment"}:
-        from backend.memory.tools.track_open_loop import track_open_loop as _track_open_loop
+        # open_loops as a separate concept is being retired — the table
+        # was write-only in practice (close_open_loop never got called by
+        # the brain). Both kinds now land as observations of type
+        # 'commitment' so the LP synthesizer can surface unresolved ones
+        # and the post-turn extractor can detect resolution mentions.
+        from backend.memory.tools.log_observation import log_observation as _log_observation
 
-        res = await _track_open_loop(user_id=user_id, content=content, source_message=content)
-        return _result_text("remembered open loop", res, no_hits_text="Open loop not recorded.")
+        tags = args.get("tags") if isinstance(args.get("tags"), dict) else {}
+        tags = {**tags, "source": "stated", "resolved": False}
+        res = await _log_observation(
+            user_id=user_id,
+            type="commitment",
+            fields={"text": content},
+            tags=tags,
+            raw=content,
+            event_time=args.get("event_time"),
+            confidence=_numeric_confidence(args.get("confidence")),
+        )
+        return _result_text("remembered commitment", res, no_hits_text="Commitment not recorded.")
 
     if kind == "loop_closed":
-        from backend.memory.tools.close_open_loop import close_open_loop as _close_open_loop
-
-        loop_id = str(args.get("loop_id") or "").strip()
-        if not loop_id:
-            return text_content(
-                "Open loop not closed: 'loop_id' is required. "
-                "Get it by calling recall(purpose='open_loops') first, then pass the "
-                "id from the matching loop."
-            )
-        res = await _close_open_loop(user_id=user_id, loop_id=loop_id)
-        return _result_text("closed open loop", res, no_hits_text="Open loop not found.")
+        # Resolution detection is moving to the post-turn extractor.
+        # Reply degraded so the model doesn't claim it closed something.
+        return text_content(
+            "Memory not recorded: kind='loop_closed' has been removed. "
+            "Resolution of stated commitments is now detected automatically "
+            "from chat. Drop the tool call; just reply."
+        )
 
     if kind == "timezone":
         from backend.memory.tools.set_timezone import set_timezone as _set_timezone
@@ -1051,7 +1090,7 @@ async def remember(args):
 
     return text_content(
         f"Memory not recorded: unsupported kind {kind!r}. "
-        f"Valid kinds: observation, open_loop, commitment, loop_closed, timezone."
+        f"Valid kinds: observation, commitment, timezone."
     )
 
 
