@@ -554,6 +554,39 @@ class EmailIntelligence(Base):
     )
 
 
+class ObsEvent(Base):
+    """Brain observability event, persisted for the /observe dashboard.
+
+    The brain writes one row per ``observability.emit()`` call. Dashboard
+    reads them back to reconstruct turns. Replaces the legacy
+    ``.donna/events.jsonl`` flat-file path which doesn't survive across
+    the Railway-pod / Vercel boundary in production.
+
+    The ``payload`` JSONB carries every event-specific key the legacy
+    JSONL line had — same shape, same downstream parser. ``ts`` is the
+    brain's emission timestamp (not the row's insert time); we keep
+    ``created_at`` separately for retention bookkeeping.
+    """
+    __tablename__ = "obs_events"
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=generate_uuid
+    )
+    ts: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    event: Mapped[str] = mapped_column(String, nullable=False)
+    turn_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    user_id: Mapped[str | None] = mapped_column(String, nullable=True, index=True)
+    schema_version: Mapped[int | None] = mapped_column(nullable=True)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        Index("idx_obs_events_user_ts", "user_id", "ts"),
+        Index("idx_obs_events_ts_event", "ts", "event"),
+    )
+
+
 class IntegrationEvent(Base):
     """Generic landing zone for V3 trigger.message events that don't have
     a dedicated ingest path yet (slack, notion, linear, github, ...).

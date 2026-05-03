@@ -49,6 +49,7 @@ from db.models import (
     EmailMessage,
     Integration,
     Observation,
+    ObsEvent,
     OpenLoop,
     ProactivePing,
     User,
@@ -145,6 +146,48 @@ def _read_events_for_user(
 
 
 # ── Routes ──────────────────────────────────────────────────────────────────
+
+
+@router.get("/events")
+async def events_stream(
+    _admin: str = Depends(_require_admin),
+    limit: int = Query(2000, ge=1, le=10000),
+    user_id: str | None = Query(None),
+):
+    """DB-backed event stream for the /observe dashboard.
+
+    Returns the most recent N events from ``obs_events`` (the table the
+    brain writes to via ``donna_runtime.obs_sink``). Each row is flattened
+    back into the same shape the legacy ``.donna/events.jsonl`` produced
+    so the dashboard's existing parsing logic doesn't need to change.
+
+    ``limit`` defaults high — /observe groups events into turns and trims
+    by turn count, so it needs the raw event tail. Cap is 10k.
+    """
+    async with async_session() as s:
+        stmt = select(ObsEvent).order_by(desc(ObsEvent.ts)).limit(limit)
+        if user_id:
+            stmt = stmt.where(ObsEvent.user_id == user_id)
+        rows = (await s.execute(stmt)).scalars().all()
+
+    events: list[dict[str, Any]] = []
+    for r in rows:
+        # Reconstruct the JSONL line shape: payload IS the full event
+        # (we stored it that way). Replay it untouched so the existing
+        # /observe parser keeps working.
+        events.append(r.payload if isinstance(r.payload, dict) else {})
+
+    # The legacy file was newest-last (append-only); the dashboard reads
+    # newest-first behavior internally, but the existing groupTurns() in
+    # the Next.js layer iterates in encounter order. Ship oldest-first to
+    # match the file's iteration semantics.
+    events.reverse()
+
+    return {
+        "events": events,
+        "count": len(events),
+        "source": "db",
+    }
 
 
 @router.get("/users")

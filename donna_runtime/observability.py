@@ -89,6 +89,15 @@ def emit(event: str, **data: Any) -> None:
     except Exception:
         logger.exception("observability.emit: write to %s failed", _OBS_LOG_PATH)
 
+    # Mirror to DB sink so /observe in production (Vercel) can read events
+    # the brain (Railway) emitted. Never blocks; failures are absorbed.
+    try:
+        from donna_runtime import obs_sink
+
+        obs_sink.enqueue(payload)
+    except Exception:
+        logger.exception("observability.emit: db sink enqueue failed")
+
 
 @contextmanager
 def turn_span(turn_id: str, user_id: str | None) -> Iterator[None]:

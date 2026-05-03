@@ -5,6 +5,17 @@ import path from 'path';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
+/**
+ * Source-of-truth selection:
+ *   1. ``DONNA_BACKEND_URL`` set → fetch DB-backed events from
+ *      ``/api/admin/events`` (production / staging path)
+ *   2. otherwise → fall back to local ``.donna/events.jsonl`` for dev
+ *      machines running the brain on the same filesystem
+ *
+ * The fallback exists so dev workflows that don't run a backend still get
+ * /observe working off the brain's local file output.
+ */
+
 type RawEvent = {
   event: string;
   ts: string;
@@ -129,6 +140,36 @@ async function readEventsLines(filePath: string): Promise<RawEvent[]> {
     if (e.code === 'ENOENT') return [];
     throw err;
   }
+}
+
+async function fetchEventsFromBackend(
+  backendUrl: string,
+  limit: number,
+): Promise<RawEvent[]> {
+  // Backend events route is admin-gated; auth from server env so the
+  // dashboard browser session never sees the credential.
+  const adminUser = process.env.ADMIN_USER || 'admin';
+  const adminPw = process.env.ADMIN_PASSWORD || '';
+  if (!adminPw) {
+    throw new Error('ADMIN_PASSWORD not configured for backend events fetch');
+  }
+  const auth = Buffer.from(`${adminUser}:${adminPw}`).toString('base64');
+  // Pull a generous tail — /observe groups by turn and trims by turn count
+  // downstream, so the raw event budget here is the limiting factor.
+  const eventBudget = Math.max(limit * 30, 2000);
+  const upstream = await fetch(
+    `${backendUrl}/api/admin/events?limit=${eventBudget}`,
+    {
+      headers: { authorization: `Basic ${auth}` },
+      cache: 'no-store',
+    },
+  );
+  if (!upstream.ok) {
+    const text = await upstream.text();
+    throw new Error(`backend events ${upstream.status}: ${text.slice(0, 200)}`);
+  }
+  const body = (await upstream.json()) as { events?: RawEvent[] };
+  return body.events ?? [];
 }
 
 function shortTool(name: string | null | undefined): string {
@@ -390,8 +431,30 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get('limit') ?? '50', 10)));
 
-  const filePath = resolveEventsPath();
-  const events = await readEventsLines(filePath);
+  const backendUrl = process.env.DONNA_BACKEND_URL?.replace(/\/$/, '');
+  let events: RawEvent[] = [];
+  let source = 'db';
+  let sourceLabel = backendUrl ? `${backendUrl}/api/admin/events` : '';
+  let warning: string | null = null;
+
+  if (backendUrl) {
+    try {
+      events = await fetchEventsFromBackend(backendUrl, limit);
+    } catch (err) {
+      // Backend reachable-but-failing should NOT fall back silently — the
+      // operator needs to see why /observe is empty in prod. Surface the
+      // error in the response so the dashboard can show a banner.
+      warning = `backend events fetch failed: ${String(err).slice(0, 200)}`;
+      events = [];
+    }
+  } else {
+    // Local-dev fallback: read the brain's append-only JSONL file.
+    const filePath = resolveEventsPath();
+    sourceLabel = filePath;
+    source = 'file';
+    events = await readEventsLines(filePath);
+  }
+
   const turns = groupTurns(events);
   const orphanDenies = attachOrphanHookDenies(events, turns);
   const trimmed = turns.slice(0, limit);
@@ -406,7 +469,9 @@ export async function GET(request: Request) {
   const aggregate = buildAggregate(events, trimmed, orphanDenies);
 
   return NextResponse.json({
-    events_path: filePath,
+    events_path: sourceLabel,
+    source,
+    warning,
     total_events: events.length,
     total_turns: turns.length,
     turns: trimmed,
