@@ -641,8 +641,11 @@ class DonnaRuntimeTests(unittest.TestCase):
         self.assertIsInstance(outbound[0], TextMessage)
         self.assertEqual(
             outbound[0].body,
-            "hi arnav, tell me something you want to get off your head. "
-            "it can be emails, it can be a thing you keep meaning to do.",
+            "hi arnav, i'm donna. "
+            "tell me something that keeps slipping away, "
+            "an email you want me to track, "
+            "or a tracker you want me to start. "
+            "we'll go from there.",
         )
 
     def test_first_message_does_not_send_dashboard_link(self) -> None:

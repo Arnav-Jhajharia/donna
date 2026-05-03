@@ -147,8 +147,11 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
 
 
 _FIRST_MESSAGE_OPENER = (
-    "hi {name}, tell me something you want to get off your head. "
-    "it can be emails, it can be a thing you keep meaning to do."
+    "hi {name}, i'm donna. "
+    "tell me something that keeps slipping away, "
+    "an email you want me to track, "
+    "or a tracker you want me to start. "
+    "we'll go from there."
 )
 
 
