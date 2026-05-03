@@ -254,31 +254,65 @@ async def _handle_v3_trigger_message(payload: dict, data: dict) -> dict:
     )
 
     if trigger_slug in _GMAIL_TRIGGER_SLUGS:
-        # Composio V3 has shipped at least three different gmail-message
-        # data shapes across different toolkit versions. Try every key
-        # we've ever seen, then log a sample of the inner keys when none
-        # match so the next variant is one log line away from a fix.
+        # Composio V3 gmail trigger sends only the parsed Message.payload
+        # (body parts + headers) under ``data`` — the Gmail API message id
+        # is NOT in there. We have to look for it on the envelope itself
+        # (metadata, top-level fields) or fall back to the RFC822
+        # Message-ID header inside parts and resolve via gmail search.
+        envelope_meta = payload.get("metadata") if isinstance(payload, dict) else {}
+        if not isinstance(envelope_meta, dict):
+            envelope_meta = {}
+
         message_id = (
-            inner.get("message_id")
+            # Direct field options on the envelope or its metadata.
+            envelope_meta.get("gmail_message_id")
+            or envelope_meta.get("message_id")
+            or envelope_meta.get("messageId")
+            or payload.get("gmail_message_id")
+            or payload.get("message_id")
+            # Older / alternate gmail data shapes — kept for compat.
+            or inner.get("message_id")
             or inner.get("messageId")
             or inner.get("id")
             or (inner.get("message") or {}).get("id")
-            or (inner.get("message") or {}).get("messageId")
             or (inner.get("payload") or {}).get("id")
-            or (inner.get("payload") or {}).get("messageId")
             or (inner.get("payload") or {}).get("message_id")
         )
+
         if not message_id:
-            sample = {
-                k: (str(v)[:60] + "...") if isinstance(v, (dict, list)) and len(str(v)) > 60
-                else v
-                for k, v in (inner.items() if isinstance(inner, dict) else [])
-            }
+            # Last resort: walk the RFC822 headers Composio sent inside
+            # ``inner`` looking for ``Message-ID`` and resolve to the
+            # Gmail API id via a search query. Cheaper than logging
+            # missing and bailing.
+            rfc_id = None
+            headers_list = inner.get("headers") if isinstance(inner, dict) else None
+            if isinstance(headers_list, list):
+                for h in headers_list:
+                    if isinstance(h, dict) and (h.get("name") or "").lower() == "message-id":
+                        rfc_id = (h.get("value") or "").strip()
+                        break
+            if rfc_id:
+                try:
+                    client = ComposioClient(api_key=settings.composio_api_key or "")
+                    resolved = await client.search_gmail_id_by_rfc(
+                        user_id=user_id, rfc_message_id=rfc_id,
+                    )
+                    if resolved:
+                        message_id = resolved
+                except Exception:
+                    logger.exception(
+                        "composio_webhook v3: rfc-id resolve failed user=%s rfc=%r",
+                        user_id, rfc_id,
+                    )
+
+        if not message_id:
+            envelope_keys = sorted(payload.keys()) if isinstance(payload, dict) else []
+            meta_keys = sorted(envelope_meta.keys()) if isinstance(envelope_meta, dict) else []
+            inner_keys = sorted(inner.keys()) if isinstance(inner, dict) else []
             logger.warning(
                 "composio_webhook v3: gmail trigger missing message_id "
-                "| inner keys=%s | sample=%s",
-                sorted(inner.keys()) if isinstance(inner, dict) else type(inner).__name__,
-                str(sample)[:500],
+                "| envelope=%s | metadata=%s | inner=%s",
+                envelope_keys, meta_keys, inner_keys,
             )
             return {"ok": True, "ignored": True, "reason": "missing_message_id"}
         try:

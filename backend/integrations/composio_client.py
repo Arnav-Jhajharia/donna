@@ -324,6 +324,41 @@ class ComposioClient:
         )
         return _normalize_gmail(result["data"])
 
+    async def search_gmail_id_by_rfc(
+        self, user_id: str, rfc_message_id: str
+    ) -> str | None:
+        """Resolve an RFC822 ``Message-ID`` header value to a Gmail API id.
+
+        Composio's V3 trigger payload only carries the parsed email body
+        (headers + parts) — the Gmail API ``id`` field is missing. The
+        RFC822 ``Message-ID`` header is the stable cross-system id; we
+        translate it back to the Gmail API id with a search query, which
+        lets ``fetch_gmail_message`` work normally.
+
+        Gmail's search syntax: ``rfc822msgid:<id-without-angle-brackets>``.
+        Returns None on no match (or any error) so the caller can log
+        and bail without raising into the webhook handler.
+        """
+        if not rfc_message_id:
+            return None
+        # Strip surrounding angle brackets if present.
+        cleaned = rfc_message_id.strip()
+        if cleaned.startswith("<") and cleaned.endswith(">"):
+            cleaned = cleaned[1:-1]
+        try:
+            ids, _ = await self.list_gmail_message_ids(
+                user_id=user_id,
+                query=f"rfc822msgid:{cleaned}",
+                max_results=1,
+            )
+        except Exception:
+            logger.exception(
+                "search_gmail_id_by_rfc: list failed user=%s rfc=%r",
+                user_id, cleaned,
+            )
+            return None
+        return ids[0] if ids else None
+
     async def list_gmail_message_ids(
         self,
         user_id: str,
