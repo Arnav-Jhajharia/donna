@@ -564,6 +564,26 @@ async def composio_webhook(
     # envelopes use "event" with bare names. Accept either; dispatch V3
     # first because the prefix gives us an unambiguous signal.
     event_type = str(payload.get("type") or payload.get("event") or "")
+    # Diagnostic: emit one structured line per accepted webhook so we
+    # can tell at a glance whether trigger.message events are arriving
+    # vs. account-status events. For trigger events, also surface the
+    # inner trigger_slug so missed dispatches are obvious.
+    inner_for_log = payload.get("data") or {}
+    trigger_slug_log = (
+        str(
+            inner_for_log.get("trigger_slug")
+            or inner_for_log.get("trigger_name")
+            or inner_for_log.get("triggerName")
+            or ""
+        )
+        if isinstance(inner_for_log, dict)
+        else ""
+    )
+    logger.info(
+        "composio_webhook: accepted event_type=%r trigger_slug=%r",
+        event_type,
+        trigger_slug_log,
+    )
     if event_type.startswith("composio."):
         return await _dispatch_v3(event_type, payload)
 
