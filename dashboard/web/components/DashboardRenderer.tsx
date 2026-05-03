@@ -5,6 +5,7 @@ import { motion } from 'framer-motion';
 import type { Block, DashboardPage, DashboardPlan, Row } from '@/lib/plan';
 import { validatePlan } from '@/lib/plan';
 import { renderBlock } from '@/lib/registry';
+import { PlaceholderFrame } from './Frame';
 import { Cell, RowGrid } from './RowGrid';
 import { Intro } from './Intro';
 import { ScreenRoot } from './ds';
@@ -206,8 +207,14 @@ function BlockSwitch({ block }: { block: Block }) {
     case 'c-read':          return <CatRead              spec={block} />;
     case 'c-capability':    return <CatCapability        spec={block} />;
     default: {
-      const _exhaustive: never = block;
-      return _exhaustive;
+      // Forward-compat: if the backend emits a block type the deployed
+      // frontend hasn't shipped yet, render a placeholder instead of
+      // letting React try to render the raw spec (would fail with
+      // error #31 — "objects are not valid as a React child"). The
+      // ``never`` annotation keeps the compile-time exhaustive check.
+      const unknown = block as { type?: string };
+      void (block as never);
+      return <PlaceholderFrame kind={String(unknown.type ?? 'unknown')} />;
     }
   }
 }
