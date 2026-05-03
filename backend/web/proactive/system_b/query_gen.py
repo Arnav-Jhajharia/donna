@@ -21,8 +21,13 @@ Designed for QUALITY > brevity. Cost-controlled by:
 """
 from __future__ import annotations
 
+import json
 import logging
-from dataclasses import dataclass
+import os
+import time
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -33,6 +38,67 @@ from db.models import ChatMessage, Observation, OpenLoop, User
 from db.session import async_session
 
 logger = logging.getLogger(__name__)
+
+
+def _trace_dir() -> Path | None:
+    """Where query_gen traces get written.
+
+    Defaults to ~/.donna/query_gen_traces/. Override with
+    ``DONNA_QUERY_GEN_TRACE_DIR``. Set ``DONNA_QUERY_GEN_TRACE=0``
+    to disable tracing entirely.
+    """
+    if os.environ.get("DONNA_QUERY_GEN_TRACE", "1").strip() == "0":
+        return None
+    raw = os.environ.get("DONNA_QUERY_GEN_TRACE_DIR")
+    if raw:
+        return Path(raw)
+    return Path.home() / ".donna" / "query_gen_traces"
+
+
+def _write_trace(
+    user_id: str,
+    *,
+    user_block: str,
+    queries: list["GeneratedQuery"],
+    duration_ms: int,
+    model: str,
+    error: str | None = None,
+) -> None:
+    """Persist one query-generation trace as JSON.
+
+    Best-effort: any write failure logs and returns. Never raises.
+    Trace shape is stable for the observer script to read.
+    """
+    out = _trace_dir()
+    if out is None:
+        return
+    try:
+        out.mkdir(parents=True, exist_ok=True)
+        ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        path = out / f"{user_id[:12]}_{ts}.json"
+        payload = {
+            "ts": datetime.now(timezone.utc).isoformat(),
+            "user_id": user_id,
+            "model": model,
+            "duration_ms": duration_ms,
+            "user_block": user_block,
+            "user_block_chars": len(user_block),
+            "queries": [
+                {
+                    "text": q.text,
+                    "angle": q.angle,
+                    "cadence": q.cadence,
+                    "ties_to": q.ties_to,
+                    "expand_with_similar": q.expand_with_similar,
+                }
+                for q in queries
+            ],
+            "queries_count": len(queries),
+            "error": error,
+        }
+        path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+    except Exception:
+        logger.exception("query_gen: trace write failed user=%s", user_id[:8])
 
 
 _MODEL = "claude-haiku-4-5-20251001"
@@ -386,25 +452,41 @@ async def generate_ambitious_queries(
         recent_chats = [str(r[0] or "").strip() for r in chat_rows if r[0]]
         recent_chats = [c for c in recent_chats if c]
 
-        obs_rows = (
-            await session.execute(
-                select(Observation)
-                .where(Observation.user_id == user_id)
-                .order_by(desc(Observation.event_time))
-                .limit(20)
-            )
-        ).scalars().all()
+        # Observation fetch: degrades gracefully if DB schema is drifted
+        # (e.g., model has columns the table doesn't). Logged once, then
+        # the deriver continues with empty observations rather than
+        # failing the whole derive cycle.
         observations: list[str] = []
-        for o in obs_rows:
-            raw = (o.raw or "").strip()
-            if raw:
-                observations.append(f"[{o.type}] {raw}")
-                continue
-            fields_summary = ", ".join(
-                f"{k}={v}" for k, v in (o.fields or {}).items() if v
+        try:
+            obs_rows = (
+                await session.execute(
+                    select(
+                        Observation.type,
+                        Observation.raw,
+                        Observation.fields,
+                        Observation.event_time,
+                    )
+                    .where(Observation.user_id == user_id)
+                    .order_by(desc(Observation.event_time))
+                    .limit(20)
+                )
+            ).all()
+            for typ, raw, fields, _ in obs_rows:
+                raw_s = (raw or "").strip()
+                if raw_s:
+                    observations.append(f"[{typ}] {raw_s}")
+                    continue
+                fields_summary = ", ".join(
+                    f"{k}={v}" for k, v in (fields or {}).items() if v
+                )
+                if fields_summary:
+                    observations.append(f"[{typ}] {fields_summary}")
+        except Exception:
+            logger.warning(
+                "generate_ambitious_queries: observation fetch failed "
+                "(schema drift?); proceeding without obs",
+                exc_info=False,
             )
-            if fields_summary:
-                observations.append(f"[{o.type}] {fields_summary}")
 
         loop_rows = (
             await session.execute(
@@ -459,6 +541,7 @@ async def generate_ambitious_queries(
         durable_attentions=durable_attentions,
     )
 
+    started = time.monotonic()
     try:
         result = await call_structured(
             model=model,
@@ -469,13 +552,29 @@ async def generate_ambitious_queries(
             cache=True,
             timeout=30.0,
         )
-    except Exception:
+    except Exception as exc:
         logger.exception(
             "generate_ambitious_queries: call_structured raised user=%s",
             user_id[:8] if user_id else "?",
         )
+        _write_trace(
+            user_id,
+            user_block=user_block,
+            queries=[],
+            duration_ms=int((time.monotonic() - started) * 1000),
+            model=model,
+            error=str(exc)[:500],
+        )
         return []
     if result is None:
+        _write_trace(
+            user_id,
+            user_block=user_block,
+            queries=[],
+            duration_ms=int((time.monotonic() - started) * 1000),
+            model=model,
+            error="call_structured returned None",
+        )
         return []
 
     out: list[GeneratedQuery] = []
@@ -483,4 +582,12 @@ async def generate_ambitious_queries(
         q = _coerce_query(raw)
         if q is not None:
             out.append(q)
+
+    _write_trace(
+        user_id,
+        user_block=user_block,
+        queries=out,
+        duration_ms=int((time.monotonic() - started) * 1000),
+        model=model,
+    )
     return out
