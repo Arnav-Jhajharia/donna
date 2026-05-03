@@ -254,14 +254,31 @@ async def _handle_v3_trigger_message(payload: dict, data: dict) -> dict:
     )
 
     if trigger_slug in _GMAIL_TRIGGER_SLUGS:
+        # Composio V3 has shipped at least three different gmail-message
+        # data shapes across different toolkit versions. Try every key
+        # we've ever seen, then log a sample of the inner keys when none
+        # match so the next variant is one log line away from a fix.
         message_id = (
             inner.get("message_id")
             or inner.get("messageId")
             or inner.get("id")
+            or (inner.get("message") or {}).get("id")
+            or (inner.get("message") or {}).get("messageId")
+            or (inner.get("payload") or {}).get("id")
+            or (inner.get("payload") or {}).get("messageId")
+            or (inner.get("payload") or {}).get("message_id")
         )
         if not message_id:
+            sample = {
+                k: (str(v)[:60] + "...") if isinstance(v, (dict, list)) and len(str(v)) > 60
+                else v
+                for k, v in (inner.items() if isinstance(inner, dict) else [])
+            }
             logger.warning(
-                "composio_webhook v3: gmail trigger missing message_id"
+                "composio_webhook v3: gmail trigger missing message_id "
+                "| inner keys=%s | sample=%s",
+                sorted(inner.keys()) if isinstance(inner, dict) else type(inner).__name__,
+                str(sample)[:500],
             )
             return {"ok": True, "ignored": True, "reason": "missing_message_id"}
         try:
