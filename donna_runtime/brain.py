@@ -155,8 +155,14 @@ _FIRST_MESSAGE_INTRO = (
 _FIRST_MESSAGE_PITCH = (
     "tell me something that keeps slipping away, "
     "an email you want me to track, "
-    "or a tracker you want me to start. "
+    "or a tracker you want me to start "
+    "or anything else honestly. "
     "we'll go from there."
+)
+
+_FIRST_MESSAGE_DASHBOARD = (
+    "your dashboard is here: {url}\n"
+    "it fills up as we go. link's good for 5 minutes."
 )
 
 
@@ -171,24 +177,35 @@ def _first_name(full_name: str) -> str:
 
 
 def _first_message_outbound(*, user_id: str, full_name: str) -> list:
-    """Build the deterministic Day 1 opener — two bubbles in succession.
+    """Build the deterministic Day 1 opener — three bubbles in succession.
 
     Bubble 1 is the intro: who Donna is and what she does.
-    Bubble 2 is the pitch: three concrete affordances the user can pick from.
+    Bubble 2 is the pitch: three concrete affordances the user can pick
+    from, plus an "anything else" door so it doesn't feel rigid.
+    Bubble 3 is the dashboard handoff: the canvas surface itself, with
+    a one-liner so the user knows it'll fill up as they engage.
 
-    Two bubbles, not one, so WhatsApp renders them as two separate texts
-    in succession — the way a real person introducing themselves would.
-    No dashboard link; that is reserved for earned moments later (a loop
-    closes, a streak ticks, an attention goes live, the user explicitly
-    asks). Sending it on Day 1 with nothing on the dashboard yet trains
-    the user that dashboard pings are noise.
+    Three bubbles, not one, so WhatsApp renders them in succession the
+    way a real person introducing themselves would. The dashboard rides
+    on Day 1 specifically because Day 1 is the holistic "this is what
+    Donna does" moment; after Day 1, the link is reserved for earned
+    moments only (loop closes, streak ticks, explicit user request).
+
+    If link minting fails (env misconfigured, token subsystem down) we
+    still send the intro + pitch — losing the dashboard handoff is
+    recoverable, losing the welcome is not.
     """
-    del user_id  # unused; reserved for future per-user opener tweaks
+    from .tools import mint_dashboard_url
+
     name = _first_name(full_name)
-    return [
+    bubbles = [
         TextMessage(body=_FIRST_MESSAGE_INTRO.format(name=name)),
         TextMessage(body=_FIRST_MESSAGE_PITCH),
     ]
+    url = mint_dashboard_url(user_id, reason="first_message")
+    if url:
+        bubbles.append(TextMessage(body=_FIRST_MESSAGE_DASHBOARD.format(url=url)))
+    return bubbles
 
 
 def _extract_inbound_images(state: dict) -> list[tuple[bytes, str]]:

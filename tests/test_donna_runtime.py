@@ -622,8 +622,8 @@ class DonnaRuntimeTests(unittest.TestCase):
         )
 
     def test_first_message_uses_deterministic_opener(self) -> None:
-        """Day 1 sends two bubbles in succession: an intro + the pitch.
-        No dashboard link. BRAIN never runs."""
+        """Day 1 sends three bubbles in succession: intro, pitch, dashboard.
+        BRAIN never runs."""
         from delivery.messages import TextMessage
         from donna_runtime import brain
 
@@ -633,12 +633,13 @@ class DonnaRuntimeTests(unittest.TestCase):
             "_is_first_message": True,
             "_user_name": "Arnav Jhajharia",
         }
-        result = asyncio.run(brain.donna_turn(state))
+        with patch("donna_runtime.tools.mint_dashboard_url", return_value="https://dash.example/auth/magic?t=abc"):
+            result = asyncio.run(brain.donna_turn(state))
 
         outbound = result["_outbound"]
-        self.assertEqual(len(outbound), 2)
-        self.assertIsInstance(outbound[0], TextMessage)
-        self.assertIsInstance(outbound[1], TextMessage)
+        self.assertEqual(len(outbound), 3)
+        for msg in outbound:
+            self.assertIsInstance(msg, TextMessage)
         # Bubble 1: intro
         self.assertEqual(
             outbound[0].body,
@@ -646,19 +647,27 @@ class DonnaRuntimeTests(unittest.TestCase):
             "i hold what you tell me, follow up when it matters, "
             "and don't let things slip.",
         )
-        # Bubble 2: pitch
+        # Bubble 2: pitch (with the "anything else honestly" door)
         self.assertEqual(
             outbound[1].body,
             "tell me something that keeps slipping away, "
             "an email you want me to track, "
-            "or a tracker you want me to start. "
+            "or a tracker you want me to start "
+            "or anything else honestly. "
             "we'll go from there.",
         )
+        # Bubble 3: dashboard handoff
+        self.assertEqual(
+            outbound[2].body,
+            "your dashboard is here: https://dash.example/auth/magic?t=abc\n"
+            "it fills up as we go. link's good for 5 minutes.",
+        )
 
-    def test_first_message_does_not_send_dashboard_link(self) -> None:
-        """Even if mint_dashboard_url would succeed, Day 1 must not include
-        the dashboard bubble. An empty dashboard linked on welcome trains
-        the user that dashboard pings are noise."""
+    def test_first_message_falls_back_when_dashboard_link_unavailable(self) -> None:
+        """If link minting fails (env unset, token subsystem down) the
+        intro + pitch still go. Losing the link is recoverable; losing
+        the welcome is not."""
+        from delivery.messages import TextMessage
         from donna_runtime import brain
 
         state = {
@@ -667,17 +676,14 @@ class DonnaRuntimeTests(unittest.TestCase):
             "_is_first_message": True,
             "_user_name": "Arnav",
         }
-        # If brain were still calling mint_dashboard_url it would get a URL
-        # back from this patch; we assert the URL never reaches outbound.
-        with patch("donna_runtime.tools.mint_dashboard_url", return_value="https://dash.example/auth/magic?t=abc"):
+        with patch("donna_runtime.tools.mint_dashboard_url", return_value=None):
             result = asyncio.run(brain.donna_turn(state))
 
         outbound = result["_outbound"]
-        # Two bubbles (intro + pitch), neither carries the dashboard link.
         self.assertEqual(len(outbound), 2)
         for msg in outbound:
+            self.assertIsInstance(msg, TextMessage)
             self.assertNotIn("dashboard", msg.body.lower())
-            self.assertNotIn("dash.example", msg.body)
 
     def test_first_message_handles_missing_or_empty_name(self) -> None:
         from donna_runtime import brain
