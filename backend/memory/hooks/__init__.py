@@ -1,6 +1,6 @@
 """PostToolUse hooks (spec §6).
 
-All four hooks run after a `send_burst` turn. The runtime wraps each in
+Hooks run after a `send_burst` turn. The runtime wraps each in
 `asyncio.create_task(...)` so they never block response delivery.
 
 Expected trace context shape:
@@ -19,6 +19,7 @@ from backend.memory.hooks import (
     extract_user_facts,
     ingest_to_graph,
     record_episode,
+    refresh_dashboard,
     save_chat_messages,
 )
 
@@ -27,4 +28,5 @@ ALL_HOOKS = (
     record_episode.run,
     ingest_to_graph.run,
     extract_user_facts.run,
+    refresh_dashboard.run,
 )
