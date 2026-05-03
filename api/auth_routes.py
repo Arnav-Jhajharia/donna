@@ -14,6 +14,7 @@ to a single 401 to avoid OTP-existence probes.
 from __future__ import annotations
 
 import logging
+import os
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Request, Response
@@ -39,16 +40,53 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 SESSION_COOKIE = "donna_session"
 
 
+def _cookie_domain(request: Request) -> str | None:
+    """Resolve the Domain attribute for the session cookie.
+
+    Without an explicit Domain, browsers scope cookies to the EXACT host
+    that responded. That breaks the canonical Safari path: magic link
+    sets the cookie on ``itsmedonna.com``, then the user types
+    ``itsmedonna.com`` in Google and Google sometimes rewrites that to
+    ``www.itsmedonna.com`` — different host, no cookie, landing page
+    shows up instead of the dashboard.
+
+    Setting Domain to the registrable apex with a leading dot
+    (``.itsmedonna.com``) makes the cookie available to all subdomains
+    AND the apex, fixing the www-vs-apex split.
+
+    Source of truth: ``SESSION_COOKIE_DOMAIN`` env var. Set to
+    ``.itsmedonna.com`` in prod. Leave unset in local dev (browsers
+    refuse Domain on ``localhost``).
+    """
+    domain = (os.environ.get("SESSION_COOKIE_DOMAIN") or "").strip()
+    if not domain:
+        return None
+    # Refuse to set Domain on localhost — Safari/Chrome reject it.
+    host = request.url.hostname or ""
+    if host in ("localhost", "127.0.0.1") or host.endswith(".localhost"):
+        return None
+    return domain
+
+
 def _set_session_cookie(
     response: Response, user_id: str, *, ttl_s: int, request: Request
 ) -> None:
-    """Issue the session cookie. Marked Secure when the request came over
-    HTTPS; the dev server on localhost-http would reject Secure cookies,
-    so we relax it there. ``SameSite=Lax`` is enough — the cookie never
-    needs to ride a cross-site POST."""
+    """Issue the session cookie.
+
+    - ``Secure`` on HTTPS (dev server on http-localhost relaxes it,
+      since Secure cookies don't ship over plain http).
+    - ``SameSite=Lax`` — top-level navigation only; the cookie never
+      needs to ride a cross-site POST.
+    - ``Domain`` resolved from ``SESSION_COOKIE_DOMAIN`` env so a single
+      cookie covers ``itsmedonna.com`` AND ``www.itsmedonna.com``
+      AND any subdomains we add later. Without this, Safari users who
+      land on the apex via magic link and then visit www get treated
+      as logged out.
+    """
     token = make_session_token(user_id, ttl_s=ttl_s)
     is_https = request.url.scheme == "https"
-    response.set_cookie(
+    domain = _cookie_domain(request)
+    kwargs: dict[str, Any] = dict(
         key=SESSION_COOKIE,
         value=token,
         max_age=ttl_s,
@@ -57,6 +95,9 @@ def _set_session_cookie(
         samesite="lax",
         path="/",
     )
+    if domain:
+        kwargs["domain"] = domain
+    response.set_cookie(**kwargs)
 
 
 class RedeemMagicRequest(BaseModel):
@@ -128,9 +169,18 @@ async def verify_otp_route(
 
 
 @router.post("/logout")
-async def logout(response: Response) -> dict[str, Any]:
-    """Clear the session cookie. No-op if no cookie was set."""
-    response.delete_cookie(key=SESSION_COOKIE, path="/")
+async def logout(request: Request, response: Response) -> dict[str, Any]:
+    """Clear the session cookie. No-op if no cookie was set.
+
+    Must use the same Domain attribute the cookie was set with — otherwise
+    the browser keeps a stale copy of the cookie on the apex while the
+    delete only clears the host-specific one.
+    """
+    domain = _cookie_domain(request)
+    if domain:
+        response.delete_cookie(key=SESSION_COOKIE, path="/", domain=domain)
+    else:
+        response.delete_cookie(key=SESSION_COOKIE, path="/")
     return {"ok": True}
 
 

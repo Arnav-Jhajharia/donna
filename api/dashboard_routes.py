@@ -543,21 +543,90 @@ async def execute_action(user_id: str, request: ActionRequest) -> JSONResponse:
             raise HTTPException(
                 status_code=400, detail="action.provider is required"
             )
-        # The dashboard never holds OAuth state itself — it nudges the
-        # brain to start the flow. Log the intent as a quick_log so the
-        # brain can ack and kick off connect on the next reactive turn.
-        result = await _log_observation(
+
+        # Map a friendly provider name to the toolkit slug(s) the
+        # composio chain expects. "google" → both gmail + googlecalendar
+        # by default since that's the canonical pair we want connected
+        # together; specific provider names map 1:1.
+        provider_slug = provider.strip().lower()
+        toolkit_map: dict[str, list[str]] = {
+            "google": ["gmail", "googlecalendar"],
+            "gmail": ["gmail"],
+            "googlecalendar": ["googlecalendar"],
+            "calendar": ["googlecalendar"],
+            "github": ["github"],
+            "slack": ["slack"],
+            "linear": ["linear"],
+            "notion": ["notion"],
+        }
+        toolkits = toolkit_map.get(provider_slug, [provider_slug])
+
+        # Log the request observation first so the brain has a record
+        # this came from the dashboard, not WhatsApp.
+        log_result = await _log_observation(
             user_id=user_id,
             obs_type="connect_integration_request",
-            fields={"provider": provider},
-            raw=f"requested connect: {provider}",
+            fields={"provider": provider, "toolkits": toolkits},
+            raw=f"requested connect: {provider} ({', '.join(toolkits)})",
             tags={"source": "dashboard", "verb": "connect_integration"},
         )
+
+        # Generate (or reuse a fresh cached) OAuth chain URL via the
+        # backend tool. The dashboard never holds OAuth state itself —
+        # it just hands the user the URL to tap.
+        try:
+            from backend.memory.tools.connect_integration import (
+                connect_integration as _connect_integration,
+            )
+
+            chain = await _connect_integration(user_id=user_id, toolkits=toolkits)
+        except Exception:
+            logger.exception("connect_integration: chain generation failed")
+            return _ack(
+                verb,
+                message=f"couldn't open the {provider} link, try again in a sec",
+                provider=provider,
+                toolkits=toolkits,
+                ok=False,
+                **log_result,
+            )
+
+        status = chain.get("status")
+        url = chain.get("url")
+        if status == "already_connected":
+            return _ack(
+                verb,
+                message=f"{provider} is already connected.",
+                provider=provider,
+                toolkits=toolkits,
+                already_connected=True,
+                **log_result,
+            )
+        if not url:
+            return _ack(
+                verb,
+                message=chain.get("message")
+                or f"couldn't open the {provider} link, try again in a sec",
+                provider=provider,
+                toolkits=toolkits,
+                ok=False,
+                chain=chain,
+                **log_result,
+            )
+
+        # Frontend looks for ``redirect_url`` on the response and opens
+        # it in a new tab. ``urls`` carries the per-toolkit map for
+        # observability / future per-toolkit handling.
         return _ack(
             verb,
-            message=f"pulling {provider} now. give me a minute.",
+            message=chain.get("message")
+            or f"opening {provider} consent.",
             provider=provider,
-            **result,
+            toolkits=toolkits,
+            redirect_url=url,
+            urls=chain.get("urls") or {},
+            cached=bool(chain.get("cached")),
+            **log_result,
         )
 
     if verb == "reply_chip":

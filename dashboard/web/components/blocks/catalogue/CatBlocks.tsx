@@ -9,7 +9,9 @@
 
 import { useState } from 'react';
 import ActionChip from '@/components/ActionChip';
+import TapToTalk from '@/components/TapToTalk';
 import type { ActionVerb } from '@/lib/plan';
+import { tallyLogPrimer } from '@/lib/wa-deeplink';
 import { cIcons, type CatIconName } from './icons';
 import { SERIF, SANS, BORDER, BORDER_STRONG, BORDER_ACCENT, Eyebrow, SectionHead } from './atoms';
 
@@ -104,6 +106,9 @@ export interface WatchItem {
   at: string;
   delta?: string;
   up?: boolean;
+  /** Backing attention id; if present, tapping the row opens the
+   *  AttentionSheet instead of falling back to a WhatsApp primer. */
+  attention_id?: string;
 }
 export interface CatWatchSpec {
   type: 'c-watch';
@@ -122,8 +127,11 @@ function WatchRows({ spec }: { spec: CatWatchSpec }) {
     <div style={{ margin: '12px 22px 0' }}>
       <SectionHead title={spec.title ?? "what i've got eyes on"} />
       {spec.items.map((it, i) => (
-        <div
+        <TapToTalk
           key={i}
+          attentionId={it.attention_id}
+          primer={`tell me more about ${it.subject}`}
+          decoration="row"
           style={{
             display: 'grid',
             gridTemplateColumns: '14px 1fr auto',
@@ -155,7 +163,7 @@ function WatchRows({ spec }: { spec: CatWatchSpec }) {
             </div>
           </div>
           <span style={{ fontFamily: SANS, fontSize: 10.5, color: 'var(--ink-400)' }}>{it.at}</span>
-        </div>
+        </TapToTalk>
       ))}
       <BlockActions actions={spec.actions} />
     </div>
@@ -240,7 +248,7 @@ function WatchTicker({ spec }: { spec: CatWatchSpec }) {
 // ═════════════════════════════════════════════════════════════════════════
 // 06 · BRIEF
 // ═════════════════════════════════════════════════════════════════════════
-export interface BriefIndexItem { subject: string; cadence: string; nextFire: string; }
+export interface BriefIndexItem { subject: string; cadence: string; nextFire: string; attention_id?: string; }
 export interface CatBriefSpec {
   type: 'c-brief';
   variant: 'newsstand' | 'index';
@@ -263,8 +271,11 @@ export function CatBrief({ spec }: { spec: CatBriefSpec }) {
         <SectionHead title="briefs i run for you" />
         <div style={{ marginTop: 6 }}>
           {(spec.items ?? []).map((b, i) => (
-            <div
+            <TapToTalk
               key={i}
+              attentionId={b.attention_id}
+              primer={`tell me about the ${b.subject} brief`}
+              decoration="row"
               style={{
                 display: 'grid',
                 gridTemplateColumns: '1fr auto',
@@ -283,14 +294,16 @@ export function CatBrief({ spec }: { spec: CatBriefSpec }) {
               <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--rust-700)', fontWeight: 500 }}>
                 {b.nextFire}
               </span>
-            </div>
+            </TapToTalk>
           ))}
         </div>
       </div>
     );
   }
   return (
-    <div
+    <TapToTalk
+      primer={`open the brief: ${spec.title ?? spec.cadenceLabel ?? 'this week'}`}
+      decoration="block"
       style={{
         margin: '12px 16px 0',
         padding: '16px 16px 14px',
@@ -343,7 +356,7 @@ export function CatBrief({ spec }: { spec: CatBriefSpec }) {
         </div>
       )}
       <BlockActions actions={spec.actions} />
-    </div>
+    </TapToTalk>
   );
 }
 
@@ -423,8 +436,10 @@ export function CatPrep({ spec }: { spec: CatPrepSpec }) {
       </div>
       <div style={{ marginTop: 10 }}>
         {spec.items.map((it, i) => (
-          <div
+          <TapToTalk
             key={i}
+            primer={it.done ? `unmark prep: ${it.label}` : `done: ${it.label}`}
+            decoration="row"
             style={{
               display: 'grid',
               gridTemplateColumns: '18px 1fr',
@@ -461,7 +476,7 @@ export function CatPrep({ spec }: { spec: CatPrepSpec }) {
             >
               {it.label}
             </div>
-          </div>
+          </TapToTalk>
         ))}
       </div>
       <BlockActions actions={spec.actions} />
@@ -559,8 +574,10 @@ export function CatSchedule({ spec }: { spec: CatScheduleSpec }) {
       <SectionHead title={spec.title ?? "today's shape"} right={spec.right ?? `${(spec.slots ?? []).length} blocks`} />
       <div style={{ marginTop: 6 }}>
         {(spec.slots ?? []).map((s, i) => (
-          <div
+          <TapToTalk
             key={i}
+            primer={`tell me about: ${s.label} at ${s.at}`}
+            decoration="row"
             style={{
               display: 'grid',
               gridTemplateColumns: '52px 8px 1fr auto',
@@ -594,7 +611,7 @@ export function CatSchedule({ spec }: { spec: CatScheduleSpec }) {
               {s.label}
             </span>
             <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--ink-400)' }}>{s.duration}</span>
-          </div>
+          </TapToTalk>
         ))}
       </div>
       <BlockActions actions={spec.actions} />
@@ -617,7 +634,9 @@ export interface CatStreakSpec {
 export function CatStreak({ spec }: { spec: CatStreakSpec }) {
   if (spec.variant === 'badge') {
     return (
-      <div
+      <TapToTalk
+        primer={`celebrate this with me: ${spec.body}`}
+        decoration="block"
         style={{
           margin: '12px 16px 0',
           padding: '14px 14px',
@@ -661,7 +680,7 @@ export function CatStreak({ spec }: { spec: CatStreakSpec }) {
             {spec.body}
           </div>
         </div>
-      </div>
+      </TapToTalk>
     );
   }
   const dots = Array.from({ length: spec.count ?? 7 });
@@ -773,7 +792,9 @@ export function CatPerson({ spec }: { spec: CatPersonSpec }) {
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${BORDER}` }}>
-          <span
+          <TapToTalk
+            primer={`draft a message to ${spec.heroName}`}
+            decoration="label"
             style={{
               fontFamily: SANS,
               fontSize: 11.5,
@@ -785,10 +806,14 @@ export function CatPerson({ spec }: { spec: CatPersonSpec }) {
             }}
           >
             {spec.ctaPrimary ?? 'draft a thought'}
-          </span>
-          <span style={{ fontFamily: SANS, fontSize: 11.5, color: 'var(--ink-500)', padding: '5px 6px' }}>
+          </TapToTalk>
+          <TapToTalk
+            primer={`open the thread with ${spec.heroName}`}
+            decoration="label"
+            style={{ fontFamily: SANS, fontSize: 11.5, color: 'var(--ink-500)', padding: '5px 6px' }}
+          >
             {spec.ctaSecondary ?? 'open thread'}
-          </span>
+          </TapToTalk>
         </div>
       </div>
     );
@@ -805,8 +830,10 @@ export function CatPerson({ spec }: { spec: CatPersonSpec }) {
             .slice(0, 2)
             .join('');
           return (
-            <div
+            <TapToTalk
               key={i}
+              primer={`tell me about ${p.name}${p.role ? ` (${p.role})` : ''}`}
+              decoration="row"
               style={{
                 display: 'grid',
                 gridTemplateColumns: '34px 1fr auto',
@@ -844,7 +871,7 @@ export function CatPerson({ spec }: { spec: CatPersonSpec }) {
                 </div>
               </div>
               <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--ink-400)' }}>{p.ago}</span>
-            </div>
+            </TapToTalk>
           );
         })}
       </div>
@@ -864,6 +891,9 @@ export interface ReminderItemCat {
   done?: boolean;
   /** Optional override action set for this row (advanced use). */
   actions?: ActionVerb[];
+  /** Backing attention id; if present, tapping the row body opens the
+   *  AttentionSheet (the per-row mark-done / snooze chips remain). */
+  attention_id?: string;
 }
 export interface CatReminderSpec {
   type: 'c-reminder';
@@ -880,7 +910,10 @@ export function CatReminder({ spec }: { spec: CatReminderSpec }) {
     if (!it) return null;
     return (
       <div style={{ margin: '12px 16px 0' }}>
-        <div
+        <TapToTalk
+          attentionId={it.attention_id}
+          primer={`done: ${it.label}`}
+          decoration="block"
           style={{
             background: 'var(--rust-100)',
             border: `1px solid ${BORDER_ACCENT}`,
@@ -906,7 +939,7 @@ export function CatReminder({ spec }: { spec: CatReminderSpec }) {
           <span style={{ fontFamily: SANS, fontSize: 11, color: 'var(--rust-700)', fontWeight: 500 }}>
             {it.at}
           </span>
-        </div>
+        </TapToTalk>
       </div>
     );
   }
@@ -1065,8 +1098,10 @@ export function CatQuickLog({ spec }: { spec: CatQuickLogSpec }) {
             const Icon = cIcons[c.icon];
             const tint = tints[c.tint ?? 'rust'];
             return (
-              <div
+              <TapToTalk
                 key={i}
+                primer={tallyLogPrimer(c.label)}
+                decoration="block"
                 style={{
                   background: 'var(--paper-100)',
                   border: `1px solid ${BORDER}`,
@@ -1094,7 +1129,7 @@ export function CatQuickLog({ spec }: { spec: CatQuickLogSpec }) {
                 <span style={{ fontFamily: SANS, fontSize: 11.5, color: 'var(--ink-900)', fontWeight: 500 }}>
                   {c.label}
                 </span>
-              </div>
+              </TapToTalk>
             );
           })}
         </div>
@@ -1109,8 +1144,10 @@ export function CatQuickLog({ spec }: { spec: CatQuickLogSpec }) {
         {spec.chips.map((c, i) => {
           const Icon = cIcons[c.icon];
           return (
-            <div
+            <TapToTalk
               key={i}
+              primer={tallyLogPrimer(c.label)}
+              decoration="label"
               style={{
                 display: 'inline-flex',
                 alignItems: 'center',
@@ -1127,7 +1164,7 @@ export function CatQuickLog({ spec }: { spec: CatQuickLogSpec }) {
             >
               <Icon s={13} c="var(--ink-700)" />
               {c.label}
-            </div>
+            </TapToTalk>
           );
         })}
       </div>
@@ -1153,7 +1190,9 @@ export interface CatPickSpec {
 export function CatPick({ spec }: { spec: CatPickSpec }) {
   if (spec.variant === 'card') {
     return (
-      <div
+      <TapToTalk
+        primer={`tell me more about: ${spec.title}`}
+        decoration="block"
         style={{
           margin: '12px 16px 0',
           display: 'flex',
@@ -1195,7 +1234,7 @@ export function CatPick({ spec }: { spec: CatPickSpec }) {
             </div>
           )}
         </div>
-      </div>
+      </TapToTalk>
     );
   }
   return (
@@ -1229,9 +1268,27 @@ export function CatPick({ spec }: { spec: CatPickSpec }) {
           gap: 18,
         }}
       >
-        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--rust-700)', fontWeight: 500 }}>save</span>
-        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>say more</span>
-        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', marginLeft: 'auto' }}>drop</span>
+        <TapToTalk
+          primer={`save this for me: ${spec.title}`}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12, color: 'var(--rust-700)', fontWeight: 500 }}
+        >
+          save
+        </TapToTalk>
+        <TapToTalk
+          primer={`tell me more about: ${spec.title}`}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}
+        >
+          say more
+        </TapToTalk>
+        <TapToTalk
+          primer={`drop this from my picks: ${spec.title}`}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', marginLeft: 'auto' }}
+        >
+          drop
+        </TapToTalk>
       </div>
       <BlockActions actions={spec.actions} />
     </div>
@@ -1403,7 +1460,9 @@ export function CatDraft({ spec }: { spec: CatDraftSpec }) {
           “{spec.preview}”
         </div>
         <div style={{ display: 'flex', gap: 8, marginTop: 12 }}>
-          <span
+          <TapToTalk
+            primer={`send the draft to ${spec.recipient}: ${spec.subject}`}
+            decoration="label"
             style={{
               fontFamily: SANS,
               fontSize: 12,
@@ -1415,9 +1474,21 @@ export function CatDraft({ spec }: { spec: CatDraftSpec }) {
             }}
           >
             send
-          </span>
-          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}>open</span>
-          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', padding: '6px 4px', marginLeft: 'auto' }}>drop</span>
+          </TapToTalk>
+          <TapToTalk
+            primer={`open the draft to ${spec.recipient}`}
+            decoration="label"
+            style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}
+          >
+            open
+          </TapToTalk>
+          <TapToTalk
+            primer={`drop the draft to ${spec.recipient}`}
+            decoration="label"
+            style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', padding: '6px 4px', marginLeft: 'auto' }}
+          >
+            drop
+          </TapToTalk>
         </div>
       </div>
     );
@@ -1446,9 +1517,27 @@ export function CatDraft({ spec }: { spec: CatDraftSpec }) {
           gap: 18,
         }}
       >
-        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--rust-700)', fontWeight: 500 }}>send</span>
-        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>open to edit</span>
-        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', marginLeft: 'auto' }}>drop</span>
+        <TapToTalk
+          primer={`send the draft to ${spec.recipient}: ${spec.subject}`}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12, color: 'var(--rust-700)', fontWeight: 500 }}
+        >
+          send
+        </TapToTalk>
+        <TapToTalk
+          primer={`open the draft to ${spec.recipient} to edit`}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}
+        >
+          open to edit
+        </TapToTalk>
+        <TapToTalk
+          primer={`drop the draft to ${spec.recipient}`}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-400)', marginLeft: 'auto' }}
+        >
+          drop
+        </TapToTalk>
       </div>
       <BlockActions actions={spec.actions} />
     </div>
@@ -1490,8 +1579,10 @@ export function CatDecision({ spec }: { spec: CatDecisionSpec }) {
         </div>
         <div style={{ marginTop: 10 }}>
           {spec.options.slice(0, 3).map((o, i) => (
-            <div
+            <TapToTalk
               key={i}
+              primer={`${spec.question.replace(/\?$/, '')} — ${o.label}`}
+              decoration="row"
               style={{
                 display: 'grid',
                 gridTemplateColumns: '14px 1fr auto',
@@ -1519,7 +1610,7 @@ export function CatDecision({ spec }: { spec: CatDecisionSpec }) {
                 )}
               </div>
               <cIcons.chev s={11} c="var(--ink-400)" />
-            </div>
+            </TapToTalk>
           ))}
         </div>
       </div>
@@ -1542,8 +1633,10 @@ export function CatDecision({ spec }: { spec: CatDecisionSpec }) {
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 8, marginTop: 10 }}>
         {spec.options.slice(0, 3).map((o, i) => (
-          <div
+          <TapToTalk
             key={i}
+            primer={`${spec.question.replace(/\?$/, '')} — ${o.label}`}
+            decoration="block"
             style={{
               background: 'var(--paper-100)',
               border: `1px solid ${BORDER}`,
@@ -1568,7 +1661,7 @@ export function CatDecision({ spec }: { spec: CatDecisionSpec }) {
                 {o.hint}
               </div>
             )}
-          </div>
+          </TapToTalk>
         ))}
       </div>
       <BlockActions actions={spec.actions} />
@@ -1620,7 +1713,9 @@ export function CatConfront({ spec }: { spec: CatConfrontSpec }) {
           </div>
         )}
         <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-          <span
+          <TapToTalk
+            primer={`i'm on it: ${spec.title}`}
+            decoration="label"
             style={{
               fontFamily: SANS,
               fontSize: 12,
@@ -1632,9 +1727,21 @@ export function CatConfront({ spec }: { spec: CatConfrontSpec }) {
             }}
           >
             on it
-          </span>
-          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}>later</span>
-          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}>talk to me</span>
+          </TapToTalk>
+          <TapToTalk
+            primer={`not now: ${spec.title}`}
+            decoration="label"
+            style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}
+          >
+            later
+          </TapToTalk>
+          <TapToTalk
+            primer={`talk to me about: ${spec.title}`}
+            decoration="label"
+            style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}
+          >
+            talk to me
+          </TapToTalk>
         </div>
       </div>
     );
@@ -1669,11 +1776,27 @@ export function CatConfront({ spec }: { spec: CatConfrontSpec }) {
           gap: 18,
         }}
       >
-        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-900)', fontWeight: 500 }}>on it</span>
-        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>later</span>
-        <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--rust-700)', fontWeight: 500, marginLeft: 'auto' }}>
+        <TapToTalk
+          primer={`i'm on it: ${spec.title}`}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-900)', fontWeight: 500 }}
+        >
+          on it
+        </TapToTalk>
+        <TapToTalk
+          primer={`not now: ${spec.title}`}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}
+        >
+          later
+        </TapToTalk>
+        <TapToTalk
+          primer={`talk to me about: ${spec.title}`}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12, color: 'var(--rust-700)', fontWeight: 500, marginLeft: 'auto' }}
+        >
           talk to me
-        </span>
+        </TapToTalk>
       </div>
       <BlockActions actions={spec.actions} />
     </div>
@@ -1731,7 +1854,9 @@ export function CatReflection({ spec }: { spec: CatReflectionSpec }) {
           </div>
         </div>
         <div style={{ display: 'flex', gap: 10, marginTop: 14 }}>
-          <span
+          <TapToTalk
+            primer={spec.prompt}
+            decoration="label"
             style={{
               fontFamily: SANS,
               fontSize: 12,
@@ -1743,8 +1868,14 @@ export function CatReflection({ spec }: { spec: CatReflectionSpec }) {
             }}
           >
             answer
-          </span>
-          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}>skip</span>
+          </TapToTalk>
+          <TapToTalk
+            primer={`skip the reflection: ${spec.prompt}`}
+            decoration="label"
+            style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)', padding: '6px 4px' }}
+          >
+            skip
+          </TapToTalk>
         </div>
       </div>
     );
@@ -1768,8 +1899,20 @@ export function CatReflection({ spec }: { spec: CatReflectionSpec }) {
         {spec.prompt}
       </div>
       <div style={{ display: 'flex', gap: 18, marginTop: 14 }}>
-        <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--rust-700)', fontWeight: 500 }}>answer</span>
-        <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-500)' }}>skip for today</span>
+        <TapToTalk
+          primer={spec.prompt}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--rust-700)', fontWeight: 500 }}
+        >
+          answer
+        </TapToTalk>
+        <TapToTalk
+          primer={`skip the reflection: ${spec.prompt}`}
+          decoration="label"
+          style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-500)' }}
+        >
+          skip for today
+        </TapToTalk>
       </div>
       <BlockActions actions={spec.actions} />
     </div>
@@ -1779,7 +1922,7 @@ export function CatReflection({ spec }: { spec: CatReflectionSpec }) {
 // ═════════════════════════════════════════════════════════════════════════
 // 19 · OPEN LOOP
 // ═════════════════════════════════════════════════════════════════════════
-export interface OpenLoopItem { commitment: string; ago: string; due?: string; overdue?: boolean; }
+export interface OpenLoopItem { commitment: string; ago: string; due?: string; overdue?: boolean; attention_id?: string; }
 export interface CatOpenLoopSpec {
   type: 'c-openloop';
   variant: 'quote' | 'dashed';
@@ -1793,6 +1936,8 @@ export function CatOpenLoop({ spec }: { spec: CatOpenLoopSpec }) {
   if (spec.variant === 'dashed') {
     const it = spec.items[0];
     if (!it) return null;
+    // Outer container is static so the three nested action TapToTalks
+    // below stay valid HTML. The action row itself is the tap surface.
     return (
       <div
         style={{
@@ -1811,7 +1956,10 @@ export function CatOpenLoop({ spec }: { spec: CatOpenLoopSpec }) {
             </span>
           )}
         </div>
-        <div
+        <TapToTalk
+          attentionId={it.attention_id}
+          primer={`about my open loop: ${it.commitment}`}
+          decoration="block"
           style={{
             fontFamily: SERIF,
             fontSize: 16,
@@ -1822,11 +1970,29 @@ export function CatOpenLoop({ spec }: { spec: CatOpenLoopSpec }) {
           }}
         >
           “{it.commitment}”
-        </div>
+        </TapToTalk>
         <div style={{ display: 'flex', gap: 14, marginTop: 10 }}>
-          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--moss-700)', fontWeight: 500 }}>i did this</span>
-          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>snooze</span>
-          <span style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}>say more</span>
+          <TapToTalk
+            primer={`done: ${it.commitment}`}
+            decoration="label"
+            style={{ fontFamily: SANS, fontSize: 12, color: 'var(--moss-700)', fontWeight: 500 }}
+          >
+            i did this
+          </TapToTalk>
+          <TapToTalk
+            primer={`snooze the loop: ${it.commitment}`}
+            decoration="label"
+            style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}
+          >
+            snooze
+          </TapToTalk>
+          <TapToTalk
+            primer={`tell me more about: ${it.commitment}`}
+            decoration="label"
+            style={{ fontFamily: SANS, fontSize: 12, color: 'var(--ink-500)' }}
+          >
+            say more
+          </TapToTalk>
         </div>
       </div>
     );
@@ -1839,7 +2005,13 @@ export function CatOpenLoop({ spec }: { spec: CatOpenLoopSpec }) {
       />
       <div style={{ marginTop: 8 }}>
         {spec.items.map((l, i) => (
-          <div key={i} style={{ padding: '12px 0', borderBottom: `1px solid ${BORDER}` }}>
+          <TapToTalk
+            key={i}
+            attentionId={l.attention_id}
+            primer={`about my open loop: ${l.commitment}`}
+            decoration="row"
+            style={{ padding: '12px 0', borderBottom: `1px solid ${BORDER}` }}
+          >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
               <Eyebrow tone={l.overdue ? 'var(--oxblood-700)' : 'var(--ink-400)'}>
                 {l.ago} · {l.due ?? (l.overdue ? 'overdue' : 'open')}
@@ -1858,7 +2030,7 @@ export function CatOpenLoop({ spec }: { spec: CatOpenLoopSpec }) {
             >
               “{l.commitment}”
             </div>
-          </div>
+          </TapToTalk>
         ))}
       </div>
       <BlockActions actions={spec.actions} />
@@ -1881,6 +2053,7 @@ export interface CatPermissionSpec {
 }
 export function CatPermission({ spec }: { spec: CatPermissionSpec }) {
   if (spec.variant === 'editorial') {
+    const connectVerb: ActionVerb = { v: 'connect_integration', provider: spec.provider };
     return (
       <div style={{ margin: '12px 22px 0' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -1906,15 +2079,20 @@ export function CatPermission({ spec }: { spec: CatPermissionSpec }) {
             paddingTop: 10,
             borderTop: `1px solid ${BORDER}`,
             display: 'flex',
-            gap: 18,
+            gap: 12,
+            alignItems: 'center',
           }}
         >
-          <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--rust-700)', fontWeight: 500 }}>
-            {spec.ctaConnect ?? 'connect'}
-          </span>
-          <span style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-500)' }}>
+          <ActionChip verb={connectVerb} tone="rust" size="sm">
+            {spec.ctaConnect ?? `connect ${spec.provider}`}
+          </ActionChip>
+          <TapToTalk
+            primer={`not now: connecting ${spec.provider}`}
+            decoration="label"
+            style={{ fontFamily: SANS, fontSize: 12.5, color: 'var(--ink-500)' }}
+          >
             {spec.ctaDismiss ?? 'not yet'}
-          </span>
+          </TapToTalk>
         </div>
       </div>
     );
@@ -1948,20 +2126,13 @@ export function CatPermission({ spec }: { spec: CatPermissionSpec }) {
           {spec.body}
         </div>
       </div>
-      <span
-        style={{
-          fontFamily: SANS,
-          fontSize: 12,
-          color: 'var(--paper-100)',
-          background: 'var(--rust-700)',
-          padding: '7px 14px',
-          borderRadius: 999,
-          fontWeight: 500,
-          whiteSpace: 'nowrap',
-        }}
+      <ActionChip
+        verb={{ v: 'connect_integration', provider: spec.provider }}
+        tone="rust"
+        size="sm"
       >
-        {spec.ctaConnect ?? 'connect'}
-      </span>
+        {spec.ctaConnect ?? `connect ${spec.provider}`}
+      </ActionChip>
       <BlockActions actions={spec.actions} />
     </div>
   );
@@ -1983,7 +2154,9 @@ export function CatRead({ spec }: { spec: CatReadSpec }) {
     const it = spec.items[0];
     if (!it) return null;
     return (
-      <div
+      <TapToTalk
+        primer={`tell me about: ${it.headline}`}
+        decoration="block"
         style={{
           margin: '12px 16px 0',
           padding: '14px 14px',
@@ -2021,7 +2194,7 @@ export function CatRead({ spec }: { spec: CatReadSpec }) {
           )}
         </div>
         <cIcons.link s={13} c="var(--ink-400)" />
-      </div>
+      </TapToTalk>
     );
   }
   return (
@@ -2029,8 +2202,10 @@ export function CatRead({ spec }: { spec: CatReadSpec }) {
       <SectionHead title="three to read" right="picked for you" italic />
       <div style={{ marginTop: 6 }}>
         {spec.items.map((r, i) => (
-          <div
+          <TapToTalk
             key={i}
+            primer={`tell me about: ${r.headline}`}
+            decoration="row"
             style={{
               padding: '12px 0',
               borderBottom: `1px solid ${BORDER}`,
@@ -2060,7 +2235,7 @@ export function CatRead({ spec }: { spec: CatReadSpec }) {
               </div>
             </div>
             <cIcons.link s={12} c="var(--ink-400)" />
-          </div>
+          </TapToTalk>
         ))}
       </div>
       <BlockActions actions={spec.actions} />

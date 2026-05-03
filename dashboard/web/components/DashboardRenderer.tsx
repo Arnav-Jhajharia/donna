@@ -266,6 +266,11 @@ function PagedDashboard({ plan }: { plan: DashboardPlan }) {
 
 function PageColumn({ page, index }: { page: DashboardPage; index: number }) {
   const isTodayPage = page.id === 'today';
+  // Page 1 ("now") is a single-screen surface — the editorial cover. It
+  // must FIT in the viewport without scrolling. Page 2 ("today") is the
+  // operational view (rails of content) and stays scrollable. The
+  // outer page container handles horizontal swipe; vertical overflow
+  // is per-page.
   return (
     <motion.section
       initial="hidden"
@@ -275,6 +280,13 @@ function PageColumn({ page, index }: { page: DashboardPage; index: number }) {
         flex: '0 0 100%',
         minWidth: '100%',
         scrollSnapAlign: 'start',
+        // 100dvh on mobile collapses with the URL bar so we don't get a
+        // nasty bottom-of-screen jump. Falls back to 100vh on browsers
+        // that don't support dvh.
+        height: isTodayPage ? 'auto' : '100dvh',
+        overflowY: isTodayPage ? 'visible' : 'hidden',
+        display: 'flex',
+        flexDirection: 'column',
       }}
     >
       {/* Page kicker + thesis (above blocks). The hero block carries its own

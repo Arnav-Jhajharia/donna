@@ -12,16 +12,26 @@
  *               only when kind=confrontation. one per plan, ever.
  */
 
+import TapToTalk from '../TapToTalk';
 import type { NoteBlock as NoteSpec } from '@/lib/plan';
 
 export default function NoteBlock({ spec }: { spec: NoteSpec }) {
   const kind = spec.kind ?? 'editorial';
   const eyebrow = spec.eyebrow ?? (kind === 'confront' ? 'a note from me · the hard one' : 'a note from me');
   const actions = spec.actions ?? {};
+  // The note IS donna's voice on the moment — when the user taps, they
+  // continue that voice in WhatsApp. Truncate long notes for the primer
+  // so we don't blow past WhatsApp's URL length comfort.
+  const tapPrimer =
+    kind === 'confront'
+      ? `let's talk about: ${spec.body.slice(0, 200)}`
+      : `say more about: ${spec.body.slice(0, 200)}`;
 
   if (kind === 'bar') {
     return (
-      <div
+      <TapToTalk
+        primer={tapPrimer}
+        decoration="block"
         style={{
           margin: '14px 16px 0',
           padding: '12px 14px',
@@ -41,13 +51,15 @@ export default function NoteBlock({ spec }: { spec: NoteSpec }) {
         >
           {spec.body}
         </div>
-      </div>
+      </TapToTalk>
     );
   }
 
   if (kind === 'confront') {
     return (
-      <div
+      <TapToTalk
+        primer={tapPrimer}
+        decoration="block"
         style={{
           margin: '14px 16px 0',
           padding: '14px 16px',
@@ -71,15 +83,20 @@ export default function NoteBlock({ spec }: { spec: NoteSpec }) {
         >
           {spec.body}
         </div>
-      </div>
+      </TapToTalk>
     );
   }
 
-  // editorial — the canonical flavor
+  // editorial — the canonical flavor. Body itself is the tap target;
+  // wrapping the whole block (eyebrow + action labels) would nest
+  // anchors. The discrete primary/secondary/tertiary action labels
+  // below stay independent tap targets.
   return (
     <div style={{ margin: '14px 22px 0' }}>
       <Eyebrow tone="var(--rust-700)">{eyebrow}</Eyebrow>
-      <div
+      <TapToTalk
+        primer={tapPrimer}
+        decoration="block"
         style={{
           fontFamily: 'var(--font-serif, "EB Garamond", Georgia, serif)',
           fontSize: 24,
@@ -92,7 +109,7 @@ export default function NoteBlock({ spec }: { spec: NoteSpec }) {
         }}
       >
         {spec.body}
-      </div>
+      </TapToTalk>
       {(actions.primary || actions.secondary || actions.tertiary) && (
         <div
           style={{
@@ -104,15 +121,31 @@ export default function NoteBlock({ spec }: { spec: NoteSpec }) {
           }}
         >
           {actions.primary !== undefined && (
-            <span style={{ fontSize: 12, color: 'var(--ink-600)' }}>{actions.primary || 'noted'}</span>
+            <TapToTalk
+              primer={`noted: ${spec.body.slice(0, 160)}`}
+              decoration="label"
+              style={{ fontSize: 12, color: 'var(--ink-600)' }}
+            >
+              {actions.primary || 'noted'}
+            </TapToTalk>
           )}
           {actions.secondary !== undefined && (
-            <span style={{ fontSize: 12, color: 'var(--rust-700)', fontWeight: 500 }}>
+            <TapToTalk
+              primer={`say more about: ${spec.body.slice(0, 160)}`}
+              decoration="label"
+              style={{ fontSize: 12, color: 'var(--rust-700)', fontWeight: 500 }}
+            >
               {actions.secondary || 'say more'}
-            </span>
+            </TapToTalk>
           )}
           {actions.tertiary !== undefined && (
-            <span style={{ fontSize: 12, color: 'var(--ink-500)' }}>{actions.tertiary || 'skip'}</span>
+            <TapToTalk
+              primer={`skip this: ${spec.body.slice(0, 160)}`}
+              decoration="label"
+              style={{ fontSize: 12, color: 'var(--ink-500)' }}
+            >
+              {actions.tertiary || 'skip'}
+            </TapToTalk>
           )}
         </div>
       )}

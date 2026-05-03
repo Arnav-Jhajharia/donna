@@ -74,7 +74,7 @@ export interface HeroBlock {
   date: string;
   greeting: string;
   subtext: string;
-  illustration?: 'mumbai' | 'none';
+  illustration?: 'mumbai' | 'singapore' | 'none';
 }
 
 // ── Block: whisper (Donna's voice; omit for minimal-voice plans) ──────────
@@ -403,6 +403,25 @@ export interface CatCapabilitySpec {
   items: CapabilityItem[];
 }
 
+// 23 · Recipe mosaic — Day 1 / sparse-signal CTA surface.
+// Each tile = "one tap and donna sets up a multi-step pipeline." On
+// tap the tile opens a WhatsApp deeplink with `primer` pre-filled;
+// donna's normal tool loop handles the actual setup on the inbound.
+export interface RecipeItem {
+  title: string;
+  body: string;
+  primer: string;
+  tone?: 'ink' | 'rust' | 'moss' | 'amber' | 'oxblood';
+  icon?: import('@/components/blocks/catalogue/icons').CatIconName;
+  size?: 'short' | 'tall';
+}
+export interface CatRecipeMosaicSpec {
+  type: 'c-recipe-mosaic';
+  eyebrow?: string;
+  title?: string;
+  items: RecipeItem[];
+}
+
 export type Block =
   | ThesisBlock
   | HeroBlock
@@ -442,7 +461,8 @@ export type Block =
   | CatOpenLoopSpec
   | CatPermissionSpec
   | CatReadSpec
-  | CatCapabilitySpec;
+  | CatCapabilitySpec
+  | CatRecipeMosaicSpec;
 
 // ── Multi-page composition (catalogue v2) ────────────────────────────────
 // The dashboard is three pages, not one screen.
@@ -580,6 +600,7 @@ const DENSITY_WEIGHTS: Record<Block['type'], number> = {
   'c-permission': 1,
   'c-read': 2,
   'c-capability': 2,
+  'c-recipe-mosaic': 4,
 };
 
 export const DENSITY_BUDGET = 12;

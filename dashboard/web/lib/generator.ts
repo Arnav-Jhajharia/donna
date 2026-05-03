@@ -259,6 +259,7 @@ function weightOf(b: Block): number {
     'c-streak': 1, 'c-person': 2, 'c-reminder': 2, 'c-quicklog': 1, 'c-pick': 1,
     'c-offer': 2, 'c-draft': 2, 'c-decision': 2, 'c-confront': 2, 'c-reflection': 2,
     'c-openloop': 2, 'c-permission': 1, 'c-read': 2, 'c-capability': 2,
+    'c-recipe-mosaic': 4,
   };
   return w[b.type];
 }

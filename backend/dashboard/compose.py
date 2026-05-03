@@ -178,6 +178,20 @@ REQUIRED on Page 2: a ``c-capability`` block under ``domain: "work"``
 **Do NOT use ``rows`` or ``intro``. Do NOT emit a top-level flat ``blocks``
 array. Always emit ``pages: [...]`` with exactly two pages.**
 
+# Names — never fabricate
+
+NEVER invent a person's name. Person names (recipients of drafts, key
+people on rails, names in confront / openloop / pick bodies) MUST come
+verbatim from one of: the brief's ``## Key people`` section, an
+observation, an open loop, a chat message, or an LP narrative
+sentence. If you cannot point at a source for a name, write "someone"
+or restructure the block. This rule overrides editorial taste.
+
+When the user's data is thin (Day 1) and you'd otherwise need a name,
+DROP the block — don't fill it with a placeholder name like "Ali",
+"Maya", "Sam", etc. A missing block is honest; a fabricated name reads
+as a leak from someone else's life and breaks trust irreversibly.
+
 # Hard rules (the renderer enforces these)
 
 - P-TH1: ``plan.thesis`` is a non-empty sentence — the moment-level read. lowercase, present-tense, anchored to something concrete.
@@ -201,9 +215,20 @@ The schema still accepts these for backwards compatibility, but the catalogue re
 
 ## ``hero`` (first block, always)
 - ``date``: human date string. e.g. "Wednesday · 22 April" or "Saturday · 9:41 pm".
-- ``greeting``: "Morning, <name>." / "Afternoon, <name>." / "Evening, <name>." / "Late, <name>." (capitalize first letter; name from the brief).
+- ``greeting``: EXACTLY one of "Morning, <name>." / "Afternoon, <name>." /
+  "Evening, <name>." / "Late, <name>." Map by local hour: 5–11 → Morning,
+  11–17 → Afternoon, 17–22 → Evening, 22–5 → Late. **Never invent
+  alternatives** like "Early," "Dawn," "Night," "Hi" — the four labels above
+  are the entire vocabulary.
 - ``subtext``: place + temperature + weather. e.g. "Mumbai · 28° · haze lifting by ten".
-- ``illustration``: ``"mumbai"`` (canonical, almost always) or ``"none"`` (sparingly, e.g. quiet late nights).
+- ``illustration``: **always set, almost always non-none.** Pick by the
+  user's current city in the brief:
+    - Singapore → ``"singapore"`` (Marina Bay Sands skyline)
+    - Mumbai or anything else / unknown → ``"mumbai"`` (default)
+  Only use ``"none"`` when the moment really demands no imagery: a death,
+  a grief beat, or an explicit "the only job tonight is sleep" plan with
+  three blocks total. **Working sessions, dawn debug sprints, and
+  ordinary late nights all keep an illustration.**
 
 ## ``footer`` (last block, always)
 - ``kind: italic`` — warm signoff. text examples: "the day is yours.", "go.", "rest.", "sleep well.", "tomorrow's a new page.", "i'll be here in the morning." Use for evenings, transitions, end-of-page beats.
@@ -475,13 +500,54 @@ When LIVE attentions are present, the plan should feel like donna is **on it** �
 - ``blocks``: leave as ``[]`` — catalogue v2 uses ``pages[]`` instead.
 - ``pages``: REQUIRED. Two pages: ``[{id:"now",...}, {id:"today",...}]``.
 
-# Thin-signal fallback
+# Thin-signal fallback (Day 1 / sparse-signal users)
 
 If the input brief is thin (no observations, no open loops, no integrations,
-no attentions, almost no chat): keep both pages but render them slim.
+no attentions, almost no chat): keep both pages but lead with the recipe
+mosaic — Day 1 is an invitation surface, not a status surface.
 
-- Page 1 (now): hero + note editorial + footer (3 blocks, no body)
-- Page 2 (today): kicker "today" + thesis "still settling in." + ``c-quicklog`` (or ``c-permission`` for whichever integration would help most) + REQUIRED ``c-capability`` (4–6 baseline capabilities)
+- Page 1 (now): ``hero`` + ``note`` editorial + ``c-recipe-mosaic`` (5
+  recipes, see below) + ``footer``. The mosaic IS the body — don't add
+  trackers, openloops, or other body blocks. The recipes are the
+  density.
+- Page 2 (today): kicker "today" + thesis "still settling in." +
+  ``c-permission`` (whichever integration would help most) + REQUIRED
+  ``c-capability`` (4–6 baseline capabilities). Most domain rails stay
+  empty — this is honest for Day 1.
+
+## ``c-recipe-mosaic`` (Day 1 CTA surface)
+
+Pinterest-style masonry of 5 high-leverage recipes. Each tile is a tap
+that opens WhatsApp with a pre-filled primer message — donna's normal
+tool loop sets up the actual workflow on the inbound. These are NOT
+single-action shortcuts; each one stands up a multi-step pipeline
+(integration + attention + cadence + threshold logic).
+
+When to use: thin-signal Day 1, AND when the user has fewer than 3
+observations / 0 attentions / no integrations connected. Once the
+user has any meaningful state, the mosaic disappears (dashboard
+shifts to status mode). Never co-occur with ``c-tracker`` / ``c-watch``
+on the same page.
+
+Required shape:
+- ``eyebrow``: "start something" (canonical) or similar.
+- ``title``: one editorial sentence ("five things donna can do for you. one tap.").
+- ``items``: exactly 5 recipes. Pick from the canonical set:
+    1. **5pm inbox wrap** — tone=rust, icon=envelope, size=tall.
+       primer: "set up a 5pm inbox wrap — the 3 emails worth replying to before i log off"
+    2. **calories, hands off** — tone=moss, icon=bowl, size=tall.
+       primer: "track my calories from now on. estimate from anything i mention. ping me at 8pm if i'm under 1500."
+    3. **monday week-read** — tone=amber, icon=eye, size=short.
+       primer: "every monday at 8am, read my calendar and send me a one-paragraph read on the week ahead"
+    4. **silent VIP detector** — tone=rust, icon=heart, size=short.
+       primer: "track my last touch with mom, dad, and three friends i'll name. ping me if anyone goes quiet for two weeks."
+    5. **nightly two-question journal** — tone=oxblood, icon=moon, size=tall.
+       primer: "every night at 10pm, ask me what stuck with me today and what i'm proud of. keep a running journal."
+
+The five recipes span the surfaces (work / body / day / people / mind)
+so a single mosaic shows donna's range. Don't add or substitute unless
+the brief explicitly tells you the user already has one of these
+running.
 
 Two pages, even when thin. Don't fabricate content; render the surface honestly."""
 
@@ -1154,7 +1220,89 @@ async def compose_manifest(
     # includes "hold" for back-compat, and the model occasionally emits a
     # third page anyway — drop it. Anything beyond pages[:2] gets trimmed.
     pages = getattr(plan, "pages", None) or []
-    if len(pages) > 2:
-        overrides["pages"] = pages[:2]
+    pages_changed = len(pages) > 2
+    if pages_changed:
+        pages = pages[:2]
+
+    # Hero normalization. The model occasionally emits illustration="none"
+    # for ordinary dawn/late-night plans (the prompt says "sparingly" and
+    # the model over-applies it) and invents greetings outside the four
+    # allowed labels ("Early," "Dawn," "Hi"). Both make the dashboard feel
+    # like a status screen instead of donna's surface — coerce here so
+    # the brand identity holds regardless of LLM drift.
+    illustration_default = _illustration_for(user)
+    pages = [
+        _normalize_hero_block(p, name=name, now_local=now_local, illustration_default=illustration_default)
+        for p in pages
+    ]
+    overrides["pages"] = pages
 
     return plan.model_copy(update=overrides)
+
+
+_VALID_GREETINGS = ("Morning", "Afternoon", "Evening", "Late")
+_VALID_ILLUSTRATIONS = ("mumbai", "singapore", "none")
+# Map IANA timezone → illustration choice. Anything not listed defaults
+# to "mumbai" (the canonical scenery). Add cities here as we render new
+# skyline SVGs for them.
+_TZ_TO_ILLUSTRATION = {
+    "Asia/Singapore": "singapore",
+}
+
+
+def _illustration_for(user: User) -> str:
+    tz = (getattr(user, "timezone", None) or "").strip()
+    return _TZ_TO_ILLUSTRATION.get(tz, "mumbai")
+
+
+def _greeting_for(now_local: datetime) -> str:
+    h = now_local.hour
+    if 5 <= h < 11:
+        return "Morning"
+    if 11 <= h < 17:
+        return "Afternoon"
+    if 17 <= h < 22:
+        return "Evening"
+    return "Late"
+
+
+def _normalize_hero_block(
+    page: Any, *, name: str, now_local: datetime, illustration_default: str
+) -> Any:
+    """Coerce hero illustration + greeting back into the catalogue contract.
+
+    Pages with three blocks or fewer (the hero-only sleep/grief shape) keep
+    whatever illustration the LLM chose. Anything richer than that defaults
+    to ``illustration_default`` (picked from user's timezone — "singapore"
+    for SG users, "mumbai" otherwise). Empty hero scenery on a real
+    working dashboard reads as broken, not restrained.
+
+    Illustration values outside the supported set ("mumbai" / "singapore" /
+    "none") get coerced to the timezone default — keeps us safe when the
+    schema literal grows but the renderer hasn't shipped the new SVG yet.
+    """
+    blocks = list(getattr(page, "blocks", None) or [])
+    if not blocks:
+        return page
+    hero = blocks[0]
+    if getattr(hero, "type", None) != "hero":
+        return page
+
+    updates: dict[str, Any] = {}
+
+    illustration = getattr(hero, "illustration", None)
+    if illustration == "none" and len(blocks) > 3:
+        updates["illustration"] = illustration_default
+    elif illustration not in _VALID_ILLUSTRATIONS:
+        updates["illustration"] = illustration_default
+
+    greeting = getattr(hero, "greeting", "") or ""
+    label = greeting.split(",", 1)[0].strip() if greeting else ""
+    if label not in _VALID_GREETINGS:
+        updates["greeting"] = f"{_greeting_for(now_local)}, {name}."
+
+    if not updates:
+        return page
+
+    blocks[0] = hero.model_copy(update=updates)
+    return page.model_copy(update={"blocks": blocks})

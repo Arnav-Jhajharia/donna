@@ -83,6 +83,30 @@ interface ScheduleRow {
   created_at: string | null;
 }
 
+interface IntegrationLocalRow {
+  provider: string | null;
+  product: string | null;
+  status: string | null;
+  composio_connection_id: string | null;
+  connected_at: string | null;
+  last_synced_at: string | null;
+  redirect_url: string | null;
+  redirect_url_issued_at: string | null;
+  last_error: string | null;
+  updated_at: string | null;
+}
+interface IntegrationComposioRow {
+  id: string | null;
+  status: string | null;
+  toolkit: string | null;
+  created_at: string | null;
+  error?: string;
+}
+interface IntegrationsResponse {
+  local: IntegrationLocalRow[];
+  composio: IntegrationComposioRow[];
+}
+
 interface ProactiveTrace {
   message: {
     id: string;
@@ -589,6 +613,42 @@ export default function AttentionObservePage() {
   const proactive = data?.proactive || [];
   const schedule = data?.schedule || [];
 
+  // Integrations panel — fetches /api/admin/{user}/integrations for the
+  // currently-selected user. Shows local DB rows joined with composio
+  // truth so we can spot OAuth chain drift, expired connections, and
+  // stuck pending states. Refreshes alongside the rest of the page.
+  const [integrationsData, setIntegrationsData] = useState<IntegrationsResponse | null>(null);
+  const [integrationsError, setIntegrationsError] = useState<string | null>(null);
+  useEffect(() => {
+    if (!appliedUserId) {
+      setIntegrationsData(null);
+      return;
+    }
+    let cancelled = false;
+    const load = async () => {
+      try {
+        const res = await fetch(`/api/admin/${encodeURIComponent(appliedUserId)}/integrations`, {
+          cache: 'no-store',
+        });
+        if (!res.ok) throw new Error(`http ${res.status}`);
+        const json = (await res.json()) as IntegrationsResponse;
+        if (cancelled) return;
+        setIntegrationsData(json);
+        setIntegrationsError(null);
+      } catch (err: unknown) {
+        if (cancelled) return;
+        setIntegrationsError(String(err));
+      }
+    };
+    void load();
+    if (!autoRefresh) return () => { cancelled = true; };
+    const id = window.setInterval(load, REFRESH_MS);
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, [appliedUserId, autoRefresh]);
+
   const filteredTicks = useMemo(() => {
     if (!expandedAttention) return ticks;
     return ticks.filter((t) => t.attention_id === expandedAttention);
@@ -974,6 +1034,144 @@ export default function AttentionObservePage() {
           </tbody>
         </table>
       </Section>
+
+      {appliedUserId && (
+        <Section
+          title={`integrations${
+            integrationsData
+              ? ` (${integrationsData.local.length} local · ${integrationsData.composio.length} composio)`
+              : ''
+          }`}
+        >
+          {integrationsError && (
+            <div style={{ color: '#e06868', padding: '6px 0', fontSize: 11 }}>
+              {integrationsError}
+            </div>
+          )}
+          {integrationsData && integrationsData.local.length === 0 &&
+            integrationsData.composio.length === 0 && (
+              <div style={{ color: '#666', padding: '6px 0' }}>
+                no integrations recorded for this user
+              </div>
+            )}
+          {integrationsData && (
+            <>
+              <div style={{ color: '#888', fontSize: 10, marginBottom: 4 }}>
+                local · postgres `integrations` table
+              </div>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>provider</th>
+                    <th style={thStyle}>product</th>
+                    <th style={thStyle}>status</th>
+                    <th style={thStyle}>connection id</th>
+                    <th style={thStyle}>connected at</th>
+                    <th style={thStyle}>last synced</th>
+                    <th style={thStyle}>redirect url</th>
+                    <th style={thStyle}>last error</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {integrationsData.local.map((r, i) => {
+                    const stale =
+                      r.status === 'pending' &&
+                      r.redirect_url_issued_at &&
+                      Date.now() - new Date(r.redirect_url_issued_at).getTime() >
+                        15 * 60 * 1000;
+                    return (
+                      <tr key={i}>
+                        <td style={tdStyle}>{r.provider}</td>
+                        <td style={tdStyle}>{r.product}</td>
+                        <td style={tdStyle}>
+                          <span
+                            style={{
+                              color:
+                                r.status === 'connected'
+                                  ? '#1f9d55'
+                                  : r.status === 'pending'
+                                    ? stale
+                                      ? '#e0a868'
+                                      : '#a0a0a0'
+                                    : '#e06868',
+                            }}
+                          >
+                            {r.status ?? '—'}
+                            {stale ? ' · stale' : ''}
+                          </span>
+                        </td>
+                        <td style={{ ...tdStyle, color: '#888' }}>
+                          {r.composio_connection_id?.slice(0, 12) ?? '—'}
+                        </td>
+                        <td style={tdStyle}>{fmtTime(r.connected_at)}</td>
+                        <td style={tdStyle}>{fmtTime(r.last_synced_at)}</td>
+                        <td style={{ ...tdStyle, color: '#888', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {r.redirect_url ? (
+                            <a
+                              href={r.redirect_url}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: '#7aa6d6' }}
+                            >
+                              open
+                            </a>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td style={{ ...tdStyle, color: r.last_error ? '#e06868' : '#888', maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {r.last_error ?? '—'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+              <div style={{ color: '#888', fontSize: 10, marginTop: 12, marginBottom: 4 }}>
+                composio · live api
+              </div>
+              <table style={tableStyle}>
+                <thead>
+                  <tr>
+                    <th style={thStyle}>connection id</th>
+                    <th style={thStyle}>toolkit</th>
+                    <th style={thStyle}>status</th>
+                    <th style={thStyle}>created at</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {integrationsData.composio.map((r, i) => (
+                    <tr key={r.id ?? i}>
+                      <td style={{ ...tdStyle, color: '#888' }}>
+                        {r.id ? r.id.slice(0, 12) : '—'}
+                      </td>
+                      <td style={tdStyle}>{r.toolkit ?? '—'}</td>
+                      <td style={tdStyle}>
+                        <span
+                          style={{
+                            color:
+                              r.status === 'ACTIVE'
+                                ? '#1f9d55'
+                                : r.status === 'INITIATED'
+                                  ? '#a0a0a0'
+                                  : '#e06868',
+                          }}
+                        >
+                          {r.status ?? '—'}
+                          {r.error ? ` · ${r.error.slice(0, 40)}` : ''}
+                        </span>
+                      </td>
+                      <td style={tdStyle}>
+                        {r.created_at ? fmtTime(r.created_at) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </>
+          )}
+        </Section>
+      )}
 
       <Section title={`attentions (${attentions.length})`}>
         <table style={tableStyle}>

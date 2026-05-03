@@ -123,6 +123,20 @@ export function ActionProvider({
             tone: 'donna',
           });
         }
+        // Verb-specific side effects on success. Today only one — the
+        // connect_integration verb returns a Composio OAuth chain URL
+        // that the user needs to land on. We open it in a new tab so
+        // the dashboard tab stays mounted (the SSE listener catches
+        // the connected_account.created webhook + recomposes).
+        if (
+          verb.v === 'connect_integration' &&
+          typeof json.redirect_url === 'string' &&
+          json.redirect_url.trim()
+        ) {
+          if (typeof window !== 'undefined') {
+            window.open(json.redirect_url, '_blank', 'noopener,noreferrer');
+          }
+        }
         setLastResponse(json);
         onActionSuccess?.(json);
         return json;

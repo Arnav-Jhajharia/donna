@@ -178,7 +178,7 @@ class HeroBlock(_PlanBase):
     date: str
     greeting: str
     subtext: str
-    illustration: Literal["mumbai", "none"] | None = None
+    illustration: Literal["mumbai", "singapore", "none"] | None = None
 
 
 class WhisperBlock(_PlanBase):
@@ -701,6 +701,29 @@ class CatCapabilityBlock(_PlanBase):
     items: list[CapabilityItem]
 
 
+# 23 · Recipe mosaic — Day 1 / sparse-signal CTA surface.
+# Each tile = "one tap and donna sets up a multi-step pipeline" (e.g.
+# "track my calories from now on, ping at 8pm if i'm under 1500"). On
+# tap, the dashboard opens a WhatsApp deeplink with the ``primer`` as the
+# pre-filled message — the actual setup runs through donna's normal tool
+# loop on the inbound. Renders Pinterest-masonry: tall tiles (size="tall")
+# carry more explanatory body copy; short tiles are recognisably one-shot.
+class RecipeItem(_PlanBase):
+    title: str
+    body: str  # 1–4 lines of plain prose explaining what donna will set up
+    primer: str  # the WhatsApp message body sent on tap
+    tone: Literal["ink", "rust", "moss", "amber", "oxblood"] | None = None
+    icon: CatIconName | None = None
+    size: Literal["short", "tall"] | None = None  # default short
+
+
+class CatRecipeMosaicBlock(_PlanBase):
+    type: Literal["c-recipe-mosaic"]
+    eyebrow: str | None = None  # e.g. "start something"
+    title: str | None = None  # e.g. "five things donna can do for you. one tap."
+    items: list[RecipeItem]
+
+
 Block = Annotated[
     Union[
         ThesisBlock,
@@ -743,6 +766,7 @@ Block = Annotated[
         CatPermissionBlock,
         CatReadBlock,
         CatCapabilityBlock,
+        CatRecipeMosaicBlock,
     ],
     Field(discriminator="type"),
 ]

@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import MumbaiLineArt from '../MumbaiLineArt';
+import SingaporeLineArt from '../SingaporeLineArt';
+import TapToTalk from '../TapToTalk';
 import type { HeroBlock as HeroBlockSpec } from '@/lib/plan';
 
 function formatLocal(d: Date): string {
@@ -29,7 +31,9 @@ export default function HeroBlock({ spec }: { spec: HeroBlockSpec }) {
   }, []);
 
   return (
-    <div
+    <TapToTalk
+      primer="what's on for me right now?"
+      decoration="block"
       style={{
         margin: '0 16px',
         borderRadius: 14,
@@ -70,9 +74,9 @@ export default function HeroBlock({ spec }: { spec: HeroBlockSpec }) {
       </div>
       {spec.illustration !== 'none' && (
         <div style={{ marginTop: 8 }}>
-          <MumbaiLineArt />
+          {spec.illustration === 'singapore' ? <SingaporeLineArt /> : <MumbaiLineArt />}
         </div>
       )}
-    </div>
+    </TapToTalk>
   );
 }

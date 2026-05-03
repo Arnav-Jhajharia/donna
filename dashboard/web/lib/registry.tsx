@@ -47,6 +47,7 @@ import { Frame, PlaceholderFrame } from '@/components/Frame';
 import NoteBlockComponent from '@/components/blocks/NoteBlock';
 import CatTrackerComp from '@/components/blocks/catalogue/CatTracker';
 import CatCapabilityComp from '@/components/blocks/catalogue/CatCapability';
+import { CatRecipeMosaic } from '@/components/blocks/catalogue/CatRecipeMosaic';
 import {
   CatWatch,
   CatBrief,
@@ -86,6 +87,7 @@ import type {
   CatPermissionSpec,
   CatReadSpec,
   CatCapabilitySpec,
+  CatRecipeMosaicSpec,
 } from './plan';
 
 type Renderer<B extends Block> = (block: B) => ReactNode;
@@ -495,6 +497,7 @@ const REGISTRY: Record<Block['type'], AnyRenderer> = {
   'c-permission':   ((b: Block) => <CatPermission spec={b as CatPermissionSpec} />),
   'c-read':         ((b: Block) => <CatRead spec={b as CatReadSpec} />),
   'c-capability':   ((b: Block) => <CatCapabilityComp spec={b as CatCapabilitySpec} />),
+  'c-recipe-mosaic':((b: Block) => <CatRecipeMosaic spec={b as CatRecipeMosaicSpec} />),
 };
 
 /** Render a single block through the registry, returning a Frame-wrapped node. */
