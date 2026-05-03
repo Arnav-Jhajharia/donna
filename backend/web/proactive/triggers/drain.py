@@ -44,6 +44,22 @@ from backend.web.proactive.types import (
 logger = logging.getLogger(__name__)
 
 
+# Hard ceiling on proactive messages a user can receive per local day.
+# Override per-deploy via ``DONNA_PROACTIVE_DAILY_CAP``. Set to a low
+# number for "quiet companion" UX; raise if the user has explicitly
+# opted into more chatter. Counts both shadow and live deliveries
+# against the same budget — once the cap is hit, everything else
+# this calendar-day gets silenced regardless of judge verdict.
+import os as _os
+_DEFAULT_DAILY_CAP = 4
+try:
+    DAILY_PROACTIVE_CAP = max(0, int(
+        _os.environ.get("DONNA_PROACTIVE_DAILY_CAP") or _DEFAULT_DAILY_CAP
+    ))
+except ValueError:
+    DAILY_PROACTIVE_CAP = _DEFAULT_DAILY_CAP
+
+
 @dataclass(frozen=True)
 class DrainDecision:
     """What ``maybe_drain_signals`` did, for tests + traces."""
@@ -52,6 +68,7 @@ class DrainDecision:
     signals_drained: int
     moves_emitted: int
     drafts_delivered: int
+    cap_remaining: int = -1  # -1 = unknown / not enforced
 
 
 def _summarize_signal(
@@ -163,16 +180,39 @@ async def maybe_drain_signals(
             drafts_delivered=0,
         )
 
-    # Delivery cap: at most budget.per_turn shadow/live sends per drain.
-    # Silenced verdicts pass through (deliver_drafts no-ops them anyway).
+    # Daily cap: count proactive messages already delivered today.
+    # Once the cap is reached, everything else is silenced regardless
+    # of judge verdict. This is the dominant rate-limiter — per-turn
+    # cap by itself only limits within ONE drain, not across drains.
+    from datetime import datetime as _dt
+    daily_repo = DailyCountRepo()
+    local_date = _dt.now().strftime("%Y-%m-%d")
+    try:
+        sent_today = await daily_repo.get(user_id, local_date)
+    except Exception:
+        sent_today = 0
+    cap_remaining = max(0, DAILY_PROACTIVE_CAP - int(sent_today or 0))
+
+    # Per-turn cap (within a single drain) THEN daily cap.
     sends = [(r, v) for r, v in verdicts if v.decision == "send"]
-    capped_sends = sends[: max(0, int(budget.per_turn))]
+    per_turn = min(max(0, int(budget.per_turn)), cap_remaining)
+    capped_sends = sends[:per_turn]
     capped_keys = {r.move.dedup_key for r, _ in capped_sends}
-    final_verdicts = [
-        (r, v) if (v.decision != "send" or r.move.dedup_key in capped_keys)
-        else (r, v.__class__(decision="silence", reason="per-turn cap"))
-        for r, v in verdicts
-    ]
+
+    daily_cap_silence_reason = (
+        f"daily-cap reached ({DAILY_PROACTIVE_CAP}/day, sent={sent_today})"
+        if cap_remaining == 0 else None
+    )
+    final_verdicts = []
+    for r, v in verdicts:
+        if v.decision != "send":
+            final_verdicts.append((r, v))
+            continue
+        if r.move.dedup_key in capped_keys:
+            final_verdicts.append((r, v))
+            continue
+        reason = daily_cap_silence_reason or "per-turn cap"
+        final_verdicts.append((r, v.__class__(decision="silence", reason=reason)))
 
     delivered = 0
     if delivery_mode in {"shadow", "live"}:
@@ -189,9 +229,6 @@ async def maybe_drain_signals(
             )
 
     now_ts = time.time()
-    daily_repo = DailyCountRepo()
-    from datetime import datetime as _dt
-    local_date = _dt.now().strftime("%Y-%m-%d")
     for r, v in final_verdicts:
         if v.decision == "send":
             try:
@@ -211,4 +248,5 @@ async def maybe_drain_signals(
         signals_drained=len(pending),
         moves_emitted=len(all_results),
         drafts_delivered=delivered,
+        cap_remaining=max(0, cap_remaining - delivered),
     )

@@ -47,6 +47,33 @@ async def _user_phone(user_id: str) -> str | None:
     return getattr(u, "phone", None) if u else None
 
 
+def _ensure_url_in_draft(draft: str, payload: dict | None) -> str:
+    """Append the source URL when the judge's draft omits it.
+
+    The judge's prompt doesn't always preserve the URL — without one the
+    user can't actually find the thing being mentioned. If the payload
+    has a URL and the draft text doesn't already contain "http", append
+    a single space + the URL.
+    """
+    if not isinstance(payload, dict):
+        return draft
+    if "http" in (draft or ""):
+        return draft
+    # ProactiveResult.payload wraps signal in {"results": [signal_dict]}
+    results = payload.get("results") if isinstance(payload, dict) else None
+    if isinstance(results, list) and results:
+        first = results[0]
+        if isinstance(first, dict):
+            url = (first.get("url") or "").strip()
+            if url:
+                return f"{draft.rstrip()} {url}"
+    # also handle bare {url: ...} payloads defensively
+    url = (payload.get("url") or "").strip() if isinstance(payload, dict) else ""
+    if url:
+        return f"{draft.rstrip()} {url}"
+    return draft
+
+
 async def deliver_drafts(
     *,
     user_id: str,
@@ -59,9 +86,13 @@ async def deliver_drafts(
     Failures during dispatch are logged but not raised - the row is
     still persisted with ``is_shadow=`` matching the requested mode so we
     have an audit trail either way.
+
+    Auto-appends the source URL when the judge's draft omits it
+    (otherwise the user has no way to find the thing being referenced).
     """
     sends = [
-        (r, v.draft) for r, v in verdicts
+        (r, _ensure_url_in_draft(v.draft, getattr(r, "payload", None)))
+        for r, v in verdicts
         if v.decision == "send" and v.draft.strip()
     ]
     if not sends:
