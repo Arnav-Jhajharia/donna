@@ -6,10 +6,9 @@
  * (plain function). Nobody hardcodes the wa.me link anywhere else.
  *
  * Location flow:
- *  - ArrivalSequence resolves the visitor's city via `lib/arrival.ts`
- *    (browser geolocation → IP fallback), and on success calls
- *    `saveDonnaLocation(city)` to persist it in localStorage under
- *    `donna:location`.
+ *  - ArrivalSequence resolves the visitor's city via IP lookup in
+ *    `lib/arrival.ts`, and on success calls `saveDonnaLocation(city)` to
+ *    persist it in localStorage under `donna:location`.
  *  - CTAs call `useDonnaWhatsAppLink()` and receive a reactive URL that
  *    updates if the city lands after the CTA has already mounted
  *    (arrival → hero races: hero can mount before detectCity resolves).
