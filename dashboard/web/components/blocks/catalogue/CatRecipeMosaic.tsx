@@ -5,26 +5,24 @@ import { buildWaUrl } from '@/lib/wa-deeplink';
 import type { CatRecipeMosaicSpec, RecipeItem } from '@/lib/plan';
 
 /**
- * Recipe invitation — Day 1 cold-start CTA surface.
+ * Recipe invitation — two variants for two moments in the user's life.
  *
- * Implements the canonical ``InvitationPromptBlock`` pattern from
- * donna-design-system/components.md:527 (the spec's day 1 / cold-start
- * primitive). Layout contract verbatim:
+ *   variant=mosaic (default, Day 1 cover)
+ *   ──────────────────────────────────────
+ *   The InvitationPromptBlock pattern from
+ *   donna-design-system/components.md:527 (the spec's day 1 /
+ *   cold-start primitive): <Label> eyebrow + serif heading w/ rust
+ *   italic accent + fake text input + hint chips.
  *
- *   1. <Label> eyebrow — "ASK ME TO" in rust caps
- *   2. <Heading level={3}> serif sentence with one italic-rust accent
- *      verb (the rust moment)
- *   3. fake text input — paper bg, hairline border, type-input, with a
- *      placeholder and blinking cursor (teaches the user "this is a
- *      chat surface" without being a real input)
- *   4. hint chips below — pill buttons, ink-300 border, transparent
- *      bg, type-small muted; tap a chip → opens WhatsApp with the
- *      primer pre-filled (the dashboard's analog to "pre-fill the
- *      input" since the real input is donna's chat itself)
+ *   variant=chips (Page 2 mind-rail footer, established users)
+ *   ──────────────────────────────────────────────────────────
+ *   Compact horizontal pill row. No fake-input chrome; just an eyebrow
+ *   + a one-line heading + chips. Used when the user already has
+ *   signal but might want more — "more I could run for you."
  *
  * Every spec field carries forward:
- *   eyebrow → <Label>
- *   title   → the heading's italic-rust accent + completion sentence
+ *   eyebrow → <Label> caps rust
+ *   title   → heading sentence (asterisks=*verb* become rust italic accent)
  *   items[].title  → chip label
  *   items[].primer → message sent on tap
  */
@@ -67,6 +65,14 @@ function HintChip({ item, idx }: { item: RecipeItem; idx: number }) {
 }
 
 export function CatRecipeMosaic({ spec }: { spec: CatRecipeMosaicSpec }) {
+  if (spec.variant === 'chips') {
+    return <RecipeChipsRow spec={spec} />;
+  }
+  return <RecipeMosaicCover spec={spec} />;
+}
+
+/** Day 1 cover variant — InvitationPromptBlock with fake input + chips. */
+function RecipeMosaicCover({ spec }: { spec: CatRecipeMosaicSpec }) {
   // The heading splits into ``before`` + accent verb + ``after``. We
   // pull the verb from spec.title using a sentinel pattern: anything
   // wrapped in *asterisks* becomes the rust italic accent. Falls back
@@ -156,6 +162,57 @@ export function CatRecipeMosaic({ spec }: { spec: CatRecipeMosaicSpec }) {
           display: 'flex',
           flexWrap: 'wrap',
           gap: 8,
+        }}
+      >
+        {spec.items.map((item, i) => (
+          <HintChip key={`${item.title}-${i}`} item={item} idx={i} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+/** Compact chips variant — Page 2 footer for established users.
+ *
+ *  No fake-input chrome (the user already knows donna is a chat surface).
+ *  Just a tiny eyebrow + a quiet one-line heading + a horizontal pill
+ *  row that wraps on mobile. Designed to read as "by the way, more I
+ *  could run for you" rather than the day-1 hero invitation. */
+function RecipeChipsRow({ spec }: { spec: CatRecipeMosaicSpec }) {
+  return (
+    <section style={{ margin: '14px 22px 0' }}>
+      <header style={{ paddingBottom: 8 }}>
+        <div
+          style={{
+            fontSize: 10,
+            letterSpacing: '0.18em',
+            textTransform: 'uppercase',
+            color: 'var(--ink-500, #6b6b6b)',
+            fontWeight: 500,
+          }}
+        >
+          {spec.eyebrow || 'more i could run'}
+        </div>
+        {spec.title && (
+          <p
+            style={{
+              fontFamily: 'var(--font-serif, "EB Garamond", Georgia, serif)',
+              fontStyle: 'italic',
+              fontSize: 14,
+              lineHeight: 1.4,
+              color: 'var(--ink-500, #6b6b6b)',
+              margin: '4px 0 0',
+            }}
+          >
+            {spec.title}
+          </p>
+        )}
+      </header>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 6,
         }}
       >
         {spec.items.map((item, i) => (

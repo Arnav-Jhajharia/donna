@@ -22,6 +22,7 @@ import NoteBlock from './blocks/NoteBlock';
 import NudgeGridBlock from './blocks/NudgeGridBlock';
 import CatTracker from './blocks/catalogue/CatTracker';
 import CatCapability from './blocks/catalogue/CatCapability';
+import { CatRecipeMosaic } from './blocks/catalogue/CatRecipeMosaic';
 import {
   CatWatch,
   CatBrief,
@@ -206,6 +207,7 @@ function BlockSwitch({ block }: { block: Block }) {
     case 'c-permission':    return <CatPermission        spec={block} />;
     case 'c-read':          return <CatRead              spec={block} />;
     case 'c-capability':    return <CatCapability        spec={block} />;
+    case 'c-recipe-mosaic': return <CatRecipeMosaic      spec={block} />;
     default: {
       // Forward-compat: if the backend emits a block type the deployed
       // frontend hasn't shipped yet, render a placeholder instead of

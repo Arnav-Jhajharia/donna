@@ -417,6 +417,9 @@ export interface RecipeItem {
 }
 export interface CatRecipeMosaicSpec {
   type: 'c-recipe-mosaic';
+  /** ``mosaic`` = full pinterest masonry (Day 1).
+   *  ``chips``  = compact pill row (Page 2 footer for established users). */
+  variant?: 'mosaic' | 'chips';
   eyebrow?: string;
   title?: string;
   items: RecipeItem[];

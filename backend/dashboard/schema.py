@@ -719,6 +719,10 @@ class RecipeItem(_PlanBase):
 
 class CatRecipeMosaicBlock(_PlanBase):
     type: Literal["c-recipe-mosaic"]
+    # ``mosaic`` = full Pinterest masonry of 5 tall+short tiles (Day 1 cover).
+    # ``chips``  = compact horizontal pill row of 3-4 recipes (Page 2 mind
+    #              rail footer for established users — "more I could run").
+    variant: Literal["mosaic", "chips"] | None = None
     eyebrow: str | None = None  # e.g. "start something"
     title: str | None = None  # e.g. "five things donna can do for you. one tap."
     items: list[RecipeItem]

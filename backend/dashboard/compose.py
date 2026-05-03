@@ -515,39 +515,51 @@ mosaic — Day 1 is an invitation surface, not a status surface.
   ``c-capability`` (4–6 baseline capabilities). Most domain rails stay
   empty — this is honest for Day 1.
 
-## ``c-recipe-mosaic`` (Day 1 CTA surface)
+## ``c-recipe-mosaic`` (CTA surface — two variants)
 
-Pinterest-style masonry of 5 high-leverage recipes. Each tile is a tap
-that opens WhatsApp with a pre-filled primer message — donna's normal
-tool loop sets up the actual workflow on the inbound. These are NOT
-single-action shortcuts; each one stands up a multi-step pipeline
-(integration + attention + cadence + threshold logic).
+Each tile is a tap that opens WhatsApp with a pre-filled primer —
+donna's tool loop handles the multi-step workflow setup on the
+inbound. The server REPLACES the ``items`` you emit with a fresh
+selection from the recipe bank that's filtered against the user's
+current attentions + connected integrations. So you choose the
+variant + eyebrow + title; the items are dynamic.
 
-When to use: thin-signal Day 1, AND when the user has fewer than 3
-observations / 0 attentions / no integrations connected. Once the
-user has any meaningful state, the mosaic disappears (dashboard
-shifts to status mode). Never co-occur with ``c-tracker`` / ``c-watch``
-on the same page.
+### variant=mosaic (Day 1 / sparse-signal cover)
+Pinterest-style masonry. Required shape:
+- ``variant``: ``"mosaic"`` (or omit — that's the default).
+- ``eyebrow``: ``"ask me to"`` (canonical).
+- ``title``: one editorial sentence with one ``*verb*`` accent
+  (asterisks become the rust italic). Example:
+  ``"set up something *real* for you."``.
+- ``items``: emit ``[]`` — server fills 5 tiles spanning surfaces
+  (work / body / day / people / mind), filtered against existing
+  state.
 
-Required shape:
-- ``eyebrow``: "start something" (canonical) or similar.
-- ``title``: one editorial sentence ("five things donna can do for you. one tap.").
-- ``items``: exactly 5 recipes. Pick from the canonical set:
-    1. **5pm inbox wrap** — tone=rust, icon=envelope, size=tall.
-       primer: "set up a 5pm inbox wrap — the 3 emails worth replying to before i log off"
-    2. **calories, hands off** — tone=moss, icon=bowl, size=tall.
-       primer: "track my calories from now on. estimate from anything i mention. ping me at 8pm if i'm under 1500."
-    3. **monday week-read** — tone=amber, icon=eye, size=short.
-       primer: "every monday at 8am, read my calendar and send me a one-paragraph read on the week ahead"
-    4. **silent VIP detector** — tone=rust, icon=heart, size=short.
-       primer: "track my last touch with mom, dad, and three friends i'll name. ping me if anyone goes quiet for two weeks."
-    5. **nightly two-question journal** — tone=oxblood, icon=moon, size=tall.
-       primer: "every night at 10pm, ask me what stuck with me today and what i'm proud of. keep a running journal."
+When to use the mosaic variant: thin-signal users (no observations,
+no live attentions, no integrations connected). It IS the body — no
+trackers / watches / openloops on the same page. Once the user has
+meaningful state, the LLM should omit the cover and let the rails
+carry the day instead.
 
-The five recipes span the surfaces (work / body / day / people / mind)
-so a single mosaic shows donna's range. Don't add or substitute unless
-the brief explicitly tells you the user already has one of these
-running.
+### variant=chips (Page 2 footer for established users)
+Compact horizontal pill row. NOT a hero — sits at the bottom of the
+mind rail as "by the way, more I could run for you." Required shape:
+- ``variant``: ``"chips"``.
+- ``domain``: ``"mind"`` (always).
+- ``eyebrow``: ``"more i could run"`` (canonical) or similar.
+- ``title``: optional one-line italic context (``"a few you haven't
+  started yet"``).
+- ``items``: emit ``[]`` — server fills 3-4 chips, gap-filtered AND
+  toolkit-gated (skips recipes whose required OAuth isn't connected).
+
+When to use the chips variant: established users (already have at
+least one live attention) who might want to expand donna's
+coverage. Never on Page 1. Never combined with the mosaic variant —
+pick one or zero per plan.
+
+If the server's selector returns zero candidates (every recipe
+already running), the block gets dropped entirely. So emitting it is
+always safe; it self-cleans when there's nothing to suggest.
 
 Two pages, even when thin. Don't fabricate content; render the surface honestly."""
 
@@ -1235,9 +1247,75 @@ async def compose_manifest(
         _normalize_hero_block(p, name=name, now_local=now_local, illustration_default=illustration_default)
         for p in pages
     ]
+
+    # Recipe-mosaic post-processing.
+    #
+    # Whatever the LLM emitted for ``items`` we replace with a fresh
+    # selection from the recipe bank, filtered against the user's
+    # current attentions + integrations. Stops the model from
+    # hallucinating recipe titles + keeps the mosaic useful for
+    # established users (who'd otherwise see "track my calories" even
+    # after they already started tracking calories).
+    #
+    # Day 1 path: the model picked variant=mosaic (the default).
+    # Established path: the prompt also allows the model to emit a
+    # second c-recipe-mosaic with variant=chips on Page 2 mind rail
+    # — we honour that and inject 3-4 chip-tile items.
+    pages = await _refresh_recipe_blocks(pages, user_id=user_id)
+
     overrides["pages"] = pages
 
     return plan.model_copy(update=overrides)
+
+
+async def _refresh_recipe_blocks(pages: list[Any], *, user_id: str) -> list[Any]:
+    """Replace ``c-recipe-mosaic`` items with fresh, gap-filtered picks.
+
+    The LLM emits the BLOCK (variant + eyebrow + title) but we own the
+    ITEMS — so the model can't hallucinate titles or include recipes the
+    user is already running. Two paths:
+
+      * variant ∈ {None, "mosaic"} → ``select_for_day_one`` (5 tiles)
+      * variant == "chips"          → ``select_for_established`` (4 tiles)
+
+    Pages without any c-recipe-mosaic block are returned unchanged. If
+    the selector returns 0 candidates (rare — every recipe already
+    running) we drop the block entirely so we don't render an empty
+    mosaic.
+    """
+    from backend.dashboard.recipe_selector import (
+        recipe_to_item,
+        select_for_day_one,
+        select_for_established,
+    )
+    from backend.dashboard.schema import RecipeItem
+
+    refreshed: list[Any] = []
+    for page in pages:
+        blocks = list(getattr(page, "blocks", None) or [])
+        if not blocks:
+            refreshed.append(page)
+            continue
+        new_blocks: list[Any] = []
+        for block in blocks:
+            if getattr(block, "type", None) != "c-recipe-mosaic":
+                new_blocks.append(block)
+                continue
+            variant = getattr(block, "variant", None) or "mosaic"
+            if variant == "chips":
+                picks = await select_for_established(user_id, k=4)
+            else:
+                picks = await select_for_day_one(user_id, k=5)
+            if not picks:
+                # Drop the block entirely — every recipe is already running.
+                continue
+            # Hydrate dicts → RecipeItem so the schema's typed list[RecipeItem]
+            # gets the right shape (avoids serializer "unexpected dict" warnings
+            # downstream).
+            items = [RecipeItem.model_validate(recipe_to_item(r)) for r in picks]
+            new_blocks.append(block.model_copy(update={"items": items}))
+        refreshed.append(page.model_copy(update={"blocks": new_blocks}))
+    return refreshed
 
 
 _VALID_GREETINGS = ("Morning", "Afternoon", "Evening", "Late")
