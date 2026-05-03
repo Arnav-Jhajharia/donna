@@ -30,6 +30,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 from sqlalchemy import desc, select
+from sqlalchemy.exc import IntegrityError
 
 from backend.memory.retrieval.structured import call_structured
 from db.models import EmailIntelligence, EmailMessage, User
@@ -295,10 +296,19 @@ async def enrich_email(user_id: str, email_message_id: str) -> bool:
                 )
             )
             await session.commit()
+    except IntegrityError:
+        # Race with a concurrent enrich_email call for the same email
+        # (Composio retries deliver the same webhook 2-5 times within
+        # seconds; both attempts can pass the existing-row guard before
+        # either commits). The unique index ``uq_email_intel_message``
+        # rejects the loser. Expected; log info only — not an exception
+        # that fills logs with stacktrace.
+        logger.info(
+            "enrich_email: lost race for user=%s email=%s — winner already persisted",
+            user_id, email_message_id,
+        )
+        return False
     except Exception:
-        # Most likely cause: race with a concurrent enrich_email call
-        # for the same email — the unique index will reject the second
-        # insert, which is fine.
         logger.exception(
             "enrich_email: persist failed user=%s email=%s",
             user_id, email_message_id,

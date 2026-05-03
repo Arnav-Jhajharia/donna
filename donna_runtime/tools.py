@@ -270,6 +270,56 @@ async def list_gmail_recent(args):
 
 
 @tool(
+    "search_gmail",
+    "Targeted live search across the user's full gmail history (Composio "
+    "→ Gmail API). Use when the user asks for a specific email by sender, "
+    "subject, or topic — especially when it might be older than the local "
+    "mirror window. Accepts Gmail search syntax: from:/to:/subject:/"
+    "after:YYYY/MM/DD/has:attachment/is:important/newer_than:7d. Hits are "
+    "persisted to the local mirror so the next read is warm. Use for: "
+    "'find the email from stripe last month', 'did X reply to Y', 'when "
+    "was the last invoice from acme'. Do NOT use for 'any new mail?' / "
+    "'what came in today?' (use list_gmail_recent — cheaper). Do NOT use "
+    "when [INTEGRATIONS] shows google_gmail as not_connected.",
+    {
+        "type": "object",
+        "required": ["query"],
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": (
+                    "Gmail search query. Examples: 'from:stripe.com', "
+                    "'subject:invoice after:2026/04/01', "
+                    "'from:saurabh has:attachment'."
+                ),
+            },
+            "limit": {"type": "integer", "default": 10},
+        },
+    },
+)
+@traceable(name="donna.tool.search_gmail", run_type="tool")
+async def search_gmail(args):
+    from backend.memory.tools.search_gmail import (
+        search_gmail as _search_gmail,
+    )
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("can't search your gmail right now.")
+    query = str(args.get("query") or "").strip()
+    if not query:
+        return text_content("search needs a query — e.g. 'from:stripe.com'.")
+    limit = int(args.get("limit") or 10)
+    res = await _search_gmail(user_id=user_id, query=query, limit=limit)
+    return _tool_text(
+        res,
+        no_hits_text="couldn't find anything matching that.",
+        degraded_text="gmail's slow on my end. try again in a sec.",
+        voice_degraded=True,
+    )
+
+
+@tool(
     "read_gmail_thread",
     "Fetch all messages in one gmail thread with full bodies. If a body was "
     "filtered at ingest (label policy stored metadata only), this tool "
@@ -2479,6 +2529,7 @@ DONNA_TOOLS = (
     connect_integration,
     check_integration_status,
     list_gmail_recent,
+    search_gmail,
     read_gmail_thread,
     list_calendar,
     composio_search_tools,

@@ -151,7 +151,7 @@ For unknown actions: composio_search_tools(use_case) → composio_execute_tool(t
 
 The connect-then-act flow is two turns: first sends the URL and ends; the resumption fires automatically when OAuth lands (if you passed `intent`). Don't block.
 
-Once google is connected, prefer typed tools (list_gmail_recent, read_gmail_thread, list_calendar) — faster and structured.
+Once google is connected, prefer typed tools — faster and structured. list_gmail_recent = recent window only. search_gmail = full-inbox query (`from:`, `subject:`, `after:`). read_gmail_thread for one thread. list_calendar for events.
 
 When the user says "didn't work / still broken / retry / is X connected?" AFTER a previous connect, FIRST read [INTEGRATIONS] — it has the answer. Only call check_integration_status when the block disagrees with what they're reporting.
 

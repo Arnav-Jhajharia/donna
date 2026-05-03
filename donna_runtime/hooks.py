@@ -340,6 +340,7 @@ _SLOW_TOOL_NAMES: frozenset[str] = frozenset({
     "composio_search_tools",
     "composio_execute_tool",
     "read_gmail_thread",
+    "search_gmail",
 })
 _SLOW_TOOL_ACK_EMOJI = "⏳"
 # Per-turn flag (via ContextVar) so the slow-tool ack only fires once
