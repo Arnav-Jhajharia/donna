@@ -233,33 +233,39 @@ function PagedDashboard({ plan }: { plan: DashboardPlan }) {
       <div
         style={{
           background: 'var(--bg-canvas)',
-          paddingTop: 28,
-          paddingBottom: 12,
-        }}
-      >
-        <TopBar initial={plan.user.initial} />
-      </div>
-      <div
-        style={{
-          background: 'var(--bg-canvas)',
           display: 'flex',
-          overflowX: 'auto',
-          scrollSnapType: 'x mandatory',
-          scrollBehavior: 'smooth',
-          paddingBottom: 24,
-        }}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          const w = el.clientWidth || 1;
-          const idx = Math.round(el.scrollLeft / w);
-          if (idx !== active) setActive(idx);
+          flexDirection: 'column',
+          height: '100%',
+          minHeight: 0,
         }}
       >
-        {pages.map((page, idx) => (
-          <PageColumn key={page.id ?? idx} page={page} index={idx} />
-        ))}
+        <div style={{ flex: '0 0 auto', paddingTop: 20, paddingBottom: 10 }}>
+          <TopBar initial={plan.user.initial} />
+        </div>
+        <div
+          style={{
+            background: 'var(--bg-canvas)',
+            display: 'flex',
+            flex: '1 1 auto',
+            minHeight: 0,
+            overflowX: 'auto',
+            overflowY: 'hidden',
+            scrollSnapType: 'x mandatory',
+            scrollBehavior: 'smooth',
+          }}
+          onScroll={(e) => {
+            const el = e.currentTarget;
+            const w = el.clientWidth || 1;
+            const idx = Math.round(el.scrollLeft / w);
+            if (idx !== active) setActive(idx);
+          }}
+        >
+          {pages.map((page, idx) => (
+            <PageColumn key={page.id ?? idx} page={page} index={idx} />
+          ))}
+        </div>
+        <PageDots count={pages.length} active={active} labels={pages.map((p) => p.id ?? '')} />
       </div>
-      <PageDots count={pages.length} active={active} labels={pages.map((p) => p.id ?? '')} />
     </ScreenRoot>
   );
 }
@@ -280,11 +286,9 @@ function PageColumn({ page, index }: { page: DashboardPage; index: number }) {
         flex: '0 0 100%',
         minWidth: '100%',
         scrollSnapAlign: 'start',
-        // 100dvh on mobile collapses with the URL bar so we don't get a
-        // nasty bottom-of-screen jump. Falls back to 100vh on browsers
-        // that don't support dvh.
-        height: isTodayPage ? 'auto' : '100dvh',
-        overflowY: isTodayPage ? 'visible' : 'hidden',
+        height: '100%',
+        minHeight: 0,
+        overflowY: isTodayPage ? 'auto' : 'hidden',
         display: 'flex',
         flexDirection: 'column',
       }}

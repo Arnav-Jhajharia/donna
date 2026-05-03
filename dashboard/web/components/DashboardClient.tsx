@@ -138,8 +138,15 @@ function DashboardSurface({ state }: { state: LoadState }) {
   };
 
   if (state.kind === 'plan') {
+    const planShellStyle: React.CSSProperties = state.plan.pages?.length
+      ? {
+          ...shellStyle,
+          height: 'calc(100dvh - var(--space-5) - var(--space-5))',
+          minHeight: 0,
+        }
+      : shellStyle;
     return (
-      <div style={shellStyle}>
+      <div style={planShellStyle}>
         <DashboardRenderer plan={state.plan} />
       </div>
     );
