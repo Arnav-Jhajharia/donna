@@ -186,16 +186,53 @@ def _composio():  # pragma: no cover - thin import site
     return Composio()
 
 
-def verify_webhook_signature(body: bytes, sig_hex: str, secret: str) -> bool:
-    """Constant-time HMAC-SHA256 verify.
+def verify_webhook_signature(
+    body: bytes,
+    sig_header: str,
+    secret: str,
+    *,
+    webhook_id: str = "",
+    webhook_timestamp: str = "",
+) -> bool:
+    """Verify a Composio webhook signature.
+
+    Composio V3 follows the Standard Webhooks spec
+    (https://www.standardwebhooks.com): three headers — ``webhook-id``,
+    ``webhook-timestamp``, ``webhook-signature`` — and the signature is
+    ``HMAC-SHA256("{id}.{timestamp}.{body}", secret)`` base64-encoded
+    with a ``v1,`` prefix. Multiple signatures may be space-separated
+    (rotation window); any match is acceptance.
+
+    A pre-V3 fallback is kept: if ``webhook_id`` and ``webhook_timestamp``
+    are empty, fall back to hex HMAC of the raw body — the V1/V2
+    scheme — so legacy webhook configurations keep working through a
+    transition.
 
     Returns False on missing inputs rather than raising — webhook routes
     treat False as 401 unauthorized.
     """
-    if not sig_hex or not secret:
+    if not sig_header or not secret:
         return False
-    expected = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, sig_hex)
+
+    # V3 (Standard Webhooks) — id + timestamp present.
+    if webhook_id and webhook_timestamp:
+        signed = f"{webhook_id}.{webhook_timestamp}.".encode() + body
+        expected = base64.b64encode(
+            hmac.new(secret.encode(), signed, hashlib.sha256).digest()
+        ).decode()
+        # The header may carry multiple "v1,sig" tokens (rotation window),
+        # space-separated. Accept any match.
+        for token in sig_header.split():
+            if not token.startswith("v1,"):
+                continue
+            candidate = token.split(",", 1)[1]
+            if hmac.compare_digest(expected, candidate):
+                return True
+        return False
+
+    # Legacy V1/V2 fallback — hex HMAC of raw body.
+    expected_hex = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
+    return hmac.compare_digest(expected_hex, sig_header)
 
 
 @dataclass(frozen=True)

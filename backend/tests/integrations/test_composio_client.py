@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 import hashlib
 import hmac
 
@@ -11,15 +12,65 @@ from backend.integrations.composio_client import (
 )
 
 
-def test_verify_webhook_signature_accepts_valid() -> None:
+def test_verify_webhook_signature_v1_legacy_accepts_valid() -> None:
+    """Legacy V1/V2 fallback: when no webhook-id/timestamp are passed,
+    verify against hex HMAC of the raw body."""
     secret = "topsecret"
     body = b'{"event":"connection.complete"}'
     sig = hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     assert verify_webhook_signature(body, sig, secret) is True
 
 
-def test_verify_webhook_signature_rejects_invalid() -> None:
+def test_verify_webhook_signature_legacy_rejects_invalid() -> None:
     assert verify_webhook_signature(b"x", "deadbeef", "topsecret") is False
+
+
+def test_verify_webhook_signature_v3_standard_webhooks_accepts_valid() -> None:
+    """Composio V3 follows Standard Webhooks: the signature is
+    HMAC-SHA256("{id}.{ts}.{body}", secret) base64-encoded with a
+    'v1,' prefix."""
+    secret = "topsecret"
+    body = b'{"type":"composio.trigger.message"}'
+    webhook_id = "msg_abc123"
+    webhook_timestamp = "1234567890"
+    signed = f"{webhook_id}.{webhook_timestamp}.".encode() + body
+    digest = hmac.new(secret.encode(), signed, hashlib.sha256).digest()
+    sig = "v1," + base64.b64encode(digest).decode()
+    assert verify_webhook_signature(
+        body, sig, secret,
+        webhook_id=webhook_id, webhook_timestamp=webhook_timestamp,
+    ) is True
+
+
+def test_verify_webhook_signature_v3_rotation_window_accepts_either() -> None:
+    """During key rotation, Composio sends multiple space-separated
+    'v1,sig' tokens — any match is acceptance."""
+    secret = "newsecret"
+    body = b'{"type":"composio.trigger.message"}'
+    webhook_id, ts = "msg_rotation", "1700000000"
+    signed = f"{webhook_id}.{ts}.".encode() + body
+    good = "v1," + base64.b64encode(
+        hmac.new(secret.encode(), signed, hashlib.sha256).digest()
+    ).decode()
+    sig_header = f"v1,olddead {good}"
+    assert verify_webhook_signature(
+        body, sig_header, secret,
+        webhook_id=webhook_id, webhook_timestamp=ts,
+    ) is True
+
+
+def test_verify_webhook_signature_v3_rejects_wrong_secret() -> None:
+    secret = "topsecret"
+    body = b'{"x": 1}'
+    webhook_id, ts = "msg_x", "1234567890"
+    signed = f"{webhook_id}.{ts}.".encode() + body
+    sig = "v1," + base64.b64encode(
+        hmac.new(b"wrong", signed, hashlib.sha256).digest()
+    ).decode()
+    assert verify_webhook_signature(
+        body, sig, secret,
+        webhook_id=webhook_id, webhook_timestamp=ts,
+    ) is False
 
 
 @pytest.mark.asyncio

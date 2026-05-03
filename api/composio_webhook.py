@@ -518,11 +518,24 @@ async def run_bootstrap_async(user_id: str) -> dict:
 @router.post("/webhook/composio")
 async def composio_webhook(
     request: Request,
+    # V3 Standard Webhooks headers — these are what Composio sends today.
+    webhook_id: str | None = Header(default=None),
+    webhook_timestamp: str | None = Header(default=None),
+    webhook_signature: str | None = Header(default=None),
+    # Legacy header from V1/V2 deployments — kept as a fallback so an old
+    # Composio dashboard configuration doesn't silently 401 every event.
     x_composio_signature: str | None = Header(default=None),
 ) -> dict:
     body = await request.body()
     secret = settings.composio_webhook_secret or ""
-    if not verify_webhook_signature(body, x_composio_signature or "", secret):
+    sig_header = webhook_signature or x_composio_signature or ""
+    if not verify_webhook_signature(
+        body,
+        sig_header,
+        secret,
+        webhook_id=webhook_id or "",
+        webhook_timestamp=webhook_timestamp or "",
+    ):
         raise HTTPException(status_code=401, detail="bad signature")
 
     try:
