@@ -102,8 +102,10 @@ def _extract_v3_toolkit_slug(data: dict) -> str | None:
 
 
 def _extract_v3_user_id(payload: dict, data: dict) -> str | None:
-    """user_id may sit at the envelope level or inside data — accept either."""
-    for src in (data, payload):
+    """user_id may sit in metadata (V3 trigger envelopes), at the envelope
+    level (older shapes), or inside data — accept any of them."""
+    metadata = payload.get("metadata") if isinstance(payload, dict) else None
+    for src in (metadata, data, payload):
         if isinstance(src, dict):
             uid = src.get("user_id") or src.get("userId")
             if uid:
@@ -210,15 +212,26 @@ _CALENDAR_DELETE_TRIGGER_SLUGS = {
 async def _handle_v3_trigger_message(payload: dict, data: dict) -> dict:
     """Unwrap a V3 trigger envelope and route to the right ingest handler.
 
-    Trigger envelopes carry the inner payload under ``data.trigger_data``
-    (Composio's convention) or ``data.payload`` (older naming). The slug
-    identifies which integration fired; we use it to dispatch."""
+    V3 envelope shape (per composio SDK ``WebhookTriggerPayloadV3``):
+    ``{type, id, timestamp, metadata: {trigger_slug, user_id, ...},
+       data: {<event-specific fields>}}``.
+    The trigger slug + user_id sit in ``metadata``; ``data`` is the
+    event-specific payload directly (no nested ``trigger_data`` wrapper).
+    Older envelopes carried these inside ``data`` — fall back so a
+    legacy webhook doesn't 404 silently.
+    """
+    metadata = payload.get("metadata") if isinstance(payload, dict) else {}
+    if not isinstance(metadata, dict):
+        metadata = {}
+
     user_id = _extract_v3_user_id(payload, data)
     if not user_id:
         return {"ok": True, "ignored": True, "reason": "missing_user_id"}
 
     trigger_slug = str(
-        data.get("trigger_slug")
+        metadata.get("trigger_slug")
+        or metadata.get("trigger_name")
+        or data.get("trigger_slug")
         or data.get("trigger_name")
         or data.get("triggerName")
         or ""
@@ -227,11 +240,17 @@ async def _handle_v3_trigger_message(payload: dict, data: dict) -> dict:
         logger.warning("composio_webhook v3: trigger.message missing slug")
         return {"ok": True, "ignored": True, "reason": "missing_trigger_slug"}
 
+    # In V3, ``data`` IS the event payload directly. The legacy
+    # ``trigger_data`` / ``payload`` wrappers only exist on older shapes.
     inner = (
-        data.get("trigger_data")
-        or data.get("payload")
-        or data.get("data")
-        or {}
+        data
+        if data and not data.get("trigger_data") and not data.get("payload")
+        else (
+            data.get("trigger_data")
+            or data.get("payload")
+            or data.get("data")
+            or {}
+        )
     )
 
     if trigger_slug in _GMAIL_TRIGGER_SLUGS:
