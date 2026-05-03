@@ -31,7 +31,6 @@ type Props = {
   headline?: string;
   subline?: string;
   ctaLabel?: string;
-  nativeScroll?: boolean;
   // Called once when the user makes any scroll-ish downward gesture while
   // the hero is the active phase. The parent advances to the proof phase.
   onAdvance?: () => void;
@@ -64,7 +63,6 @@ export default function Hero({
   headline = "Now meet yours.",
   subline = "On WhatsApp. Already three steps ahead.",
   ctaLabel = "Text Donna",
-  nativeScroll = false,
   onAdvance,
 }: Props) {
   // Reactive — if arrival resolves the city after Hero has mounted, the
@@ -110,7 +108,6 @@ export default function Hero({
   // mount so trackpad inertia from the arrival dismiss can't trigger it.
   // ------------------------------------------------------------------
   useEffect(() => {
-    if (nativeScroll) return;
     if (!onAdvance) return;
     if (typeof window === "undefined") return;
 
@@ -173,7 +170,7 @@ export default function Hero({
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onTouchEnd);
     };
-  }, [nativeScroll, onAdvance]);
+  }, [onAdvance]);
 
   return (
     <section
@@ -265,7 +262,7 @@ export default function Hero({
         <p
           className="mt-3 font-sans text-paper whitespace-nowrap"
           style={{
-            fontSize: "clamp(14px, 2vw + 6px, 28px)",
+            fontSize: "clamp(13px, 1.4vw + 6px, 22px)",
             lineHeight: 1.5,
             textShadow: TEXT_SHADOW,
           }}

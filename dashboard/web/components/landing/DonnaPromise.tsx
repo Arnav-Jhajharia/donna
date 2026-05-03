@@ -144,11 +144,10 @@ const DP_TOUCH_DY_THRESHOLD = 8;
 type DonnaPromiseProps = {
   // Called once when the reader advances past the letter to the CTA phase.
   onAdvance?: () => void;
-  nativeScroll?: boolean;
 };
 
 // ─── Component ────────────────────────────────────────────────────────────
-export default function DonnaPromise({ onAdvance, nativeScroll = false }: DonnaPromiseProps = {}) {
+export default function DonnaPromise({ onAdvance }: DonnaPromiseProps = {}) {
   const reduced = useReducedMotion() === true;
   const isDesktop = useIsDesktop();
   const [shape] = useState<Shape>(() => buildPaperShape());
@@ -166,7 +165,6 @@ export default function DonnaPromise({ onAdvance, nativeScroll = false }: DonnaP
   // during the unfurl can't skip past the letter.
   // ------------------------------------------------------------------
   useEffect(() => {
-    if (nativeScroll) return;
     if (!onAdvance) return;
     if (typeof window === "undefined") return;
 
@@ -247,7 +245,7 @@ export default function DonnaPromise({ onAdvance, nativeScroll = false }: DonnaP
       window.removeEventListener("touchmove", onTouchMove);
       window.removeEventListener("touchend", onTouchEnd);
     };
-  }, [nativeScroll, onAdvance, reduced]);
+  }, [onAdvance, reduced]);
 
   // Unroll timing — the clip-path reveal handles top-to-bottom pacing on its
   // own, so paragraphs no longer cascade; they ride under the unfurling edge.
