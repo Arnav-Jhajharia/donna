@@ -356,11 +356,40 @@ async def _handle_v3_trigger_message(payload: dict, data: dict) -> dict:
             )
         return {"ok": True, "ingested": "calendar.event.deleted"}
 
-    logger.info(
-        "composio_webhook v3: unhandled trigger_slug=%r user=%s",
-        trigger_slug, user_id,
-    )
-    return {"ok": True, "unhandled_trigger": trigger_slug}
+    # Generic landing for any toolkit without a dedicated ingest path
+    # (slack / notion / linear / github / ...). Stored so the proactive
+    # dispatcher has a uniform feed to score on. Idempotent on
+    # (user_id, toolkit, source_ref) — Composio retries dedupe at insert.
+    try:
+        from backend.integrations.events_store import (
+            record_event,
+            toolkit_for_trigger_slug,
+        )
+
+        toolkit = toolkit_for_trigger_slug(trigger_slug)
+        recorded = await record_event(
+            user_id=user_id,
+            trigger_slug=trigger_slug,
+            inner=inner if isinstance(inner, dict) else {},
+            toolkit=toolkit,
+        )
+        logger.info(
+            "composio_webhook v3: recorded generic event user=%s toolkit=%s "
+            "slug=%s inserted=%s",
+            user_id, toolkit, trigger_slug, recorded,
+        )
+        return {
+            "ok": True,
+            "recorded": recorded,
+            "toolkit": toolkit,
+            "trigger_slug": trigger_slug,
+        }
+    except Exception:
+        logger.exception(
+            "composio_webhook v3: generic event capture failed user=%s slug=%s",
+            user_id, trigger_slug,
+        )
+        return {"ok": True, "ignored": True, "reason": "capture_failed"}
 
 
 async def _dispatch_v3(event_type: str, payload: dict) -> dict:

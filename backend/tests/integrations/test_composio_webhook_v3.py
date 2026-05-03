@@ -247,22 +247,38 @@ async def test_v3_trigger_calendar_event_deleted_dispatches_delete(
 
 
 @pytest.mark.asyncio
-async def test_v3_trigger_unknown_slug_logs_and_returns_ok(
+async def test_v3_trigger_unknown_slug_recorded_to_integration_events(
     db, stub_subscribe, stub_bootstrap
 ):
-    """An unknown trigger should return 200 (so Composio doesn't retry
-    forever) but be flagged as unhandled."""
+    """A toolkit without a dedicated ingest path lands in integration_events
+    so the proactive dispatcher can score on it."""
+    from sqlalchemy import select
+
+    from db.models import IntegrationEvent
+
     payload = {
         "type": "composio.trigger.message",
         "data": {
             "user_id": "u1",
             "trigger_slug": "NOTION_PAGE_CREATED",
-            "trigger_data": {},
+            "id": "page_xyz",
         },
     }
     res = await wh._dispatch_v3(payload["type"], payload)
     assert res["ok"] is True
-    assert res["unhandled_trigger"] == "NOTION_PAGE_CREATED"
+    assert res["recorded"] is True
+    assert res["toolkit"] == "notion"
+    assert res["trigger_slug"] == "NOTION_PAGE_CREATED"
+
+    async with db() as s:
+        row = (
+            await s.execute(
+                select(IntegrationEvent).where(IntegrationEvent.user_id == "u1")
+            )
+        ).scalar_one()
+    assert row.toolkit == "notion"
+    assert row.trigger_slug == "NOTION_PAGE_CREATED"
+    assert row.source_ref == "page_xyz"
 
 
 @pytest.mark.asyncio

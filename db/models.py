@@ -554,6 +554,64 @@ class EmailIntelligence(Base):
     )
 
 
+class IntegrationEvent(Base):
+    """Generic landing zone for V3 trigger.message events that don't have
+    a dedicated ingest path yet (slack, notion, linear, github, ...).
+
+    Stores the raw inner payload so the proactive dispatcher can score on
+    it without us needing a per-toolkit model. ``source_ref`` is an opaque
+    per-event id used for dedupe — slack ``ts``, notion page id, linear
+    issue identifier, etc. When a toolkit doesn't expose a stable id the
+    field is null and we accept the duplicate insert (rare in practice).
+
+    Lifecycle:
+    - inserted by ``backend.integrations.events_store.record_event`` from
+      ``api/composio_webhook._handle_v3_trigger_message`` when no specific
+      branch matches the trigger slug
+    - consumed by the proactive dispatcher (TODO: separate worker reads
+      ``processed_at IS NULL`` rows ordered by ``created_at`` and routes
+      to the Tier 1 importance scorer)
+    - ``processed_at`` is set when the dispatcher has scored the event,
+      regardless of whether it ended up firing — prevents re-scoring on
+      restart
+    """
+    __tablename__ = "integration_events"
+    id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=generate_uuid
+    )
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), nullable=False, index=True
+    )
+    toolkit: Mapped[str] = mapped_column(String, nullable=False)
+    trigger_slug: Mapped[str] = mapped_column(String, nullable=False)
+    payload: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    source_ref: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    processed_at: Mapped[datetime | None] = mapped_column(
+        DateTime, nullable=True
+    )
+
+    __table_args__ = (
+        Index(
+            "idx_integration_events_user_toolkit_created",
+            "user_id", "toolkit", "created_at",
+        ),
+        Index(
+            "idx_integration_events_unprocessed",
+            "user_id", "created_at",
+            postgresql_where=sa.text("processed_at IS NULL"),
+        ),
+        Index(
+            "uq_integration_events_dedupe",
+            "user_id", "toolkit", "source_ref",
+            unique=True,
+            postgresql_where=sa.text("source_ref IS NOT NULL"),
+        ),
+    )
+
+
 class DashboardManifest(Base):
     """Latest brain-emitted DashboardPlan for a user.
 
