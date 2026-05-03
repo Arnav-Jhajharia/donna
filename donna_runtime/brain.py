@@ -41,6 +41,14 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
         state["_outbound"] = []
         return state
 
+    # Pre-BRAIN city → tz lock. If the inbound carries a strong locative
+    # signal ("from Bangalore", "i'm in NYC") and the user's tz hasn't
+    # been confirmed yet, set it deterministically. Fires before BRAIN
+    # specifically so any reminder tool the model calls this turn writes
+    # an accurate UTC fire_at — phone-prefix guesses are wrong for
+    # travelers and the first reminder is the worst place to find out.
+    await _maybe_lock_city_tz(state, raw=raw, user_id=user_id)
+
     # Day 1 first-message: skip BRAIN entirely. Donna pitches herself with a
     # locked opener so the welcome lands the same every time. Reliability is
     # the brand on Day 1, and the user shouldn't see the model warming up.
@@ -202,6 +210,59 @@ def _first_message_outbound(*, user_id: str, full_name: str) -> list:
         TextMessage(body=_FIRST_MESSAGE_INTRO.format(name=name)),
         TextMessage(body=_FIRST_MESSAGE_PITCH),
     ]
+
+
+async def _maybe_lock_city_tz(state: dict, *, raw: str, user_id: str) -> None:
+    """Detect a city signal in the inbound and lock tz if matched.
+
+    Skips when:
+      - tz already confirmed (state["_tz_done"] is True)
+      - user_id missing
+      - no city detected in the inbound
+      - set_timezone import fails or DB write fails (logged + swallowed)
+
+    On success, mutates `state["_user_timezone"]` and `state["_tz_done"]`
+    in place so the rest of this turn (context builder, reminder tools)
+    sees the new tz immediately, without re-reading the User row.
+    """
+    if not user_id or user_id == "unknown":
+        return
+    if state.get("_tz_done") is True:
+        return
+    try:
+        from .city_tz import detect_city_tz
+    except Exception:
+        logger.exception("brain: city_tz import failed")
+        return
+    match = detect_city_tz(raw)
+    if not match:
+        return
+    city, tz = match
+    try:
+        from backend.memory.tools.set_timezone import set_timezone as _set_timezone
+    except Exception:
+        logger.exception("brain: set_timezone import failed")
+        return
+    try:
+        result = await _set_timezone(
+            user_id=user_id, timezone=tz, source=f"city_signal:{city}"
+        )
+    except Exception:
+        logger.exception(
+            "brain: city_tz lock failed user=%s city=%s tz=%s",
+            user_id[:8], city, tz,
+        )
+        return
+    status = result.get("status") if isinstance(result, dict) else None
+    if status == "ok":
+        # Update in-memory state so this turn's tools see the new tz.
+        state["_user_timezone"] = tz
+        state["_tz_done"] = True
+        state["_tz_source"] = f"city_signal:{city}"
+        logger.info(
+            "brain: city_tz locked user=%s city=%s tz=%s",
+            user_id[:8], city, tz,
+        )
 
 
 def _decide_dashboard_handoff(

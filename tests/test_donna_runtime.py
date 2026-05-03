@@ -660,6 +660,116 @@ class DonnaRuntimeTests(unittest.TestCase):
         for msg in outbound:
             self.assertNotIn("dashboard", msg.body.lower())
 
+    def test_city_tz_detects_from_pattern(self) -> None:
+        """'Hi from Bangalore, don't make me regret this' → Asia/Kolkata."""
+        from donna_runtime.city_tz import detect_city_tz
+
+        match = detect_city_tz("Hi from Bangalore, don't make me regret this")
+        self.assertEqual(match, ("bangalore", "Asia/Kolkata"))
+
+    def test_city_tz_detects_im_in_pattern(self) -> None:
+        from donna_runtime.city_tz import detect_city_tz
+
+        match = detect_city_tz("hey, i'm in NYC for the week")
+        self.assertEqual(match, ("nyc", "America/New_York"))
+
+        match = detect_city_tz("i am in tokyo right now")
+        self.assertEqual(match, ("tokyo", "Asia/Tokyo"))
+
+    def test_city_tz_detects_multiword_city(self) -> None:
+        """Multi-word cities like 'New York' must beat the single-word
+        suffix ('York'); 'New Delhi' and 'Hong Kong' likewise."""
+        from donna_runtime.city_tz import detect_city_tz
+
+        self.assertEqual(
+            detect_city_tz("writing from new york"),
+            ("new york", "America/New_York"),
+        )
+        self.assertEqual(
+            detect_city_tz("based in hong kong now"),
+            ("hong kong", "Asia/Hong_Kong"),
+        )
+
+    def test_city_tz_skips_weak_in_pattern(self) -> None:
+        """Bare 'in <city>' without a locative trigger like 'i'm' or
+        'currently' must NOT lock tz — too noisy ('meeting in paris')."""
+        from donna_runtime.city_tz import detect_city_tz
+
+        self.assertIsNone(detect_city_tz("we're meeting in paris next month"))
+        self.assertIsNone(detect_city_tz("the conference in berlin sounds fun"))
+
+    def test_city_tz_returns_none_for_unknown_city(self) -> None:
+        from donna_runtime.city_tz import detect_city_tz
+
+        self.assertIsNone(detect_city_tz("hi from atlantis"))
+        self.assertIsNone(detect_city_tz("i'm in middle earth"))
+
+    def test_city_tz_returns_none_for_empty(self) -> None:
+        from donna_runtime.city_tz import detect_city_tz
+
+        self.assertIsNone(detect_city_tz(""))
+        self.assertIsNone(detect_city_tz("   "))
+
+    def test_brain_locks_city_tz_on_first_message(self) -> None:
+        """When the very first inbound carries a strong city signal AND
+        tz isn't confirmed yet, brain must call set_timezone before the
+        deterministic opener fires. The state is updated in-place so any
+        downstream code this turn sees the locked tz."""
+        from donna_runtime import brain
+        from backend.memory.tools._shape import ok as ok_result
+
+        captured: dict = {}
+
+        async def fake_set_tz(*, user_id, timezone, source="user_correction"):
+            captured["user_id"] = user_id
+            captured["timezone"] = timezone
+            captured["source"] = source
+            return ok_result({"timezone": timezone})
+
+        state = {
+            "user_id": "user-day1",
+            "raw_input": "hi from bangalore, don't make me regret this",
+            "_is_first_message": True,
+            "_user_name": "Arnav",
+            "_tz_done": False,
+            "_user_timezone": "Asia/Singapore",  # phone-guess fallback
+        }
+        with patch("backend.memory.tools.set_timezone.set_timezone", fake_set_tz):
+            asyncio.run(brain.donna_turn(state))
+
+        self.assertEqual(captured["user_id"], "user-day1")
+        self.assertEqual(captured["timezone"], "Asia/Kolkata")
+        self.assertTrue(captured["source"].startswith("city_signal:bangalore"))
+        # In-memory state mutated so this turn's tools see the new tz.
+        self.assertTrue(state["_tz_done"])
+        self.assertEqual(state["_user_timezone"], "Asia/Kolkata")
+
+    def test_brain_skips_city_tz_when_already_done(self) -> None:
+        """If tz_done is already True, brain MUST NOT re-call set_timezone
+        even if the inbound carries a city signal — the user has already
+        confirmed."""
+        from donna_runtime import brain
+
+        called = {"n": 0}
+
+        async def fake_set_tz(*args, **kwargs):
+            called["n"] += 1
+            raise AssertionError("set_timezone must not run when tz_done=True")
+
+        state = {
+            "user_id": "user-x",
+            "raw_input": "hi from bangalore",
+            "_is_first_message": True,
+            "_user_name": "Arnav",
+            "_tz_done": True,
+            "_user_timezone": "America/New_York",
+        }
+        with patch("backend.memory.tools.set_timezone.set_timezone", fake_set_tz):
+            asyncio.run(brain.donna_turn(state))
+        self.assertEqual(called["n"], 0)
+        # User's confirmed tz untouched.
+        self.assertEqual(state["_user_timezone"], "America/New_York")
+
     def test_dashboard_handoff_decides_emit_on_fresh_user(self) -> None:
         """Pure decision: fresh user (no flag) + valid URL → emit bubble,
         flip flag in returned goals."""
