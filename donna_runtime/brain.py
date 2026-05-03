@@ -41,6 +41,16 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
         state["_outbound"] = []
         return state
 
+    # Day 1 first-message: skip BRAIN entirely. Donna pitches herself with a
+    # locked opener so the welcome lands the same every time. Reliability is
+    # the brand on Day 1, and the user shouldn't see the model warming up.
+    if state.get("_is_first_message"):
+        state["_outbound"] = _first_message_outbound(
+            user_id=user_id,
+            full_name=state.get("_user_name") or "",
+        )
+        return state
+
     cfg = config or DonnaAgentConfig()
     stateless = cfg.stateless_sessions or _stateless_sessions_default()
     if stateless:
@@ -134,6 +144,36 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
     state["_outbound"] = list(buffer)
     state["_turn_trace"] = trace
     return state
+
+
+_FIRST_MESSAGE_OPENER = (
+    "hi {name}, tell me something you want to get off your head. "
+    "it can be emails, it can be a thing you keep meaning to do."
+)
+
+
+def _first_name(full_name: str) -> str:
+    """Extract first token from a WhatsApp display name. Lowercase to match
+    Donna's voice. Empty input falls back to 'there' so the opener still
+    reads naturally."""
+    token = (full_name or "").strip().split()
+    if not token:
+        return "there"
+    return token[0].lower()
+
+
+def _first_message_outbound(*, user_id: str, full_name: str) -> list:
+    """Build the deterministic Day 1 opener.
+
+    Just the pitch — no dashboard link, no other bubbles. The dashboard
+    link is reserved for earned moments later (a loop closes, a streak
+    ticks, an attention goes live, the user explicitly asks). Sending it
+    on Day 1 with nothing on the dashboard yet trains the user that
+    dashboard pings are noise.
+    """
+    del user_id  # unused; reserved for future per-user opener tweaks
+    name = _first_name(full_name)
+    return [TextMessage(body=_FIRST_MESSAGE_OPENER.format(name=name))]
 
 
 def _extract_inbound_images(state: dict) -> list[tuple[bytes, str]]:

@@ -621,6 +621,86 @@ class DonnaRuntimeTests(unittest.TestCase):
             base64.b64encode(b"raw-bytes").decode("ascii"),
         )
 
+    def test_first_message_uses_deterministic_opener(self) -> None:
+        """Day 1 sends only the locked opener — no dashboard link. The link
+        is reserved for earned moments later (loop closes, streak ticks,
+        explicit user request). BRAIN never runs on first message."""
+        from delivery.messages import TextMessage
+        from donna_runtime import brain
+
+        state = {
+            "user_id": "user-day1",
+            "raw_input": "hey",
+            "_is_first_message": True,
+            "_user_name": "Arnav Jhajharia",
+        }
+        result = asyncio.run(brain.donna_turn(state))
+
+        outbound = result["_outbound"]
+        self.assertEqual(len(outbound), 1)
+        self.assertIsInstance(outbound[0], TextMessage)
+        self.assertEqual(
+            outbound[0].body,
+            "hi arnav, tell me something you want to get off your head. "
+            "it can be emails, it can be a thing you keep meaning to do.",
+        )
+
+    def test_first_message_does_not_send_dashboard_link(self) -> None:
+        """Even if mint_dashboard_url would succeed, Day 1 must not include
+        the dashboard bubble. An empty dashboard linked on welcome trains
+        the user that dashboard pings are noise."""
+        from donna_runtime import brain
+
+        state = {
+            "user_id": "user-day1",
+            "raw_input": "hey",
+            "_is_first_message": True,
+            "_user_name": "Arnav",
+        }
+        # If brain were still calling mint_dashboard_url it would get a URL
+        # back from this patch; we assert the URL never reaches outbound.
+        with patch("donna_runtime.tools.mint_dashboard_url", return_value="https://dash.example/auth/magic?t=abc"):
+            result = asyncio.run(brain.donna_turn(state))
+
+        outbound = result["_outbound"]
+        self.assertEqual(len(outbound), 1)
+        for msg in outbound:
+            self.assertNotIn("dashboard", msg.body.lower())
+            self.assertNotIn("dash.example", msg.body)
+
+    def test_first_message_handles_missing_or_empty_name(self) -> None:
+        from donna_runtime import brain
+
+        # Empty name → 'there' fallback so the line still reads naturally.
+        bubbles = brain._first_message_outbound(user_id="u", full_name="")
+        self.assertTrue(bubbles[0].body.startswith("hi there,"))
+
+        # Multi-word display name → first token, lowercased.
+        bubbles = brain._first_message_outbound(user_id="u", full_name="MARIA Rodriguez")
+        self.assertTrue(bubbles[0].body.startswith("hi maria,"))
+
+    def test_first_message_skips_brain_entirely(self) -> None:
+        """Confirm the deterministic path does not call traced_donna_turn —
+        the BRAIN should never run for Day 1."""
+        from donna_runtime import brain
+
+        called = {"n": 0}
+
+        async def fake_turn(*args, **kwargs):
+            called["n"] += 1
+            raise AssertionError("BRAIN must not run on first_message")
+
+        state = {
+            "user_id": "user-day1",
+            "raw_input": "hey",
+            "_is_first_message": True,
+            "_user_name": "Arnav",
+        }
+        with patch.object(brain, "traced_donna_turn", fake_turn), \
+             patch("donna_runtime.tools.mint_dashboard_url", return_value=None):
+            asyncio.run(brain.donna_turn(state))
+        self.assertEqual(called["n"], 0)
+
     def test_audit_flags_disallowed_tools_and_send_burst_policy(self) -> None:
         findings = audit_trace(
             {
