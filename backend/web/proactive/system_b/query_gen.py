@@ -93,16 +93,66 @@ class _QueryGenOut(BaseModel):
     queries: list[_RawQuery] = Field(default_factory=list)
 
 
-_SYSTEM_PROMPT = """You generate an AMBITIOUS proactive web search plan for a user.
+_SYSTEM_PROMPT = """You generate an AMBITIOUS, FANNED-OUT proactive web search plan for a user.
 
 You read their Living Profile (narrative, current_situation, today_shape,
 active_tensions, what_changed_this_week, key_people, running_themes),
 recent user-side chat messages, observations, and open loops.
 
-You output 8-15 SEARCH-SHAPED queries. Each query is a string you would
+You output 8-12 SEARCH-SHAPED queries. Each query is a string you would
 type into a search engine to find pages relevant to a SPECIFIC signal in
-the inputs. The user gets value from BREADTH — many angles, not many
-queries on the same topic.
+the inputs. The user gets value from BREADTH across DIFFERENT life dimensions
+— not multiple queries on the same domain.
+
+═══════════════════════════════════════════════════════════════════════════
+CRITICAL: FANOUT RULE (read this first; it overrides everything else)
+═══════════════════════════════════════════════════════════════════════════
+
+A user is a whole person, not just whatever they're working on this week.
+Their life has dimensions: their work / build, their health, their
+relationships, the markets / news they follow, the places they live and
+travel, the people they orbit, the intellectual questions they're chewing
+on outside of work, hobbies, and durable interests that persist across
+acute states.
+
+If the LP narrative is dominated by ONE acute focus (e.g., "mid-sprint on
+product X"), the deriver's mistake is to make 8 queries about product X.
+That fails the user — they already know about product X, they're DOING
+product X. The proactive web should bring them what they DON'T already see
+in their tabs.
+
+HARD RULE: NO MORE THAN 3 of your 8-12 queries may be about the user's
+PRIMARY WORK DOMAIN (whatever the narrative says they're sprinting on).
+The other 5+ MUST come from different life dimensions. If you can't find
+5 distinct dimensions, mine deeper:
+
+  - Past attention specs the user has (look at running_themes — do any
+    reference markets, places, people, hobbies?)
+  - Older chat messages (entities mentioned weeks ago, not just last 24h)
+  - Observation types beyond the work bucket (food, travel, exercise, money)
+  - Places the user lives/travels to (NUS campus, Singapore, India)
+  - Markets / industries the user has shown durable interest in
+  - Real people named in chat (not invented)
+
+If 5+ of your queries cluster on the same domain, you have FAILED. Restart
+and pick from different life dimensions.
+
+REQUIRED ANGLE COVERAGE (out of 8-12 queries, you MUST emit at least one
+in each of these dimensions UNLESS the inputs genuinely have zero signal):
+
+  - At least 1 NEIGHBOR query (specific competitor/peer in the user's space,
+    NOT the user's own product)
+  - At least 1 PERSON query (real name from chat or key_people)
+  - At least 1 RHYTHM/HEALTH query NOT about productivity or sprinting
+    (food, recovery, sleep, body, place-specific)
+  - At least 2 queries from completely DIFFERENT life dimensions than the
+    primary work domain (markets, news, places, hobbies, family, intellectual
+    questions disconnected from the build)
+
+If the LP narrative says "mid-sprint on personal AI agent" then watching
+"agent memory papers" and "scheduler debugging" is BUILD-DOMAIN. Watching
+"Singapore food delivery" or "Indian markets RBI repo rate" or "Sourcy
+founder Avu updates" is DIFFERENT-DIMENSION. Aim for the latter mix.
 
 Hard query rules:
   - SEARCH-SHAPED: like a Google search, not a question. Include named
@@ -114,8 +164,8 @@ Hard query rules:
   - TIED TO A SIGNAL: every query references something concrete in the
     inputs. Quote it in ties_to. No invented topics.
 
-Generate from these 8 distinct ANGLES (mix all that apply, do not force
-all 8):
+Generate from these 8 distinct ANGLES (rotate across them; the FANOUT
+RULE above tells you how to weight them):
 
 1. direct — things in the user's main work / product. Their stack, the
    APIs they call, the features they're shipping. Use NAMED entities
@@ -184,8 +234,16 @@ def _format_user_block(
     recent_user_chats: list[str],
     observations: list[str],
     open_loops: list[str],
+    durable_attentions: list[str] | None = None,
 ) -> str:
-    """Render LP + raw signals for the query generator."""
+    """Render LP + raw signals for the query generator.
+
+    ``durable_attentions`` (optional): titles+subjects of the user's
+    existing attention specs. These are the strongest "what does this
+    user durably care about" signal — they show topics the user has
+    explicitly committed to watching, which often span beyond whatever
+    acute focus the LP narrative is currently centered on.
+    """
     parts: list[str] = []
 
     for key in (
@@ -253,12 +311,24 @@ def _format_user_block(
         if rendered:
             parts.append("## Open loops (commitments user has made)\n" + rendered)
 
+    if durable_attentions:
+        rendered = "\n".join(
+            f"- {a[:200]}" for a in durable_attentions[:30] if a.strip()
+        )
+        if rendered:
+            parts.append(
+                "## Durable interests (existing attention specs the user has — "
+                "STRONGEST signal of what they care about beyond any acute focus)\n"
+                + rendered
+            )
+
     if not parts:
         parts.append("(empty profile)")
 
     parts.append(
-        "Generate 8-15 ambitious search-shaped queries. Each must tie "
-        "to a SPECIFIC signal above. Quality over count."
+        "Generate 8-12 fanned-out search-shaped queries. Apply the FANOUT "
+        "RULE: no more than 3 queries on the user's primary work domain. "
+        "The other 5+ MUST cover different life dimensions."
     )
     return "\n\n".join(parts)
 
@@ -347,6 +417,37 @@ async def generate_ambitious_queries(
         open_loops_text = [str(r[0] or "").strip() for r in loop_rows]
         open_loops_text = [l for l in open_loops_text if l]
 
+    # Pull existing attentions as the strongest "durable interests"
+    # signal — these are topics the user has explicitly committed to
+    # watching, often spanning beyond whatever acute focus the LP
+    # narrative is currently centered on.
+    durable_attentions: list[str] = []
+    try:
+        from donna.attention.schema import AttentionStatus
+        from donna.attention.store import AttentionStore
+
+        store = AttentionStore()
+        attentions = store.list(user_id=user_id)
+        live_states = {AttentionStatus.LIVE, AttentionStatus.OFFERED}
+        for a in attentions:
+            if a.status not in live_states:
+                continue
+            spec = getattr(a, "spec", None)
+            if spec is None:
+                continue
+            title = (getattr(spec, "title", "") or "").strip()
+            subj_obj = getattr(spec, "subject", None)
+            subj = (getattr(subj_obj, "name", "") or "").strip() if subj_obj else ""
+            card = getattr(getattr(spec, "card", None), "value", "") or ""
+            if title or subj:
+                bits = [b for b in (subj, title, f"({card})" if card else "") if b]
+                durable_attentions.append(" — ".join(bits))
+    except Exception:
+        logger.exception(
+            "generate_ambitious_queries: durable_attentions load failed user=%s",
+            user_id[:8] if user_id else "?",
+        )
+
     if not profile and not recent_chats and not observations and not open_loops_text:
         return []
 
@@ -355,6 +456,7 @@ async def generate_ambitious_queries(
         recent_user_chats=recent_chats,
         observations=observations,
         open_loops=open_loops_text,
+        durable_attentions=durable_attentions,
     )
 
     try:
