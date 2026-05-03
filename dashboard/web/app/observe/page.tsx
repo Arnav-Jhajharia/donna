@@ -87,6 +87,8 @@ type Aggregate = {
 
 type Payload = {
   events_path: string;
+  source?: 'db' | 'file';
+  warning?: string | null;
   total_events: number;
   total_turns: number;
   turns: Turn[];
@@ -363,8 +365,25 @@ export default function ObservePage() {
             donna / observe
           </h1>
           <div style={{ fontSize: 11, color: 'var(--ink-600)', marginTop: 4 }}>
-            self-observability · {data?.events_path ?? 'loading…'}
+            self-observability · {data?.source === 'db' ? 'db' : 'file'} ·{' '}
+            <span style={{ opacity: 0.7 }}>{data?.events_path ?? 'loading…'}</span>
           </div>
+          {data?.warning && (
+            <div
+              style={{
+                marginTop: 8,
+                padding: '6px 10px',
+                background: 'var(--rust-50, #fef2e8)',
+                border: '1px solid var(--rust-300, #d99977)',
+                borderRadius: 4,
+                fontSize: 12,
+                color: 'var(--rust-800, #7a3a08)',
+                fontFamily: 'var(--font-mono, monospace)',
+              }}
+            >
+              ⚠ {data.warning}
+            </div>
+          )}
         </div>
         <div style={{ display: 'flex', gap: 12, alignItems: 'center', fontSize: 11, color: 'var(--ink-600)' }}>
           {lastFetched && <span>updated {fmtTime(lastFetched.toISOString())}</span>}
