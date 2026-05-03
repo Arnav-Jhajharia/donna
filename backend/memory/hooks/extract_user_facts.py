@@ -29,6 +29,14 @@ _PROMPT_PATH = (
 # Identity-shaped fact keys where writing the wrong subject is costly.
 # For these we require a first-person marker in the inbound message and
 # reject any extraction that co-occurs with third-party markers.
+#
+# RELAXED keys (NOT in this set): key_relationships, current_goals, values,
+# hobbies, expertise. These either inherently mention third parties
+# (key_relationships: "Maya is my sister" fails strict first-person test
+# because "is my" tests as third-party-shaped) or describe the user's
+# inner life in ways that don't require explicit "I/my/me" subject markers.
+# The Aayam-leak class can't apply to these because the values themselves
+# carry the relationship/quality, not bare identity.
 _IDENTITY_KEYS = frozenset(
     {
         FactKey.PREFERRED_NAME.value,
@@ -38,6 +46,11 @@ _IDENTITY_KEYS = frozenset(
         FactKey.AGE_GROUP.value,
         FactKey.LIFE_STAGE.value,
         FactKey.HOUSEHOLD.value,
+        # New strict-identity keys: misattribution would mean recording the
+        # wrong school/employer onto the user. "My friend's at NUS" must
+        # NOT write education_institution=NUS for the user.
+        FactKey.EDUCATION_INSTITUTION.value,
+        FactKey.EMPLOYER.value,
     }
 )
 
