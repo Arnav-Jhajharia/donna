@@ -201,15 +201,21 @@ def _flush(engine, batch: list[dict[str, Any]]) -> None:
                 "user_id": ev.get("user_id"),
                 "schema_version": ev.get("schema_version"),
                 "payload": ev,
+                # Pass created_at explicitly: the prod table was built from
+                # ``Base.metadata.create_all`` (Python-side ``default=utcnow``)
+                # rather than the migration's ``server_default=now()``, so
+                # raw-SQL INSERTs need to fill it in.
+                "created_at": datetime.utcnow(),
             }
         )
     sql = text(
         """
         INSERT INTO obs_events
-            (id, ts, event, turn_id, user_id, schema_version, payload)
+            (id, ts, event, turn_id, user_id, schema_version, payload,
+             created_at)
         VALUES
             (:id, :ts, :event, :turn_id, :user_id, :schema_version,
-             CAST(:payload AS JSONB))
+             CAST(:payload AS JSONB), :created_at)
         """
     )
     import json
