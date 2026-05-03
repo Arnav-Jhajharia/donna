@@ -11,6 +11,7 @@ from typing import TypedDict
 
 
 class FactKey(str, Enum):
+    # Stable identity (slow-changing).
     PREFERRED_NAME = "preferred_name"
     HOME_CITY = "home_city"
     CURRENT_CITY = "current_city"
@@ -21,6 +22,18 @@ class FactKey(str, Enum):
     LIFE_STAGE = "life_stage"
     HOUSEHOLD = "household"
     PRIMARY_LANGUAGE = "primary_language"
+    # Identity-card v2 (Letta-style core memory). These are the fields that
+    # make Donna feel like she knows you on every turn — promoted into the
+    # always-loaded USER MODEL block. Values are short strings (comma-sep
+    # for lists). The four-op write pipeline (Phase 2) handles supersession.
+    EDUCATION_INSTITUTION = "education_institution"
+    EMPLOYER = "employer"
+    KEY_RELATIONSHIPS = "key_relationships"
+    EXPERTISE = "expertise"
+    CURRENT_GOALS = "current_goals"
+    VALUES = "values"
+    HOBBIES = "hobbies"
+    # Daily-rhythm fields.
     WAKE_TIME = "wake_time"
     SLEEP_TIME = "sleep_time"
 
