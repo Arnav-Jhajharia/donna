@@ -143,6 +143,13 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
 
     state["_outbound"] = list(buffer)
     state["_turn_trace"] = trace
+
+    # Day-2 handoff: ship the dashboard link on the first successful BRAIN
+    # turn after Day 1, in the same beat as Donna acting on whatever the
+    # user offloaded. One-shot per user, gated on a persisted flag, so it
+    # never double-fires and never re-arrives months later.
+    await _maybe_append_dashboard_handoff(state, user_id=user_id)
+
     return state
 
 
@@ -177,35 +184,100 @@ def _first_name(full_name: str) -> str:
 
 
 def _first_message_outbound(*, user_id: str, full_name: str) -> list:
-    """Build the deterministic Day 1 opener — three bubbles in succession.
+    """Build the deterministic Day 1 opener — two bubbles in succession.
 
     Bubble 1 is the intro: who Donna is and what she does.
-    Bubble 2 is the pitch: three concrete affordances the user can pick
-    from, plus an "anything else" door so it doesn't feel rigid.
-    Bubble 3 is the dashboard handoff: the canvas surface itself, with
-    a one-liner so the user knows it'll fill up as they engage.
+    Bubble 2 is the pitch: three concrete affordances plus an "anything
+    else" door so it doesn't feel rigid.
 
-    Three bubbles, not one, so WhatsApp renders them in succession the
-    way a real person introducing themselves would. The dashboard rides
-    on Day 1 specifically because Day 1 is the holistic "this is what
-    Donna does" moment; after Day 1, the link is reserved for earned
-    moments only (loop closes, streak ticks, explicit user request).
-
-    If link minting fails (env misconfigured, token subsystem down) we
-    still send the intro + pitch — losing the dashboard handoff is
-    recoverable, losing the welcome is not.
+    No dashboard on Day 1. The dashboard handoff lands on turn 2, after
+    BRAIN has actually responded to whatever the user offloaded — so
+    the link arrives in the same beat as Donna acting on something
+    concrete. Sending it cold on Day 1 with nothing on the dashboard
+    yet teaches the user that dashboard pings are noise.
     """
-    from .tools import mint_dashboard_url
-
+    del user_id  # unused; reserved for future per-user opener tweaks
     name = _first_name(full_name)
-    bubbles = [
+    return [
         TextMessage(body=_FIRST_MESSAGE_INTRO.format(name=name)),
         TextMessage(body=_FIRST_MESSAGE_PITCH),
     ]
-    url = mint_dashboard_url(user_id, reason="first_message")
-    if url:
-        bubbles.append(TextMessage(body=_FIRST_MESSAGE_DASHBOARD.format(url=url)))
-    return bubbles
+
+
+def _decide_dashboard_handoff(
+    goals: dict, url: str | None
+) -> tuple[dict, "TextMessage | None"]:
+    """Pure decision for whether to append the Day-2 dashboard handoff.
+
+    Returns (new_goals, bubble). Caller persists new_goals if the bubble
+    is non-None. Three rules:
+      1. flag already True → already sent, no-op
+      2. url is None       → minting failed, leave flag False, retry next turn
+      3. fresh + url ok    → flip flag, return bubble for the caller to ship
+
+    No DB, no IO, no logging. Safe to unit-test directly.
+    """
+    if goals.get("dashboard_sent"):
+        return goals, None
+    if not url:
+        return goals, None
+    new_goals = dict(goals)
+    new_goals["dashboard_sent"] = True
+    bubble = TextMessage(body=_FIRST_MESSAGE_DASHBOARD.format(url=url))
+    return new_goals, bubble
+
+
+async def _maybe_append_dashboard_handoff(state: dict, *, user_id: str) -> None:
+    """Append the dashboard handoff bubble on the first post-Day-1 turn.
+
+    IO wrapper around `_decide_dashboard_handoff`. Reads
+    users.onboarding_goals, mints a fresh magic link if needed, appends
+    a bubble to state["_outbound"], and persists the flag.
+
+    Failure modes — none break the turn:
+      - link mint fails → no bubble, flag stays False, next turn retries
+      - DB read/write fails → log + skip, next turn retries
+      - empty _outbound (proactive silent turn) → skip; the link only
+        rides on a real reactive reply
+
+    Skipped on Day 1 itself because brain.donna_turn short-circuits
+    before this hook runs.
+    """
+    if not user_id or user_id == "unknown":
+        return
+    outbound = state.get("_outbound") or []
+    if not outbound:
+        return
+    try:
+        from sqlalchemy import select
+
+        from db.models import User
+        from db.session import async_session
+        from .tools import mint_dashboard_url
+    except Exception:
+        logger.exception("brain: dashboard handoff imports failed")
+        return
+
+    try:
+        async with async_session() as session:
+            row = (
+                await session.execute(select(User).where(User.id == user_id))
+            ).scalar_one_or_none()
+            if row is None:
+                return
+            goals = dict(row.onboarding_goals or {})
+            if goals.get("dashboard_sent"):
+                return
+            url = mint_dashboard_url(user_id, reason="day2_handoff")
+            new_goals, bubble = _decide_dashboard_handoff(goals, url)
+            if bubble is None:
+                return
+            outbound.append(bubble)
+            state["_outbound"] = outbound
+            row.onboarding_goals = new_goals
+            await session.commit()
+    except Exception:
+        logger.exception("brain: dashboard handoff failed user=%s", user_id[:8])
 
 
 def _extract_inbound_images(state: dict) -> list[tuple[bytes, str]]:

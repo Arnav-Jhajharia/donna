@@ -622,8 +622,9 @@ class DonnaRuntimeTests(unittest.TestCase):
         )
 
     def test_first_message_uses_deterministic_opener(self) -> None:
-        """Day 1 sends three bubbles in succession: intro, pitch, dashboard.
-        BRAIN never runs."""
+        """Day 1 sends two bubbles in succession: intro + pitch. The
+        dashboard does NOT ride on Day 1 — it auto-appends on turn 2.
+        BRAIN never runs on first message."""
         from delivery.messages import TextMessage
         from donna_runtime import brain
 
@@ -633,11 +634,10 @@ class DonnaRuntimeTests(unittest.TestCase):
             "_is_first_message": True,
             "_user_name": "Arnav Jhajharia",
         }
-        with patch("donna_runtime.tools.mint_dashboard_url", return_value="https://dash.example/auth/magic?t=abc"):
-            result = asyncio.run(brain.donna_turn(state))
+        result = asyncio.run(brain.donna_turn(state))
 
         outbound = result["_outbound"]
-        self.assertEqual(len(outbound), 3)
+        self.assertEqual(len(outbound), 2)
         for msg in outbound:
             self.assertIsInstance(msg, TextMessage)
         # Bubble 1: intro
@@ -656,34 +656,67 @@ class DonnaRuntimeTests(unittest.TestCase):
             "or anything else honestly. "
             "we'll go from there.",
         )
-        # Bubble 3: dashboard handoff
-        self.assertEqual(
-            outbound[2].body,
-            "your dashboard is here: https://dash.example/auth/magic?t=abc\n"
-            "it fills up as we go. link's good for 5 minutes.",
-        )
+        # No dashboard bubble on Day 1.
+        for msg in outbound:
+            self.assertNotIn("dashboard", msg.body.lower())
 
-    def test_first_message_falls_back_when_dashboard_link_unavailable(self) -> None:
-        """If link minting fails (env unset, token subsystem down) the
-        intro + pitch still go. Losing the link is recoverable; losing
-        the welcome is not."""
-        from delivery.messages import TextMessage
+    def test_dashboard_handoff_decides_emit_on_fresh_user(self) -> None:
+        """Pure decision: fresh user (no flag) + valid URL → emit bubble,
+        flip flag in returned goals."""
         from donna_runtime import brain
 
-        state = {
-            "user_id": "user-day1",
-            "raw_input": "hey",
-            "_is_first_message": True,
-            "_user_name": "Arnav",
-        }
-        with patch("donna_runtime.tools.mint_dashboard_url", return_value=None):
-            result = asyncio.run(brain.donna_turn(state))
+        new_goals, bubble = brain._decide_dashboard_handoff(
+            goals={"tz_done": False},
+            url="https://dash.example/auth/magic?t=abc",
+        )
+        self.assertIsNotNone(bubble)
+        self.assertIn("https://dash.example/auth/magic?t=abc", bubble.body)
+        self.assertIn("fills up as we go", bubble.body)
+        self.assertTrue(new_goals["dashboard_sent"])
+        # Other goal keys preserved.
+        self.assertFalse(new_goals["tz_done"])
 
-        outbound = result["_outbound"]
-        self.assertEqual(len(outbound), 2)
-        for msg in outbound:
-            self.assertIsInstance(msg, TextMessage)
-            self.assertNotIn("dashboard", msg.body.lower())
+    def test_dashboard_handoff_decides_skip_when_already_sent(self) -> None:
+        """Pure decision: flag already True → no bubble, goals untouched.
+        Idempotent across turns so the link never auto-fires twice."""
+        from donna_runtime import brain
+
+        original = {"dashboard_sent": True, "tz_done": True}
+        new_goals, bubble = brain._decide_dashboard_handoff(
+            goals=original,
+            url="https://dash.example/auth/magic?t=xyz",
+        )
+        self.assertIsNone(bubble)
+        # Returned goals are the same object — no mutation.
+        self.assertIs(new_goals, original)
+
+    def test_dashboard_handoff_decides_skip_when_url_none(self) -> None:
+        """Pure decision: minting failed (url=None) → no bubble, flag stays
+        False so the next successful turn retries."""
+        from donna_runtime import brain
+
+        new_goals, bubble = brain._decide_dashboard_handoff(
+            goals={"dashboard_sent": False},
+            url=None,
+        )
+        self.assertIsNone(bubble)
+        self.assertFalse(new_goals.get("dashboard_sent"))
+
+    def test_dashboard_handoff_skips_when_outbound_empty(self) -> None:
+        """IO wrapper: an empty outbound (proactive silent turn) is a
+        no-op, never touches the DB."""
+        from donna_runtime import brain
+
+        async def run():
+            state = {"_outbound": []}
+            await brain._maybe_append_dashboard_handoff(state, user_id="u")
+            return state
+
+        # If this hits the DB, the test harness will raise. Asserting the
+        # function returns cleanly is enough — no DB module is imported
+        # because the empty-outbound guard fires before the imports.
+        state = asyncio.run(run())
+        self.assertEqual(state["_outbound"], [])
 
     def test_first_message_handles_missing_or_empty_name(self) -> None:
         from donna_runtime import brain
