@@ -8,6 +8,10 @@ pydantic>=2.9
 pydantic-settings>=2.5
 sqlalchemy[asyncio]>=2.0
 asyncpg>=0.29
+# Sync driver for the attention proposer's calendar dry-run path
+# (donna/attention/dry_run.py rewrites URLs to postgresql+psycopg2://).
+# Binary wheel avoids needing libpq headers in the build image.
+psycopg2-binary>=2.9
 beautifulsoup4>=4.12
 python-dotenv>=1.0
 composio>=0.11

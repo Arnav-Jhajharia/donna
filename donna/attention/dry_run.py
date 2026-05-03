@@ -71,22 +71,32 @@ class CalendarFetcher:
 
 # A single sync engine, lazily built. Reused across CalendarFetcher calls
 # to avoid spinning up a fresh psycopg connection per propose pass.
+# ``_SYNC_ENGINE_FAILED`` stays True after the first init failure so the
+# next ten thousand calls don't each re-throw and re-log the same
+# ImportError — the proposer ticks every minute, the brain ticks per
+# turn, so silent retry-spam was filling logs.
 _SYNC_ENGINE = None
+_SYNC_ENGINE_FAILED = False
 
 
 def _get_sync_engine():
     """Build (once) a sync SQLAlchemy engine off the same DATABASE_URL the
     async engine uses, swapping the driver to psycopg2/psycopg so we can
     talk to Postgres from sync proposer code without rewriting the
-    async pipeline."""
-    global _SYNC_ENGINE
+    async pipeline. Returns None on any failure; the caller falls back
+    to a fixture/empty list."""
+    global _SYNC_ENGINE, _SYNC_ENGINE_FAILED
     if _SYNC_ENGINE is not None:
         return _SYNC_ENGINE
+    if _SYNC_ENGINE_FAILED:
+        return None
     try:
         from sqlalchemy import create_engine
         from db.session import _clean_url
         from config import settings
     except Exception:
+        _SYNC_ENGINE_FAILED = True
+        logger.exception("calendar sync engine: import failed (one-shot log)")
         return None
     url, _kwargs = _clean_url(settings.database_url)
     # Async URLs use postgresql+asyncpg://; rewrite to use psycopg2 which
@@ -103,8 +113,9 @@ def _get_sync_engine():
     try:
         _SYNC_ENGINE = create_engine(url, pool_pre_ping=True, pool_size=2)
     except Exception:
-        logger.exception("calendar sync engine init failed")
-        _SYNC_ENGINE = None
+        _SYNC_ENGINE_FAILED = True
+        logger.exception("calendar sync engine init failed (one-shot log)")
+        return None
     return _SYNC_ENGINE
 
 
