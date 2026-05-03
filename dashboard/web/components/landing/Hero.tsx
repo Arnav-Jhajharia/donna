@@ -219,7 +219,7 @@ export default function Hero({
         className="absolute left-1/2 -translate-x-1/2 w-full px-5 text-center font-sans text-paper"
         style={{
           top: "8%",
-          fontSize: "clamp(14px, 0.6vw + 12px, 18px)",
+          fontSize: "clamp(18px, 1vw + 14px, 26px)",
           lineHeight: 1.5,
           textShadow: TEXT_SHADOW,
         }}
@@ -260,9 +260,9 @@ export default function Hero({
           <Wordmark color="paper" size="cover" />
         </div>
         <p
-          className="mt-3 font-sans text-paper"
+          className="mt-3 font-sans text-paper whitespace-nowrap"
           style={{
-            fontSize: "clamp(18px, 0.6vw + 16px, 24px)",
+            fontSize: "clamp(13px, 1.4vw + 6px, 22px)",
             lineHeight: 1.5,
             textShadow: TEXT_SHADOW,
           }}
@@ -275,7 +275,7 @@ export default function Hero({
           reads as a proper editorial button, not a phone pill. */}
       <div
         className="absolute left-1/2 -translate-x-1/2 w-full px-5 flex justify-center"
-        style={{ bottom: "18%" }}
+        style={{ bottom: "10%" }}
       >
         <a
           href={ctaHref}

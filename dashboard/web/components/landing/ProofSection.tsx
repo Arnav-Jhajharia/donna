@@ -222,8 +222,8 @@ function Message({
         // DONNA: full ink, clear and present.
         color: isUser ? "var(--rust-500)" : "var(--color-ink)",
         maxWidth: isUser ? "560px" : "880px",
-        marginLeft: "auto",
-        marginRight: "auto",
+        marginLeft: 0,
+        marginRight: 0,
         marginTop,
         opacity: visible ? 1 : 0,
         transform: visible
@@ -296,24 +296,26 @@ function PillarStage({
   return (
     <div
       // Stacked vertically on every viewport: conversation reads first
-      // (top), tagline lands as the payoff below it (bottom). The earlier
-      // chat-left / tagline-right split obscured the narrative — the
-      // tagline is meant to land *after* the conversation, not parallel
-      // to it. Both groups are centered horizontally; the whole stack is
-      // centered vertically with a clear gap between conversation and
-      // payoff.
-      className="flex h-full w-full flex-col items-center justify-center px-6"
-      style={{ gap: "clamp(48px, 7vh, 88px)" }}
+      // (top), tagline lands as the payoff below it (bottom). Left-aligned
+      // editorial layout — both the conversation and the payoff sit on
+      // the same left rail, centered vertically with a clear gap between
+      // conversation and payoff.
+      className="flex h-full w-full flex-col items-start justify-center"
+      style={{
+        gap: "clamp(48px, 7vh, 88px)",
+        paddingLeft: "clamp(24px, 6vw, 120px)",
+        paddingRight: "clamp(24px, 6vw, 120px)",
+      }}
     >
-      {/* Chat column — centered text block, conversation reads top→bottom.
+      {/* Chat column — left-aligned text block, conversation reads top→bottom.
           Wider cap on desktop so the conversation commands the viewport
           rather than floating in a 640px island on a 1920px screen. */}
       <div
         role="log"
         aria-live="polite"
-        className="flex flex-col items-center text-center"
+        className="flex flex-col items-start text-left"
         style={{
-          maxWidth: "min(900px, 80vw)",
+          maxWidth: "min(900px, 90vw)",
           width: "100%",
         }}
       >
@@ -373,7 +375,7 @@ function Tagline({
         letterSpacing: "-0.03em",
         fontWeight: 400,
         maxWidth: "min(1100px, 90vw)",
-        textAlign: "center",
+        textAlign: "left",
         opacity: visible ? 1 : 0,
         transform: visible
           ? "translate3d(0, 0, 0)"
