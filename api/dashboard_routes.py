@@ -614,6 +614,31 @@ async def execute_action(user_id: str, request: ActionRequest) -> JSONResponse:
                 **log_result,
             )
 
+        # Spawn the OAuth watcher so the user gets a "<toolkit> connected"
+        # WhatsApp message AS SOON AS the toolkit flips ACTIVE — without
+        # this, completion notifications depend entirely on Composio's
+        # webhook, which can be misconfigured per env / silently dropped
+        # under load. The watcher polls Composio every 5s for up to 10
+        # minutes; once the toolkit is active it mark_connected's the DB
+        # row AND fires notify_integration_complete. Idempotent against
+        # the webhook path (notify uses a dedupe map per stage), so
+        # firing both is safe.
+        try:
+            from backend.integrations.oauth_watcher import (
+                watch_oauth_and_bootstrap,
+            )
+
+            asyncio.create_task(
+                watch_oauth_and_bootstrap(
+                    user_id=user_id,
+                    toolkits=toolkits,
+                )
+            )
+        except Exception:
+            logger.exception(
+                "connect_integration: oauth watcher spawn failed user_id=%s", user_id
+            )
+
         # Frontend looks for ``redirect_url`` on the response and opens
         # it in a new tab. ``urls`` carries the per-toolkit map for
         # observability / future per-toolkit handling.

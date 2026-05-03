@@ -24,19 +24,46 @@ from backend.integrations import composio_meta, state
 from donna_runtime.observability import instrument_memory_op
 
 
-def _donna_final_callback() -> str | None:
+def _donna_final_callback(toolkits: list[str] | None = None) -> str | None:
     """Where the OAuth chain lands after the last toolkit completes.
 
-    Without this, ``initiate_oauth_chain`` defaults to Composio's own
-    dashboard ``platform.composio.dev/dashboard`` — which is jarring for
-    the user (they expect to land back on Donna). We point at the Donna
-    dashboard root: authed users see their canvas, unauthed users see
-    the landing page. Either is better than Composio's UI.
+    Preference order:
+      1. ``COMPOSIO_FINAL_CALLBACK_URL`` env override (escape hatch).
+      2. ``<DASHBOARD_BASE_URL>/oauth-complete?tk=<comma-list>`` — the
+         Donna-side interstitial that confirms the connection then
+         auto-redirects to WhatsApp. Strongly preferred: gives the user
+         a Donna-branded confirmation, works around mobile browsers
+         that suppress immediate ``wa.me`` deeplinks on cold visits.
+      3. ``DONNA_WHATSAPP_URL`` / ``NEXT_PUBLIC_WA_URL`` — direct
+         WhatsApp deeplink fallback when no dashboard is configured.
+      4. Hardcoded ``wa.me/6585767653`` as last resort so the chain
+         still completes locally.
+
+    ``toolkits`` is encoded into the URL so the interstitial can show
+    "Gmail and Calendar are on the line." without a separate lookup.
+    Composio sometimes appends its own params alongside ours; the page
+    accepts ``tk`` / ``toolkits`` / ``toolkit`` to be flexible.
     """
-    base = (os.environ.get("DASHBOARD_BASE_URL") or "").rstrip("/")
-    if not base:
-        return None
-    return f"{base}/?integration=connected"
+    explicit = (os.environ.get("COMPOSIO_FINAL_CALLBACK_URL") or "").strip()
+    if explicit:
+        return explicit
+
+    dashboard_base = (os.environ.get("DASHBOARD_BASE_URL") or "").strip().rstrip("/")
+    if dashboard_base:
+        url = f"{dashboard_base}/oauth-complete"
+        if toolkits:
+            from urllib.parse import quote
+            slugs = ",".join(quote(t.lower()) for t in toolkits if t)
+            if slugs:
+                url = f"{url}?tk={slugs}"
+        return url
+
+    base = (
+        os.environ.get("DONNA_WHATSAPP_URL")
+        or os.environ.get("NEXT_PUBLIC_WA_URL")
+        or "https://wa.me/6585767653"
+    ).strip()
+    return base.rstrip("/") if base else None
 
 DESCRIPTION = (
     "Generate a one-tap connect link for one or more Composio toolkits. "
@@ -232,7 +259,7 @@ async def connect_integration(
         "user_id": user_id,
         "toolkit_to_auth_config": toolkit_to_ac,
     }
-    final_callback = _donna_final_callback()
+    final_callback = _donna_final_callback(toolkits=pending_toolkits)
     if final_callback:
         chain_kwargs["final_callback_url"] = final_callback
     chain = await composio_meta.initiate_oauth_chain(**chain_kwargs)

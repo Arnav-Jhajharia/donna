@@ -67,6 +67,10 @@ const USER_PUBLIC_PATHS = new Set([
   '/auth/otp',
   '/auth/signin',
   '/auth/expired',
+  // Composio's OAuth chain redirects here after a connection completes.
+  // No session cookie required (user is mid-OAuth flow); the page just
+  // confirms + auto-redirects to WhatsApp.
+  '/oauth-complete',
 ]);
 const USER_PUBLIC_PREFIXES = ['/api/dashboard/', '/api/auth/'];
 
