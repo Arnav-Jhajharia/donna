@@ -22,7 +22,7 @@
 import { useEffect, useState } from "react";
 
 // Singapore: +65 9197 8565. wa.me wants digits only — no +, no spaces.
-export const DONNA_WHATSAPP_NUMBER = "6591978565";
+export const DONNA_WHATSAPP_NUMBER = "6585767653";
 
 const LOCATION_STORAGE_KEY = "donna:location";
 
