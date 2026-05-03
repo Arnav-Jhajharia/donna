@@ -536,6 +536,23 @@ async def composio_webhook(
         webhook_id=webhook_id or "",
         webhook_timestamp=webhook_timestamp or "",
     ):
+        # Diagnostic: emit a single redacted line so we can see WHICH
+        # piece is wrong without leaking the secret. Header names are
+        # logged verbatim; values are truncated.
+        header_keys = sorted(request.headers.keys())
+        sig_preview = sig_header[:20] + "..." if sig_header else "<empty>"
+        logger.warning(
+            "composio_webhook: bad signature | headers=%s | "
+            "webhook-id=%r | webhook-timestamp=%r | sig=%s | "
+            "secret_prefix=%s | secret_len=%d | body_len=%d",
+            header_keys,
+            (webhook_id or "")[:30],
+            (webhook_timestamp or "")[:30],
+            sig_preview,
+            (secret or "")[:6],
+            len(secret or ""),
+            len(body),
+        )
         raise HTTPException(status_code=401, detail="bad signature")
 
     try:
