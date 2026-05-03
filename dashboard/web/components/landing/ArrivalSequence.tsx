@@ -7,8 +7,9 @@
  * Lines 1–5 fade in, hold, and fade out. The final line holds and becomes
  * the rust moment for the screen (one italic rust accent inside a heading).
  *
- * Everything else — location, time — resolves on the client without blocking
- * first paint. If detection fails, the copy falls back to neutral.
+ * Everything else — IP-based city, device time — resolves on the client
+ * without blocking first paint. If detection fails, the copy falls back to
+ * neutral.
  *
  * Decorative by design: the sequence is wrapped in `aria-hidden`, the page
  * has an sr-only H1, and a skip link jumps straight to the main landmark.
@@ -100,9 +101,10 @@ function buildLines(city: string | null, now: Date): Line[] {
 
 type Props = {
   onComplete?: () => void;
+  nativeScroll?: boolean;
 };
 
-export default function ArrivalSequence({ onComplete }: Props) {
+export default function ArrivalSequence({ onComplete, nativeScroll = false }: Props) {
   const reduceMotion = useReducedMotion() === true;
 
   const [city, setCity] = useState<string | null>(null);
@@ -118,8 +120,8 @@ export default function ArrivalSequence({ onComplete }: Props) {
   // tripping the react-hooks/refs rule.
   const [arrivalNow] = useState<Date>(() => new Date());
 
-  // Detect the visitor's city, then flip `cityReady`. The first line is
-  // gated on this flag — no flash of "somewhere in the world" before the
+  // Detect the visitor's city from IP lookup, then flip `cityReady`. The first
+  // line is gated on this flag — no flash of "somewhere in the world" before the
   // real city lands. If detection hangs or fails, a short timeout flips
   // the flag anyway so the sequence can't stall.
   useEffect(() => {
@@ -258,6 +260,7 @@ export default function ArrivalSequence({ onComplete }: Props) {
   }, [idx]);
 
   useEffect(() => {
+    if (nativeScroll) return;
     if (done) return;
     if (typeof window === "undefined") return;
 
@@ -360,7 +363,7 @@ export default function ArrivalSequence({ onComplete }: Props) {
         scrollAdvTimerRef.current = null;
       }
     };
-  }, [done, finalIdx, clearTimedTimers]);
+  }, [nativeScroll, done, finalIdx, clearTimedTimers]);
 
   // Tap / click on the arrival overlay = one advance (same as scroll). The
   // earlier behavior set `skipped=true`, which jumped straight to the final
@@ -369,12 +372,16 @@ export default function ArrivalSequence({ onComplete }: Props) {
   // shortcut, since the timed sequence is bypassed for them anyway.
   const handleSkip = useCallback(() => {
     if (done) return;
+    if (nativeScroll) {
+      if (!skipped) setSkipped(true);
+      return;
+    }
     if (reduceMotion) {
       if (!skipped) setSkipped(true);
       return;
     }
     advanceRef.current?.();
-  }, [reduceMotion, skipped, done]);
+  }, [nativeScroll, reduceMotion, skipped, done]);
 
   // The skip link fast-forwards past the held final state entirely — keyboard
   // users should not have to wait for any hold timer.

@@ -38,7 +38,6 @@
 
 import {
   useEffect,
-  useMemo,
   useState,
   type ReactNode,
 } from "react";
@@ -397,9 +396,10 @@ type ProofSectionProps = {
   // Called once when the user advances past the final state (state 9).
   // The parent uses this to transition to the next phase (DonnaPromise).
   onComplete?: () => void;
+  nativeScroll?: boolean;
 };
 
-export default function ProofSection({ onComplete }: ProofSectionProps = {}) {
+export default function ProofSection({ onComplete, nativeScroll = false }: ProofSectionProps = {}) {
   const reduced = useReducedMotion() === true;
 
   // 1..TOTAL_STATES. The component is mounted only when the proof phase is
@@ -417,8 +417,8 @@ export default function ProofSection({ onComplete }: ProofSectionProps = {}) {
    */
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
-    if (reduced) setState(TOTAL_STATES);
-  }, [reduced]);
+    if (reduced || nativeScroll) setState(TOTAL_STATES);
+  }, [reduced, nativeScroll]);
 
   /* ----- Scroll hijack. Runs for the lifetime of the component (until
    * state reaches TOTAL_STATES, after which further gestures are simply
@@ -426,6 +426,7 @@ export default function ProofSection({ onComplete }: ProofSectionProps = {}) {
    * the page level; we only manage gesture listeners here.
    * ---------------------------------------------------------------- */
   useEffect(() => {
+    if (nativeScroll) return;
     if (reduced) return;
     if (typeof window === "undefined") return;
 
@@ -529,18 +530,44 @@ export default function ProofSection({ onComplete }: ProofSectionProps = {}) {
       window.removeEventListener("touchend", onTouchEnd);
       window.removeEventListener("keydown", onKeyDown);
     };
-  }, [reduced, onComplete]);
+  }, [nativeScroll, reduced, onComplete]);
+
+  const ariaLabel = activePillar.tagline;
+
+  if (nativeScroll) {
+    return (
+      <section aria-label="Donna proof" className="relative w-full bg-paper overflow-hidden">
+        <GetDonnaCTA />
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0"
+          style={{
+            backgroundImage: `url("${GRAIN_DATA_URI}")`,
+            backgroundRepeat: "repeat",
+            backgroundSize: "180px 180px",
+            opacity: 0.035,
+            mixBlendMode: "multiply",
+            zIndex: 0,
+          }}
+        />
+        {PILLARS.map((p, i) => (
+          <div
+            key={i}
+            className="relative flex min-h-screen items-center justify-center"
+            style={{ zIndex: 1 }}
+          >
+            <PillarStage pillar={p} subState={SUB_STATES_PER_PILLAR} reduced={reduced} />
+          </div>
+        ))}
+      </section>
+    );
+  }
 
   /* ----- Pillar cross-fade when advancing from one pillar to the next ----- */
   const pillarOpacity = (i: number) => (pillarIdx === i ? 1 : 0);
   const pillarTransition = reduced
     ? "none"
     : `opacity 500ms ${CHAT_EASE}`;
-
-  const ariaLabel = useMemo(
-    () => activePillar.tagline,
-    [activePillar.tagline]
-  );
 
   return (
     <section
