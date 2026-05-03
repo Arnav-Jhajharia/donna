@@ -146,8 +146,13 @@ async def donna_turn(state: dict, config: DonnaAgentConfig | None = None) -> dic
     return state
 
 
-_FIRST_MESSAGE_OPENER = (
+_FIRST_MESSAGE_INTRO = (
     "hi {name}, i'm donna. "
+    "i hold what you tell me, follow up when it matters, "
+    "and don't let things slip."
+)
+
+_FIRST_MESSAGE_PITCH = (
     "tell me something that keeps slipping away, "
     "an email you want me to track, "
     "or a tracker you want me to start. "
@@ -166,17 +171,24 @@ def _first_name(full_name: str) -> str:
 
 
 def _first_message_outbound(*, user_id: str, full_name: str) -> list:
-    """Build the deterministic Day 1 opener.
+    """Build the deterministic Day 1 opener — two bubbles in succession.
 
-    Just the pitch — no dashboard link, no other bubbles. The dashboard
-    link is reserved for earned moments later (a loop closes, a streak
-    ticks, an attention goes live, the user explicitly asks). Sending it
-    on Day 1 with nothing on the dashboard yet trains the user that
-    dashboard pings are noise.
+    Bubble 1 is the intro: who Donna is and what she does.
+    Bubble 2 is the pitch: three concrete affordances the user can pick from.
+
+    Two bubbles, not one, so WhatsApp renders them as two separate texts
+    in succession — the way a real person introducing themselves would.
+    No dashboard link; that is reserved for earned moments later (a loop
+    closes, a streak ticks, an attention goes live, the user explicitly
+    asks). Sending it on Day 1 with nothing on the dashboard yet trains
+    the user that dashboard pings are noise.
     """
     del user_id  # unused; reserved for future per-user opener tweaks
     name = _first_name(full_name)
-    return [TextMessage(body=_FIRST_MESSAGE_OPENER.format(name=name))]
+    return [
+        TextMessage(body=_FIRST_MESSAGE_INTRO.format(name=name)),
+        TextMessage(body=_FIRST_MESSAGE_PITCH),
+    ]
 
 
 def _extract_inbound_images(state: dict) -> list[tuple[bytes, str]]:

@@ -622,9 +622,8 @@ class DonnaRuntimeTests(unittest.TestCase):
         )
 
     def test_first_message_uses_deterministic_opener(self) -> None:
-        """Day 1 sends only the locked opener — no dashboard link. The link
-        is reserved for earned moments later (loop closes, streak ticks,
-        explicit user request). BRAIN never runs on first message."""
+        """Day 1 sends two bubbles in succession: an intro + the pitch.
+        No dashboard link. BRAIN never runs."""
         from delivery.messages import TextMessage
         from donna_runtime import brain
 
@@ -637,11 +636,19 @@ class DonnaRuntimeTests(unittest.TestCase):
         result = asyncio.run(brain.donna_turn(state))
 
         outbound = result["_outbound"]
-        self.assertEqual(len(outbound), 1)
+        self.assertEqual(len(outbound), 2)
         self.assertIsInstance(outbound[0], TextMessage)
+        self.assertIsInstance(outbound[1], TextMessage)
+        # Bubble 1: intro
         self.assertEqual(
             outbound[0].body,
             "hi arnav, i'm donna. "
+            "i hold what you tell me, follow up when it matters, "
+            "and don't let things slip.",
+        )
+        # Bubble 2: pitch
+        self.assertEqual(
+            outbound[1].body,
             "tell me something that keeps slipping away, "
             "an email you want me to track, "
             "or a tracker you want me to start. "
@@ -666,7 +673,8 @@ class DonnaRuntimeTests(unittest.TestCase):
             result = asyncio.run(brain.donna_turn(state))
 
         outbound = result["_outbound"]
-        self.assertEqual(len(outbound), 1)
+        # Two bubbles (intro + pitch), neither carries the dashboard link.
+        self.assertEqual(len(outbound), 2)
         for msg in outbound:
             self.assertNotIn("dashboard", msg.body.lower())
             self.assertNotIn("dash.example", msg.body)
