@@ -99,16 +99,18 @@ class JudgeOutput(BaseModel):
     channel_hint: Literal["whatsapp", "dashboard", "digest", "hold"] | None = Field(
         default=None,
         description=(
-            "Tier 2's channel routing recommendation. Tier 3 may override."
+            "Channel to route this message to. whatsapp=send via WhatsApp now, "
+            "dashboard=surface on the dashboard only, digest=batch for a "
+            "scheduled digest, hold=delay all routing until Tier 3 decides. "
+            "Null = no preference."
         ),
     )
-    reclassify_speech_act: Literal[
-        "dont_forget", "heads_up", "i_noticed", "now_the_moment", "thought_youd_want"
-    ] | None = Field(
+    reclassify_speech_act: SpeechAct | None = Field(
         default=None,
         description=(
-            "If Tier 2 disagrees with the source's speech_act tag, set "
-            "this to the corrected act. Null otherwise."
+            "If Tier 2 disagrees with the source's speech_act tag, set this "
+            "to the corrected act (one of dont_forget, heads_up, i_noticed, "
+            "now_the_moment, thought_youd_want). Null otherwise."
         ),
     )
 
