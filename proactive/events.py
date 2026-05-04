@@ -50,6 +50,25 @@ class ProactiveEvent:
       signals     — Tier 1 deterministic output (score + signal labels).
                     Kept as ``dict[str, Any]`` so non-email scorers can
                     drop in their own keys without forcing a schema bump.
+
+                    Well-known optional keys (set by source adapters when
+                    applicable; absent otherwise):
+                      event_age_minutes (float)
+                        Minutes elapsed since the underlying event happened
+                        (e.g. email arrival, calendar change, monitor hit).
+                        Used by ``proactive.fresh_signal.should_prefetch`` to
+                        decide whether to re-fetch source state at Tier 3
+                        context build. When missing, the pre-fetch is
+                        skipped (safe default).
+                      is_urgent_signal (bool)
+                        True when the source-specific scorer judged this
+                        event time-sensitive enough to upgrade the speech
+                        act from thought_youd_want to heads_up. Used by
+                        ``proactive.sources._inference.infer_speech_act``.
+                      score (float)
+                        Per-source relevance score from the Tier 1 scorer.
+                        Currently used by the email path; other sources may
+                        populate it analogously.
     """
 
     user_id: str

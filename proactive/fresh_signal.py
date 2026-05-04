@@ -52,6 +52,9 @@ async def fetch_for_event(event: ProactiveEvent) -> dict[str, Any]:
             return await _fetch_system_b(event, fetched_at)
         if event.source == "attention_fire":
             return await _fetch_attention(event, fetched_at)
+        # attention_offer and pattern intentionally have no stub: pattern is
+        # always thought_youd_want (gated out by should_prefetch), and
+        # attention_offer is passive and shouldn't pre-fetch in Phase 1.
         return {"status": "no_fetcher", "fetched_at": fetched_at}
     except Exception as exc:  # noqa: BLE001 — best-effort
         logger.exception("fresh_signal: fetch raised source=%s", event.source)

@@ -59,6 +59,11 @@ async def test_fetch_for_event_returns_ok_status_for_known_source():
     assert "fetched_at" in result
 
 
+def test_threshold_boundary_at_60_minutes_prefetches():
+    """should_prefetch uses >=, so age=60 (the exact threshold) prefetches."""
+    assert should_prefetch(_event("heads_up", age_minutes=60))
+
+
 @pytest.mark.asyncio
 async def test_fetch_for_event_swallows_exceptions():
     """Per-source failures degrade rather than raise."""
