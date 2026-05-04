@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -464,12 +465,143 @@ async def _escalate_to_brain(
             event.user_id,
         )
 
+    # ──────────────────────────────────────────────────────────────────
+    # PHASE 1 MIRROR: build the fat-contract Tier 3 input, log to telemetry.
+    #
+    # The Tier 3 brain itself is not invoked yet — that wiring lands in
+    # Phase 2 once options.py picks the Tier 3 tool palette by cfg.mode.
+    # Today we prove the input contract assembles + the dispatcher path
+    # is wired + telemetry rows are written.
+    # ──────────────────────────────────────────────────────────────────
+    counterfactual_outcome: str | None = None
+    counterfactual_elapsed_ms: int | None = None
+    counterfactual_error: str | None = None
+    started = time.monotonic()
+    try:
+        from donna_runtime.context_builder_tier3 import build_tier3_user_message
+
+        # Phase 1: pre-built blocks are placeholder strings. Real block
+        # builders (USER MODEL, DAY view, prior touches, etc.) land in
+        # Phase 2 alongside the System B fold-in and cutover.
+        _ = build_tier3_user_message(
+            event=event,
+            judge=judge if judge is not None else _placeholder_judge(),
+            escalation_reason=(
+                "needs_tools" if (judge and judge.needs_tools) else "tier2_failed"
+            ),
+            user_model_block="(phase 1 — USER MODEL block not yet populated)",
+            queued_thing_block="(phase 1 — queued spec block not yet populated)",
+            day_view_block="(phase 1 — DAY view block not yet populated)",
+            prior_touches_block="(phase 1 — prior touches block not yet populated)",
+            user_state_block="(phase 1 — user state block not yet populated)",
+            pending_notes_block="(phase 1 — pending notes block not yet populated)",
+            fresh_signal_block=None,
+        )
+        counterfactual_outcome = "input_built"
+    except Exception as exc:  # noqa: BLE001 — best-effort, never block legacy
+        logger.exception(
+            "dispatcher: counterfactual input build raised user=%s",
+            event.user_id,
+        )
+        counterfactual_outcome = "input_failed"
+        counterfactual_error = f"{type(exc).__name__}: {str(exc)[:200]}"
+    counterfactual_elapsed_ms = int((time.monotonic() - started) * 1000)
+
+    # Write telemetry. Best-effort — never block the legacy outcome.
+    try:
+        await _write_dispatch_telemetry(
+            event=event,
+            judge=judge,
+            legacy_outbound_count=len(outbound),
+            counterfactual_outcome=counterfactual_outcome,
+            counterfactual_elapsed_ms=counterfactual_elapsed_ms,
+            counterfactual_error=counterfactual_error,
+        )
+    except Exception:
+        logger.exception(
+            "dispatcher: telemetry write failed user=%s",
+            event.user_id,
+        )
+
     return DispatchOutcome(
         action="escalated",
         reason="needs_tools" if (judge and judge.needs_tools) else "fallback",
         judge=judge,
         outbound=outbound,
     )
+
+
+def _placeholder_judge() -> "JudgeResult":
+    """Construct a minimal placeholder JudgeResult for the counterfactual
+    path when no Tier 2 verdict is available (e.g. Tier 2 timed out).
+    Phase 1 mirror-mode safety net."""
+    from proactive.judge import JudgeResult
+    return JudgeResult(
+        action="drop",
+        register=None,
+        draft=None,
+        tie_in=(),
+        needs_tools=False,
+        reasoning="(no tier 2 verdict — counterfactual placeholder)",
+        raw_response="",
+    )
+
+
+async def _write_dispatch_telemetry(
+    *,
+    event: ProactiveEvent,
+    judge: "JudgeResult | None",
+    legacy_outbound_count: int,
+    counterfactual_outcome: str | None,
+    counterfactual_elapsed_ms: int | None,
+    counterfactual_error: str | None,
+) -> None:
+    """Write one ProactiveDispatchTelemetry row. Best-effort.
+
+    Phase 1: captures legacy outbound count + the counterfactual input-
+    build outcome. The full Tier 3 turn (drafts, skip reasons) is not
+    captured yet — that lands when the SDK tool wiring lands.
+    """
+    try:
+        from backend.db.session import async_session
+        from db.models import ProactiveDispatchTelemetry, generate_uuid
+    except Exception:
+        logger.exception("dispatcher: telemetry imports failed")
+        return
+
+    score: float | None = None
+    if event.signals.get("score") is not None:
+        try:
+            score = float(event.signals["score"])
+        except (TypeError, ValueError):
+            score = None
+
+    async with async_session() as session:
+        row = ProactiveDispatchTelemetry(
+            id=generate_uuid(),
+            user_id=event.user_id,
+            source=event.source,
+            speech_act=event.speech_act,
+            topic_key=event.topic_key,
+            tier1_score=score,
+            arbiter_decision=None,
+            arbiter_reason=None,
+            tier2_action=judge.action if judge else None,
+            tier2_register=judge.register if judge else None,
+            tier2_draft=judge.draft if judge else None,
+            tier2_needs_tools=judge.needs_tools if judge else None,
+            tier2_channel_hint=getattr(judge, "channel_hint", None),
+            tier2_reclassify=getattr(judge, "reclassify_speech_act", None),
+            tier3_invoked=True,
+            tier3_outcome="legacy_thin_directive",
+            channel="whatsapp" if legacy_outbound_count > 0 else None,
+            counterfactual_legacy_outbound_count=legacy_outbound_count,
+            counterfactual_fat_contract_outcome=counterfactual_outcome,
+            counterfactual_fat_contract_elapsed_ms=counterfactual_elapsed_ms,
+            counterfactual_fat_contract_error=counterfactual_error,
+        )
+        session.add(row)
+        await session.commit()
 
 
 def _build_escalation_prompt(
