@@ -288,3 +288,178 @@ async def load_day_view_block(*, user_id: str) -> str:
     if chat_lines:
         parts.extend(chat_lines[-10:])  # last 10 messages only
     return "\n".join(parts)
+
+
+async def load_prior_touches_block(
+    *,
+    user_id: str,
+    topic_key: str,
+    lookback_days: int = 7,
+) -> str:
+    """Render the PRIOR TOUCHES block.
+
+    Surfaces:
+      - Most recent proactive fire on this topic_key (or any topic if
+        none specifically) within lookback_days.
+      - The user's response within 1h, if available (Phase 2: today
+        we don't have a join from telemetry to chat replies; fallback
+        to 'no response captured').
+
+    Tells the brain whether to double-tap. Degrades gracefully.
+    """
+    try:
+        from datetime import datetime, timedelta
+
+        from sqlalchemy import select
+
+        from backend.db.session import async_session
+        from db.models import ProactiveDispatchTelemetry
+    except Exception:
+        logger.exception("tier3 block: prior_touches imports failed")
+        return f"{_PLACEHOLDER_PREFIX} prior touches unavailable"
+
+    cutoff = datetime.utcnow() - timedelta(days=lookback_days)
+
+    try:
+        async with async_session() as session:
+            # Most recent fire on this topic
+            on_topic = (
+                await session.execute(
+                    select(ProactiveDispatchTelemetry)
+                    .where(ProactiveDispatchTelemetry.user_id == user_id)
+                    .where(ProactiveDispatchTelemetry.topic_key == topic_key)
+                    .where(ProactiveDispatchTelemetry.event_at >= cutoff)
+                    .order_by(ProactiveDispatchTelemetry.event_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+
+            # Most recent fire any topic (for double-tap risk)
+            any_topic = (
+                await session.execute(
+                    select(ProactiveDispatchTelemetry)
+                    .where(ProactiveDispatchTelemetry.user_id == user_id)
+                    .where(ProactiveDispatchTelemetry.event_at >= cutoff)
+                    .order_by(ProactiveDispatchTelemetry.event_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+    except Exception:
+        logger.exception(
+            "tier3 block: prior_touches query failed user=%s",
+            user_id[:8] if user_id else "?",
+        )
+        return f"{_PLACEHOLDER_PREFIX} prior touches query failed"
+
+    parts: list[str] = []
+    if on_topic:
+        delta = datetime.utcnow() - on_topic.event_at
+        hours = int(delta.total_seconds() / 3600)
+        draft = (on_topic.tier2_draft or "")[:80]
+        parts.append(
+            f"on this topic ({topic_key}): last fire {hours}h ago — '{draft}'"
+        )
+    else:
+        parts.append(f"on this topic ({topic_key}): no prior fires in {lookback_days}d")
+
+    if any_topic and (not on_topic or any_topic.id != on_topic.id):
+        delta = datetime.utcnow() - any_topic.event_at
+        mins = int(delta.total_seconds() / 60)
+        parts.append(
+            f"most recent fire (any topic): {mins} min ago, "
+            f"speech_act={any_topic.speech_act}, topic={any_topic.topic_key}"
+        )
+    elif not any_topic:
+        parts.append(f"no proactive fires in {lookback_days}d at all")
+
+    return "\n".join(parts)
+
+
+async def load_user_state_now_block(*, user_id: str) -> str:
+    """Render the USER STATE NOW block.
+
+    Phase 2A keeps this lean — no Haiku tone read yet (that's Phase 2.5).
+    Surfaces:
+      - Time-of-day in user's tz (or UTC fallback)
+      - Last user message (from chat_messages, if any in last 30 min)
+      - Latest observation (from observations table, if any in last 36h)
+
+    Real mood/focus inference lands later when the synthesis worker
+    populates a richer state cache.
+    """
+    try:
+        from datetime import datetime, timedelta, timezone
+
+        from sqlalchemy import select
+
+        from backend.db.session import async_session
+        from db.models import ChatMessage, Observation, User
+    except Exception:
+        logger.exception("tier3 block: user_state imports failed")
+        return f"{_PLACEHOLDER_PREFIX} user state unavailable"
+
+    parts: list[str] = []
+
+    try:
+        async with async_session() as session:
+            user_row = (
+                await session.execute(
+                    select(User).where(User.id == user_id)
+                )
+            ).scalar_one_or_none()
+            tz_name = getattr(user_row, "timezone", None) or "UTC"
+
+            try:
+                from zoneinfo import ZoneInfo
+                now_local = datetime.now(ZoneInfo(tz_name))
+            except Exception:
+                now_local = datetime.utcnow()
+            parts.append(f"local time: {now_local.strftime('%Y-%m-%d %H:%M %Z')}")
+
+            # Last user message in last 30 min
+            cutoff = datetime.utcnow() - timedelta(minutes=30)
+            last_user_msg = (
+                await session.execute(
+                    select(ChatMessage)
+                    .where(ChatMessage.user_id == user_id)
+                    .where(ChatMessage.role == "user")
+                    .where(ChatMessage.created_at >= cutoff)
+                    .order_by(ChatMessage.created_at.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+
+            if last_user_msg:
+                content = (getattr(last_user_msg, "content", None) or "")[:80]
+                age = datetime.utcnow() - last_user_msg.created_at
+                mins = int(age.total_seconds() / 60)
+                parts.append(f"last user msg: {mins}min ago — '{content}'")
+            else:
+                parts.append("no user messages in last 30 min")
+
+            # Latest observation in last 36h
+            obs_cutoff = datetime.utcnow() - timedelta(hours=36)
+            last_obs = (
+                await session.execute(
+                    select(Observation)
+                    .where(Observation.user_id == user_id)
+                    .where(Observation.event_time >= obs_cutoff)
+                    .order_by(Observation.event_time.desc())
+                    .limit(1)
+                )
+            ).scalar_one_or_none()
+            if last_obs:
+                kind = getattr(last_obs, "kind", None) or "obs"
+                age = datetime.utcnow() - last_obs.event_time
+                hours = int(age.total_seconds() / 3600)
+                parts.append(f"last observation: {kind}, {hours}h ago")
+            else:
+                parts.append("no observations in last 36h")
+    except Exception:
+        logger.exception(
+            "tier3 block: user_state query failed user=%s",
+            user_id[:8] if user_id else "?",
+        )
+        return f"{_PLACEHOLDER_PREFIX} user state query failed"
+
+    return "\n".join(parts)

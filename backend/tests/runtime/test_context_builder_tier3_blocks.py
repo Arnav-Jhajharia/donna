@@ -98,3 +98,49 @@ async def test_load_day_view_block_includes_proactive_fires(db):
     assert "thread_xyz" in block or "heads_up" in block
     # The block should hint at fires_today count
     assert "fire" in block.lower() or "ping" in block.lower()
+
+
+from donna_runtime.context_builder_tier3 import (
+    load_prior_touches_block,
+    load_user_state_now_block,
+)
+
+
+@pytest.mark.asyncio
+async def test_load_prior_touches_block_no_history_returns_compact_string(db):
+    block = await load_prior_touches_block(
+        user_id="u1", topic_key="never_touched_topic"
+    )
+    assert isinstance(block, str)
+    assert "no prior" in block.lower() or "never" in block.lower() or block.strip() == ""
+
+
+@pytest.mark.asyncio
+async def test_load_prior_touches_block_finds_recent_telemetry(db):
+    async with db() as session:
+        row = ProactiveDispatchTelemetry(
+            id=generate_uuid(),
+            user_id="u1",
+            source="email",
+            speech_act="heads_up",
+            topic_key="thread_recurring",
+            tier3_invoked=True,
+            tier2_draft="luca replied",
+            counterfactual_legacy_outbound_count=1,
+            event_at=datetime.utcnow() - timedelta(days=2),
+        )
+        session.add(row)
+        await session.commit()
+
+    block = await load_prior_touches_block(
+        user_id="u1", topic_key="thread_recurring"
+    )
+    assert "thread_recurring" in block or "luca" in block
+
+
+@pytest.mark.asyncio
+async def test_load_user_state_now_block_returns_compact_summary(db):
+    block = await load_user_state_now_block(user_id="u1")
+    assert isinstance(block, str)
+    # Even with no observations / chat, returns at least time-of-day signal.
+    assert len(block) > 0
