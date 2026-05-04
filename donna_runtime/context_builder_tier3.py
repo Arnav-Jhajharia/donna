@@ -23,20 +23,8 @@ Blocks rendered:
 """
 from __future__ import annotations
 
-from typing import Literal
-
-from proactive.events import ProactiveEvent
+from proactive.events import EscalationReason, ProactiveEvent
 from proactive.judge import JudgeResult
-
-
-EscalationReason = Literal[
-    "needs_tools",
-    "empty_draft",
-    "validator_fail",
-    "stakes_aware",
-    "hold_ambiguity",
-    "tier2_failed",
-]
 
 
 _PAYLOAD_VALUE_MAX_CHARS = 600
@@ -91,14 +79,15 @@ def build_tier3_user_message(
     parts.append("# THE EVENT PAYLOAD\n" + "\n".join(payload_lines))
 
     # Block 5 — TIER 2 (the hint, not the constraint)
-    tier2_lines = [
-        f"action: {judge.action}",
-        f"register: {judge.register or 'n/a'}",
+    tier2_lines = [f"action: {judge.action}"]
+    if judge.register is not None:
+        tier2_lines.append(f"register: {judge.register}")
+    tier2_lines.extend([
         f"draft: {judge.draft or '(none)'}",
         f"tie_in: {list(judge.tie_in) if judge.tie_in else '[]'}",
         f"needs_tools: {judge.needs_tools}",
         f"reasoning: {judge.reasoning or '(none)'}",
-    ]
+    ])
     if judge.channel_hint:
         tier2_lines.append(f"channel_hint: {judge.channel_hint}")
     if judge.reclassify_speech_act:

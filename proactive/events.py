@@ -29,6 +29,15 @@ SpeechAct = Literal[
     "thought_youd_want",      # curator — earn the interrupt
 ]
 
+EscalationReason = Literal[
+    "needs_tools",      # Tier 2 flagged needs_tools=True
+    "empty_draft",      # Tier 2 said ping but produced no draft
+    "validator_fail",   # voice validator couldn't fix the draft
+    "stakes_aware",     # speech-act-aware escalation (e.g. i_noticed mood_low)
+    "hold_ambiguity",   # action=hold but channel routing unclear
+    "tier2_failed",     # Tier 2 timeout / parse error / 5xx
+]
+
 
 @dataclass(frozen=True)
 class ProactiveEvent:

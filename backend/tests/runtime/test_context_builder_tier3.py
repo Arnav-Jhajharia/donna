@@ -168,3 +168,38 @@ def test_build_tier3_user_message_truncates_long_payload_values():
     # The line for body_excerpt is bounded; full 1000-char value is not in the
     # output verbatim.
     assert ("x" * 1000) not in msg
+
+
+def test_build_tier3_user_message_omits_register_when_none():
+    """register: line is omitted when judge.register is None
+    (consistent with channel_hint and reclassify_speech_act handling)."""
+    judge = JudgeResult(
+        action="drop",
+        register=None,
+        draft=None,
+        tie_in=(),
+        needs_tools=False,
+        reasoning="not interesting",
+        raw_response="",
+    )
+    msg = build_tier3_user_message(
+        event=_event(),
+        judge=judge,
+        escalation_reason="needs_tools",
+        user_model_block="x",
+        day_view_block="x",
+        prior_touches_block="x",
+        user_state_block="x",
+        pending_notes_block="x",
+        queued_thing_block="x",
+        fresh_signal_block=None,
+    )
+    assert "register:" not in msg
+    assert "n/a" not in msg
+
+
+def test_escalation_reason_imported_from_proactive_events():
+    """EscalationReason should be importable from proactive.events
+    so the dispatcher (Task 11) doesn't need type: ignore."""
+    from proactive.events import EscalationReason  # noqa: F401
+    from proactive import EscalationReason as EscalationReasonRoot  # noqa: F401

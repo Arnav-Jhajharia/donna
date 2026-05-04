@@ -17,6 +17,7 @@ Phase 0 lays the scaffold. Phase 1 wires email mirror-mode. Phase 2 flips
 from __future__ import annotations
 
 from proactive.events import (
+    EscalationReason,
     ProactiveEvent,
     ProactiveSource,
     SpeechAct,
@@ -25,6 +26,7 @@ from proactive.events import (
 from proactive.judge import JudgeResult, judge_event
 
 __all__ = (
+    "EscalationReason",
     "JudgeResult",
     "ProactiveEvent",
     "ProactiveSource",
