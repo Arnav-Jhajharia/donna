@@ -1,13 +1,20 @@
 """Real block builders for the Tier 3 input contract."""
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import select
 
-from db.models import PendingProactiveNote, generate_uuid, utcnow
+from db.models import (
+    ChatMessage,
+    PendingProactiveNote,
+    ProactiveDispatchTelemetry,
+    generate_uuid,
+    utcnow,
+)
 from donna_runtime.context_builder_tier3 import (
+    load_day_view_block,
     load_user_model_block_for_tier3,
     load_pending_notes_block,
 )
@@ -56,3 +63,38 @@ async def test_load_pending_notes_block_returns_active_notes(db):
     block = await load_pending_notes_block(user_id="u1")
     assert "anthropic" in block
     assert "thread_test" in block
+
+
+@pytest.mark.asyncio
+async def test_load_day_view_block_no_activity_returns_compact_summary(db):
+    block = await load_day_view_block(user_id="u1")
+    assert isinstance(block, str)
+    assert len(block) > 0
+    # Empty day still has a header.
+    assert "today" in block.lower() or "day" in block.lower()
+
+
+@pytest.mark.asyncio
+async def test_load_day_view_block_includes_proactive_fires(db):
+    """Telemetry rows from today should appear in the block."""
+    async with db() as session:
+        row = ProactiveDispatchTelemetry(
+            id=generate_uuid(),
+            user_id="u1",
+            source="email",
+            speech_act="heads_up",
+            topic_key="thread_xyz",
+            tier3_invoked=True,
+            tier3_outcome="legacy_thin_directive",
+            channel="whatsapp",
+            counterfactual_legacy_outbound_count=1,
+            counterfactual_fat_contract_outcome="input_built",
+            event_at=datetime.utcnow(),
+        )
+        session.add(row)
+        await session.commit()
+
+    block = await load_day_view_block(user_id="u1")
+    assert "thread_xyz" in block or "heads_up" in block
+    # The block should hint at fires_today count
+    assert "fire" in block.lower() or "ping" in block.lower()

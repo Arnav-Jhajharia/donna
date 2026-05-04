@@ -183,3 +183,108 @@ async def load_pending_notes_block(*, user_id: str) -> str:
         topic = getattr(row, "topic_key", None) or "(no topic)"
         lines.append(f"- {topic} — {draft}")
     return "\n".join(lines)
+
+
+async def load_day_view_block(*, user_id: str) -> str:
+    """Render the DAY VIEW block.
+
+    Compact, fits in a few hundred tokens. Pulls from:
+      - chat_messages today (Donna's outbound + user's inbound, with
+        timestamps and short snippets)
+      - proactive_dispatch_telemetry today (proactive fires this user
+        already received, with topic_key + speech_act + draft)
+      - schedule_fires today via DonnaSchedule.fired_at
+
+    Degrades gracefully on any failure.
+    """
+    try:
+        from sqlalchemy import and_, or_, select
+
+        from backend.db.session import async_session
+        from db.models import (
+            ChatMessage,
+            DonnaSchedule,
+            ProactiveDispatchTelemetry,
+        )
+    except Exception:
+        logger.exception("tier3 block: day_view imports failed")
+        return f"{_PLACEHOLDER_PREFIX} day view unavailable"
+
+    from datetime import datetime, timedelta
+
+    today_start = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0)
+
+    chat_lines: list[str] = []
+    fires_today: list[str] = []
+    schedule_fires: list[str] = []
+
+    try:
+        async with async_session() as session:
+            # Chat messages today
+            chat_rows = (
+                await session.execute(
+                    select(ChatMessage)
+                    .where(ChatMessage.user_id == user_id)
+                    .where(ChatMessage.created_at >= today_start)
+                    .order_by(ChatMessage.created_at.asc())
+                    .limit(40)
+                )
+            ).scalars().all()
+
+            for cm in chat_rows:
+                role = getattr(cm, "role", "") or ""
+                ts = getattr(cm, "created_at", None)
+                ts_str = ts.strftime("%H:%M") if ts else "??:??"
+                content = (getattr(cm, "content", None) or "")[:60]
+                chat_lines.append(f"  {ts_str} [{role}] {content}")
+
+            # Proactive fires today
+            fire_rows = (
+                await session.execute(
+                    select(ProactiveDispatchTelemetry)
+                    .where(ProactiveDispatchTelemetry.user_id == user_id)
+                    .where(ProactiveDispatchTelemetry.event_at >= today_start)
+                    .order_by(ProactiveDispatchTelemetry.event_at.asc())
+                )
+            ).scalars().all()
+
+            for fr in fire_rows:
+                draft = (getattr(fr, "tier2_draft", None) or "")[:60]
+                fires_today.append(
+                    f"  {fr.speech_act} on {fr.topic_key} → {draft}"
+                )
+
+            # Schedule fires today
+            sched_rows = (
+                await session.execute(
+                    select(DonnaSchedule)
+                    .where(DonnaSchedule.user_id == user_id)
+                    .where(DonnaSchedule.fired_at >= today_start)
+                    .order_by(DonnaSchedule.fired_at.asc())
+                    .limit(20)
+                )
+            ).scalars().all()
+
+            for sr in sched_rows:
+                ts = getattr(sr, "fired_at", None)
+                ts_str = ts.strftime("%H:%M") if ts else "??:??"
+                schedule_fires.append(f"  {ts_str} fired sched {sr.id[:8]}")
+    except Exception:
+        logger.exception(
+            "tier3 block: day_view query failed user=%s",
+            user_id[:8] if user_id else "?",
+        )
+        return f"{_PLACEHOLDER_PREFIX} day view query failed"
+
+    parts: list[str] = []
+    parts.append(f"today (UTC): {today_start.date().isoformat()}")
+    parts.append(f"proactive fires today: {len(fires_today)}")
+    if fires_today:
+        parts.extend(fires_today)
+    parts.append(f"schedule fires today: {len(schedule_fires)}")
+    if schedule_fires:
+        parts.extend(schedule_fires)
+    parts.append(f"chat messages today: {len(chat_lines)}")
+    if chat_lines:
+        parts.extend(chat_lines[-10:])  # last 10 messages only
+    return "\n".join(parts)
