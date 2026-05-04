@@ -18,11 +18,20 @@ file. Task 6 ships only the three terminators below.
 """
 from __future__ import annotations
 
-from datetime import datetime
+import logging
+from datetime import datetime, timezone
 from typing import Any, Literal
 
+logger = logging.getLogger(__name__)
 
 _MAX_REASON_LEN = 500
+_QUICK_CHECK_MAX_RESULTS = 5
+_READ_EXTERNAL_SOURCES = {
+    "gmail_thread",
+    "calendar_event",
+    "exa_url",
+    "person_recent_chat",
+}
 
 # ---- terminators -----------------------------------------------------------
 
@@ -133,4 +142,104 @@ async def send_burst(
         "messages": messages,
         "push": push,
         "surface_at": surface_at,
+    }
+
+
+# ---- read tools ------------------------------------------------------------
+
+
+async def _exa_search_for_quick_check(
+    *, query: str, num_results: int
+) -> list[dict[str, Any]]:
+    """Indirection for monkeypatching in tests + isolating the Exa client.
+
+    Real implementation lazy-imports the Exa client; this stays importable
+    without an Exa key for most callsites.
+
+    Returns a list of simplified hit dicts, each with title/url/excerpt.
+    """
+    try:
+        from backend.web.client import exa_search, have_exa_key
+    except Exception:
+        logger.exception("quick_check: exa client import failed")
+        return []
+    if not have_exa_key():
+        logger.warning("quick_check: no EXA_API_KEY — returning empty")
+        return []
+    try:
+        # exa_search returns Exa's raw JSON (dict with a "results" array).
+        response = await exa_search(query=query, num_results=num_results)
+    except Exception:
+        logger.exception("quick_check: exa_search raised")
+        return []
+    raw_results = response.get("results", []) if isinstance(response, dict) else []
+    return [
+        {
+            "title": (item.get("title") or "")[:200],
+            "url": item.get("url") or "",
+            "excerpt": (item.get("text") or item.get("excerpt") or "")[:400],
+        }
+        for item in (raw_results or [])
+    ]
+
+
+async def quick_check(
+    *,
+    question: str,
+    max_results: int = 3,
+) -> dict[str, Any]:
+    """One-shot web search to verify a specific claim or fetch a focused fact.
+
+    USE WHEN: the event makes a factual claim that needs verification, OR
+              thought_youd_want needs a freshness check.
+    DO NOT USE: for general research or exploration. This is verification,
+                not curiosity.
+    HARD LIMIT: one call per turn. The harness rejects a second call.
+    """
+    if not question or not question.strip():
+        raise ValueError("question is required")
+    if max_results <= 0 or max_results > _QUICK_CHECK_MAX_RESULTS:
+        raise ValueError(
+            f"max_results must be 1..{_QUICK_CHECK_MAX_RESULTS}; got {max_results}"
+        )
+    results = await _exa_search_for_quick_check(
+        query=question.strip(), num_results=max_results
+    )
+    return {
+        "status": "ok" if results else "no_results",
+        "question": question.strip(),
+        "results": results,
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+async def read_external(
+    *,
+    source: Literal[
+        "gmail_thread", "calendar_event", "exa_url", "person_recent_chat"
+    ],
+    ref: str,
+) -> dict[str, Any]:
+    """Fresh state of one specific external resource by identifier.
+
+    USE WHEN: need fresh state of something specifically referenced by id,
+              and that exact resource isn't in the pre-fetched fresh_signal
+              block.
+    DO NOT USE: when pre-fetched fresh_signal already has what you need.
+    """
+    if source not in _READ_EXTERNAL_SOURCES:
+        raise ValueError(
+            f"source must be one of {_READ_EXTERNAL_SOURCES}; got {source!r}"
+        )
+    if not ref:
+        raise ValueError("ref is required")
+    # Phase 1: stub. Real per-source fetchers land alongside Phase 2.
+    return {
+        "status": "no_fetcher",
+        "source": source,
+        "ref": ref,
+        "note": (
+            "Phase 1 stub. Real fetcher lands with the System B fold-in."
+        ),
+        "fetched_at": datetime.now(timezone.utc).isoformat(),
     }

@@ -10,6 +10,8 @@ from donna_runtime.tools_tier3 import (
     kill_attention,
     reshape_attention,
     send_burst,
+    quick_check,
+    read_external,
 )
 
 
@@ -137,3 +139,49 @@ async def test_send_burst_rejects_push_with_surface_at():
 async def test_send_burst_requires_messages():
     with pytest.raises(ValueError, match="messages"):
         await send_burst(messages=[])
+
+
+@pytest.mark.asyncio
+async def test_quick_check_requires_question():
+    with pytest.raises(ValueError, match="question"):
+        await quick_check(question="")
+
+
+@pytest.mark.asyncio
+async def test_quick_check_returns_results_shape(monkeypatch):
+    """Stub the underlying exa search call."""
+    async def _fake_search(*, query, num_results, **_kwargs):
+        return [
+            {"title": "A", "url": "https://a", "excerpt": "ex"},
+            {"title": "B", "url": "https://b", "excerpt": "ex"},
+        ]
+    monkeypatch.setattr(
+        "donna_runtime.tools_tier3._exa_search_for_quick_check",
+        _fake_search,
+    )
+
+    out = await quick_check(question="is anthropic shipping today?")
+    assert out["status"] == "ok"
+    assert len(out["results"]) == 2
+    assert out["results"][0]["url"] == "https://a"
+
+
+@pytest.mark.asyncio
+async def test_quick_check_caps_max_results():
+    """max_results is hard-capped at 5 to prevent abuse."""
+    with pytest.raises(ValueError, match="max_results"):
+        await quick_check(question="x", max_results=99)
+
+
+@pytest.mark.asyncio
+async def test_read_external_unknown_source_raises():
+    with pytest.raises(ValueError, match="source"):
+        await read_external(source="bogus", ref="x")  # type: ignore[arg-type]
+
+
+@pytest.mark.asyncio
+async def test_read_external_gmail_thread_returns_stub():
+    out = await read_external(source="gmail_thread", ref="thread_xyz")
+    assert out["status"] in {"ok", "degraded", "no_fetcher"}
+    assert out["source"] == "gmail_thread"
+    assert out["ref"] == "thread_xyz"
