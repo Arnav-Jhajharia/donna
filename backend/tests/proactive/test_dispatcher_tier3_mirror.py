@@ -91,9 +91,9 @@ async def test_counterfactual_logs_telemetry_after_legacy_escalation(db):
     assert row.source == "email"
     assert row.speech_act == "heads_up"
     assert row.tier3_invoked is True
-    # Phase 1: outcome is one of input_built / input_failed
+    # Phase 2A: outcome is one of ship/skip/reshape/kill/error/no_terminator
     assert row.counterfactual_fat_contract_outcome in {
-        "input_built", "input_failed"
+        "ship", "skip", "reshape", "kill", "error", "no_terminator",
     }
     assert row.counterfactual_fat_contract_elapsed_ms is not None
     assert row.counterfactual_fat_contract_elapsed_ms >= 0

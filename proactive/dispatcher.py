@@ -466,45 +466,109 @@ async def _escalate_to_brain(
         )
 
     # ──────────────────────────────────────────────────────────────────
-    # PHASE 1 MIRROR: build the fat-contract Tier 3 input, log to telemetry.
+    # PHASE 2A: build the Tier 3 input contract with real block data,
+    # then call donna_turn(mode="proactive_tier3"). Capture the actual
+    # outcome (ship/skip/reshape/kill/error) to telemetry.
     #
-    # The Tier 3 brain itself is not invoked yet — that wiring lands in
-    # Phase 2 once options.py picks the Tier 3 tool palette by cfg.mode.
-    # Today we prove the input contract assembles + the dispatcher path
-    # is wired + telemetry rows are written.
+    # Mirror discipline: the Tier 3 call's outbound buffer is NEVER sent
+    # to the user. Legacy outbound (already populated above) is what
+    # reaches WhatsApp.
     # ──────────────────────────────────────────────────────────────────
     counterfactual_outcome: str | None = None
+    counterfactual_draft: str | None = None
+    counterfactual_skip_reason: str | None = None
     counterfactual_elapsed_ms: int | None = None
     counterfactual_error: str | None = None
     started = time.monotonic()
-    try:
-        from donna_runtime.context_builder_tier3 import build_tier3_user_message
 
-        # Phase 1: pre-built blocks are placeholder strings. Real block
-        # builders (USER MODEL, DAY view, prior touches, etc.) land in
-        # Phase 2 alongside the System B fold-in and cutover.
-        _ = build_tier3_user_message(
+    try:
+        from donna_runtime.brain import donna_turn
+        from donna_runtime.config import DonnaAgentConfig
+        from donna_runtime.context_builder_tier3 import (
+            build_tier3_user_message,
+            load_day_view_block,
+            load_pending_notes_block,
+            load_prior_touches_block,
+            load_user_model_block_for_tier3,
+            load_user_state_now_block,
+        )
+
+        # Build real blocks. Each builder degrades gracefully.
+        user_model_block = await load_user_model_block_for_tier3(user_id=event.user_id)
+        day_view_block = await load_day_view_block(user_id=event.user_id)
+        prior_touches_block = await load_prior_touches_block(
+            user_id=event.user_id, topic_key=event.topic_key
+        )
+        user_state_block = await load_user_state_now_block(user_id=event.user_id)
+        pending_notes_block = await load_pending_notes_block(user_id=event.user_id)
+
+        user_message = build_tier3_user_message(
             event=event,
             judge=judge if judge is not None else _placeholder_judge(),
             escalation_reason=(
                 "needs_tools" if (judge and judge.needs_tools) else "tier2_failed"
             ),
-            user_model_block="(phase 1 — USER MODEL block not yet populated)",
-            queued_thing_block="(phase 1 — queued spec block not yet populated)",
-            day_view_block="(phase 1 — DAY view block not yet populated)",
-            prior_touches_block="(phase 1 — prior touches block not yet populated)",
-            user_state_block="(phase 1 — user state block not yet populated)",
-            pending_notes_block="(phase 1 — pending notes block not yet populated)",
+            user_model_block=user_model_block,
+            queued_thing_block="(phase 2a — queued spec block deferred to Phase 2.5)",
+            day_view_block=day_view_block,
+            prior_touches_block=prior_touches_block,
+            user_state_block=user_state_block,
+            pending_notes_block=pending_notes_block,
             fresh_signal_block=None,
         )
-        counterfactual_outcome = "input_built"
-    except Exception as exc:  # noqa: BLE001 — best-effort, never block legacy
+
+        tier3_cfg = DonnaAgentConfig(
+            mode="proactive_tier3",
+            user_id=event.user_id,
+            user_phone=phone,
+            stateless_sessions=True,
+        )
+        tier3_state: dict[str, Any] = {
+            "user_id": event.user_id,
+            "raw_input": user_message,
+            "user_message": user_message,
+            "phone": phone,
+            "trigger": {
+                "source": event.source,
+                "speech_act": event.speech_act,
+                "topic_key": event.topic_key,
+                "escalation_reason": (
+                    "needs_tools" if (judge and judge.needs_tools) else "tier2_failed"
+                ),
+            },
+        }
+
+        tier3_result = await donna_turn(tier3_state, tier3_cfg)
+        outcome_payload = (
+            tier3_result.get("_tier3_outcome")
+            if isinstance(tier3_result, dict)
+            else None
+        ) or {}
+
+        action = outcome_payload.get("action")
+        if action == "ship":
+            counterfactual_outcome = "ship"
+            messages = outcome_payload.get("messages") or []
+            if messages and isinstance(messages[0], dict):
+                counterfactual_draft = (messages[0].get("body") or "")[:500]
+        elif action == "skip":
+            counterfactual_outcome = "skip"
+            counterfactual_skip_reason = (outcome_payload.get("reason") or "")[:500]
+        elif action == "reshape":
+            counterfactual_outcome = "reshape"
+        elif action == "kill":
+            counterfactual_outcome = "kill"
+            counterfactual_skip_reason = (outcome_payload.get("reason") or "")[:500]
+        else:
+            counterfactual_outcome = "no_terminator"
+    except Exception as exc:
         logger.exception(
-            "dispatcher: counterfactual input build raised user=%s",
+            "dispatcher: Tier 3 counterfactual call raised user=%s",
             event.user_id,
         )
-        counterfactual_outcome = "input_failed"
+        counterfactual_outcome = "error"
         counterfactual_error = f"{type(exc).__name__}: {str(exc)[:200]}"
+
     counterfactual_elapsed_ms = int((time.monotonic() - started) * 1000)
 
     # Write telemetry. Best-effort — never block the legacy outcome.
@@ -514,6 +578,8 @@ async def _escalate_to_brain(
             judge=judge,
             legacy_outbound_count=len(outbound),
             counterfactual_outcome=counterfactual_outcome,
+            counterfactual_draft=counterfactual_draft,
+            counterfactual_skip_reason=counterfactual_skip_reason,
             counterfactual_elapsed_ms=counterfactual_elapsed_ms,
             counterfactual_error=counterfactual_error,
         )
@@ -553,14 +619,16 @@ async def _write_dispatch_telemetry(
     judge: "JudgeResult | None",
     legacy_outbound_count: int,
     counterfactual_outcome: str | None,
+    counterfactual_draft: str | None = None,
+    counterfactual_skip_reason: str | None = None,
     counterfactual_elapsed_ms: int | None,
     counterfactual_error: str | None,
 ) -> None:
     """Write one ProactiveDispatchTelemetry row. Best-effort.
 
-    Phase 1: captures legacy outbound count + the counterfactual input-
-    build outcome. The full Tier 3 turn (drafts, skip reasons) is not
-    captured yet — that lands when the SDK tool wiring lands.
+    Phase 2A: captures legacy outbound count + the counterfactual Tier 3
+    outcome (ship/skip/reshape/kill/error/no_terminator), the model's
+    draft (when it shipped), and the skip/kill reason.
     """
     try:
         from backend.db.session import async_session
@@ -597,6 +665,8 @@ async def _write_dispatch_telemetry(
             channel="whatsapp" if legacy_outbound_count > 0 else None,
             counterfactual_legacy_outbound_count=legacy_outbound_count,
             counterfactual_fat_contract_outcome=counterfactual_outcome,
+            counterfactual_fat_contract_draft=counterfactual_draft,
+            counterfactual_fat_contract_skip_reason=counterfactual_skip_reason,
             counterfactual_fat_contract_elapsed_ms=counterfactual_elapsed_ms,
             counterfactual_fat_contract_error=counterfactual_error,
         )

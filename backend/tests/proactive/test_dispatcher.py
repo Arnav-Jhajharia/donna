@@ -318,8 +318,13 @@ async def test_ping_escalate_when_needs_tools(
     invoked = {}
 
     async def fake_donna_turn(state, cfg=None):
-        invoked["state"] = state
-        invoked["cfg"] = cfg
+        # Phase 2A: dispatcher runs both legacy (mode=proactive) and
+        # counterfactual Tier 3 (mode=proactive_tier3) calls. Capture
+        # only the legacy state so this test still asserts on the
+        # _tier2_proposal hint that the legacy prompt path attaches.
+        if cfg is not None and getattr(cfg, "mode", None) == "proactive":
+            invoked["state"] = state
+            invoked["cfg"] = cfg
         return state
 
     # The dispatcher imports donna_turn lazily inside _escalate_to_brain.
