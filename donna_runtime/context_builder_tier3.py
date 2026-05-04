@@ -412,9 +412,34 @@ async def load_user_state_now_block(*, user_id: str) -> str:
             try:
                 from zoneinfo import ZoneInfo
                 now_local = datetime.now(ZoneInfo(tz_name))
+                parts.append(
+                    f"local time: {now_local.strftime('%Y-%m-%d %H:%M')} ({tz_name})"
+                )
             except Exception:
                 now_local = datetime.utcnow()
-            parts.append(f"local time: {now_local.strftime('%Y-%m-%d %H:%M %Z')}")
+                parts.append(f"local time: {now_local.strftime('%Y-%m-%d %H:%M')} (UTC fallback)")
+
+            # Quiet-hours signal so Tier 3 sees the same "is this an OK time
+            # to ping" cue the rate limiter would gate on.
+            try:
+                from backend.integrations.proactive_rate_limit import (
+                    _in_quiet_window,
+                    _parse_hhmm,
+                    _resolve_quiet_hours,
+                )
+
+                sleep_raw, wake_raw = await _resolve_quiet_hours(user_id)
+                if sleep_raw and wake_raw:
+                    sleep_at = _parse_hhmm(sleep_raw)
+                    wake_at = _parse_hhmm(wake_raw)
+                    if sleep_at and wake_at:
+                        in_quiet = _in_quiet_window(now_local.time(), sleep_at, wake_at)
+                        flag = "IN QUIET HOURS — pinging now would wake them" if in_quiet else "outside quiet hours"
+                        parts.append(f"quiet hours: {sleep_raw}-{wake_raw} ({flag})")
+                else:
+                    parts.append("quiet hours: not set (no timezone or sleep/wake facts)")
+            except Exception:
+                logger.exception("tier3 block: quiet-hours lookup failed user=%s", user_id[:8] if user_id else "?")
 
             # Last user message in last 30 min
             cutoff = datetime.utcnow() - timedelta(minutes=30)
