@@ -113,3 +113,73 @@ def build_tier3_user_message(
     # Block 11 — TOOLS lives in the system prompt (not user msg).
 
     return "\n\n".join(parts)
+
+
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+_PLACEHOLDER_PREFIX = "(phase 2a — degraded fallback)"
+
+
+async def load_user_model_block_for_tier3(*, user_id: str) -> str:
+    """Render the USER MODEL block for the Tier 3 input contract.
+
+    Reuses the existing reactive helper. On any failure, returns a
+    placeholder so the dispatcher never blocks.
+    """
+    try:
+        from donna_runtime.context_builder import load_user_model_block
+
+        block = await load_user_model_block(user_id) or ""
+        if not block.strip():
+            return f"{_PLACEHOLDER_PREFIX} no user model loaded"
+        return block.strip()
+    except Exception:
+        logger.exception(
+            "tier3 block: USER MODEL load failed user=%s",
+            user_id[:8] if user_id else "?",
+        )
+        return f"{_PLACEHOLDER_PREFIX} user model unavailable"
+
+
+async def load_pending_notes_block(*, user_id: str) -> str:
+    """Render the PENDING NOTES block from active pending_proactive_notes."""
+    try:
+        from sqlalchemy import select
+
+        from backend.db.session import async_session
+        from db.models import PendingProactiveNote
+    except Exception:
+        logger.exception("tier3 block: pending_notes imports failed")
+        return f"{_PLACEHOLDER_PREFIX} pending notes unavailable"
+
+    try:
+        async with async_session() as session:
+            rows = (
+                await session.execute(
+                    select(PendingProactiveNote)
+                    .where(PendingProactiveNote.user_id == user_id)
+                    .where(PendingProactiveNote.status == "pending")
+                    .order_by(PendingProactiveNote.created_at.desc())
+                    .limit(20)
+                )
+            ).scalars().all()
+    except Exception:
+        logger.exception(
+            "tier3 block: pending_notes query failed user=%s",
+            user_id[:8] if user_id else "?",
+        )
+        return f"{_PLACEHOLDER_PREFIX} pending notes query failed"
+
+    if not rows:
+        return "no pending notes."
+
+    lines = []
+    for row in rows:
+        # Compact one-line per note. Truncate long drafts to keep prompt tight.
+        draft = (getattr(row, "draft_text", None) or getattr(row, "draft", None) or "")[:160]
+        topic = getattr(row, "topic_key", None) or "(no topic)"
+        lines.append(f"- {topic} — {draft}")
+    return "\n".join(lines)
