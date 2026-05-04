@@ -55,52 +55,48 @@ def _percentile(values: list[int], pct: float) -> int | None:
 
 def _summarize(rows: list[Any]) -> dict[str, Any]:
     total = len(rows)
-    input_built = sum(
-        1 for r in rows if r.counterfactual_fat_contract_outcome == "input_built"
-    )
-    input_failed = sum(
-        1 for r in rows if r.counterfactual_fat_contract_outcome == "input_failed"
-    )
     legacy_ships = sum(
         1 for r in rows if (r.counterfactual_legacy_outbound_count or 0) > 0
     )
 
+    # Phase 2A outcomes
+    outcomes = ("ship", "skip", "reshape", "kill", "error", "no_terminator",
+                "input_built", "input_failed")
+    counts = {
+        outcome: sum(
+            1 for r in rows
+            if r.counterfactual_fat_contract_outcome == outcome
+        )
+        for outcome in outcomes
+    }
+
     # Per-speech-act breakdown
     by_act: dict[str, dict[str, int]] = defaultdict(
         lambda: {
-            "n": 0,
-            "input_built": 0,
-            "input_failed": 0,
-            "legacy_ships": 0,
+            "n": 0, "legacy_ships": 0,
+            **{o: 0 for o in outcomes},
         }
     )
     for r in rows:
         act = r.speech_act or "unknown"
         by_act[act]["n"] += 1
-        if r.counterfactual_fat_contract_outcome == "input_built":
-            by_act[act]["input_built"] += 1
-        if r.counterfactual_fat_contract_outcome == "input_failed":
-            by_act[act]["input_failed"] += 1
         if (r.counterfactual_legacy_outbound_count or 0) > 0:
             by_act[act]["legacy_ships"] += 1
+        outcome = r.counterfactual_fat_contract_outcome
+        if outcome in by_act[act]:
+            by_act[act][outcome] += 1
 
     # Per-source breakdown
     by_source: dict[str, dict[str, int]] = defaultdict(
-        lambda: {
-            "n": 0,
-            "input_built": 0,
-            "input_failed": 0,
-        }
+        lambda: {"n": 0, **{o: 0 for o in outcomes}}
     )
     for r in rows:
         src = r.source or "unknown"
         by_source[src]["n"] += 1
-        if r.counterfactual_fat_contract_outcome == "input_built":
-            by_source[src]["input_built"] += 1
-        if r.counterfactual_fat_contract_outcome == "input_failed":
-            by_source[src]["input_failed"] += 1
+        outcome = r.counterfactual_fat_contract_outcome
+        if outcome in by_source[src]:
+            by_source[src][outcome] += 1
 
-    # Elapsed timings (Phase 1 measures input-build only; very fast)
     elapsed = [
         r.counterfactual_fat_contract_elapsed_ms
         for r in rows
@@ -109,22 +105,19 @@ def _summarize(rows: list[Any]) -> dict[str, Any]:
     p50 = _percentile(elapsed, 0.50)
     p95 = _percentile(elapsed, 0.95)
 
-    # Top error types when failed
     errors = Counter()
     for r in rows:
         if (
-            r.counterfactual_fat_contract_outcome == "input_failed"
+            r.counterfactual_fat_contract_outcome == "error"
             and r.counterfactual_fat_contract_error
         ):
-            # error format is "ExceptionType: message[:200]"
             err_type = r.counterfactual_fat_contract_error.split(":", 1)[0]
             errors[err_type] += 1
 
     return {
         "total": total,
-        "input_built": input_built,
-        "input_failed": input_failed,
         "legacy_ships": legacy_ships,
+        **counts,
         "by_speech_act": dict(by_act),
         "by_source": dict(by_source),
         "elapsed_ms_p50": p50,
@@ -138,11 +131,14 @@ def _print_report(summary: dict[str, Any], days: int) -> None:
     print(f"=== proactive counterfactual eval — last {days} days ===\n")
     print(f"total events dispatched:  {total}")
     print(f"  legacy ships:           {summary['legacy_ships']}")
-    print(f"  input_built (Phase 1):  {summary['input_built']}")
-    print(f"  input_failed:           {summary['input_failed']}")
-    if total > 0:
-        success_pct = 100.0 * summary["input_built"] / total
-        print(f"  build success rate:     {success_pct:.1f}%")
+    print(f"  ship (tier 3):          {summary['ship']}")
+    print(f"  skip (tier 3):          {summary['skip']}")
+    print(f"  reshape (tier 3):       {summary['reshape']}")
+    print(f"  kill (tier 3):          {summary['kill']}")
+    print(f"  error (tier 3):         {summary['error']}")
+    print(f"  no_terminator:          {summary['no_terminator']}")
+    print(f"  input_built (legacy):   {summary['input_built']}")
+    print(f"  input_failed (legacy):  {summary['input_failed']}")
     print(f"  elapsed_ms p50 / p95:   {summary['elapsed_ms_p50']} / {summary['elapsed_ms_p95']}")
     print()
 
@@ -151,9 +147,11 @@ def _print_report(summary: dict[str, Any], days: int) -> None:
         for act, stats in sorted(summary["by_speech_act"].items()):
             print(
                 f"  {act:20} n={stats['n']:>4}  "
-                f"built={stats['input_built']:>3}  "
-                f"failed={stats['input_failed']:>2}  "
-                f"legacy_ship={stats['legacy_ships']:>3}"
+                f"ship={stats['ship']:>3}  "
+                f"skip={stats['skip']:>3}  "
+                f"reshape={stats['reshape']:>2}  "
+                f"kill={stats['kill']:>2}  "
+                f"err={stats['error']:>2}"
             )
         print()
 
@@ -162,13 +160,14 @@ def _print_report(summary: dict[str, Any], days: int) -> None:
         for src, stats in sorted(summary["by_source"].items()):
             print(
                 f"  {src:20} n={stats['n']:>4}  "
-                f"built={stats['input_built']:>3}  "
-                f"failed={stats['input_failed']:>2}"
+                f"ship={stats['ship']:>3}  "
+                f"skip={stats['skip']:>3}  "
+                f"err={stats['error']:>2}"
             )
         print()
 
     if summary["top_errors"]:
-        print("top error types (input_failed):")
+        print("top error types (Tier 3 SDK exceptions):")
         for err_type, count in summary["top_errors"]:
             print(f"  {err_type}: {count}")
 

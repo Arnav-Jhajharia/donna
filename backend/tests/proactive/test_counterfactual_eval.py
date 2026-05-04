@@ -81,9 +81,9 @@ def test_summarize_elapsed_p50_p95():
 
 def test_summarize_top_errors_groups_by_exception_type():
     rows = [
-        _row(outcome="input_failed", error="ValueError: missing key"),
-        _row(outcome="input_failed", error="ValueError: bad shape"),
-        _row(outcome="input_failed", error="KeyError: foo"),
+        _row(outcome="error", error="ValueError: missing key"),
+        _row(outcome="error", error="ValueError: bad shape"),
+        _row(outcome="error", error="KeyError: foo"),
     ]
     summary = _summarize(rows)
     assert dict(summary["top_errors"]) == {"ValueError": 2, "KeyError": 1}
@@ -97,3 +97,36 @@ def test_summarize_legacy_ships_counts_only_with_outbound():
     ]
     summary = _summarize(rows)
     assert summary["legacy_ships"] == 2  # only the rows with legacy_count > 0
+
+
+def test_summarize_counts_phase_2a_outcomes():
+    rows = [
+        _row(outcome="ship"),
+        _row(outcome="ship"),
+        _row(outcome="skip"),
+        _row(outcome="reshape"),
+        _row(outcome="kill"),
+        _row(outcome="error", error="RuntimeError: SDK failure"),
+        _row(outcome="no_terminator"),
+    ]
+    summary = _summarize(rows)
+    assert summary["ship"] == 2
+    assert summary["skip"] == 1
+    assert summary["reshape"] == 1
+    assert summary["kill"] == 1
+    assert summary["error"] == 1
+    assert summary["no_terminator"] == 1
+
+
+def test_summarize_per_speech_act_includes_phase_2a_outcomes():
+    rows = [
+        _row(speech_act="heads_up", outcome="ship"),
+        _row(speech_act="heads_up", outcome="skip"),
+        _row(speech_act="i_noticed", outcome="ship"),
+    ]
+    summary = _summarize(rows)
+    heads = summary["by_speech_act"]["heads_up"]
+    assert heads["ship"] == 1
+    assert heads["skip"] == 1
+    iotc = summary["by_speech_act"]["i_noticed"]
+    assert iotc["ship"] == 1
