@@ -22,6 +22,8 @@ from datetime import datetime
 from typing import Any, Literal
 
 
+_MAX_REASON_LEN = 500
+
 # ---- terminators -----------------------------------------------------------
 
 
@@ -35,7 +37,7 @@ async def skip(reason: str) -> dict[str, Any]:
     """
     if not reason or not reason.strip():
         raise ValueError("skip requires a reason (one short sentence)")
-    return {"action": "skip", "reason": reason.strip()}
+    return {"action": "skip", "reason": reason.strip()[:_MAX_REASON_LEN]}
 
 
 async def kill_attention(*, attention_id: str, reason: str) -> dict[str, Any]:
@@ -48,6 +50,7 @@ async def kill_attention(*, attention_id: str, reason: str) -> dict[str, Any]:
     DO NOT USE: for transient stale (use reshape_attention with
                 next_fire_at instead).
     """
+    attention_id = attention_id.strip() if attention_id else ""
     if not attention_id:
         raise ValueError("attention_id is required")
     if not reason or not reason.strip():
@@ -55,7 +58,7 @@ async def kill_attention(*, attention_id: str, reason: str) -> dict[str, Any]:
     return {
         "action": "kill",
         "attention_id": attention_id,
-        "reason": reason.strip(),
+        "reason": reason.strip()[:_MAX_REASON_LEN],
     }
 
 
@@ -63,7 +66,7 @@ async def reshape_attention(
     *,
     attention_id: str,
     next_fire_at: datetime | None = None,
-    surface_level: Literal["DEFAULT", "DIGEST", "URGENT"] | None = None,
+    surface_level: Literal["silent", "digest", "notify", "urgent"] | None = None,
     cadence_change: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Modify the live attention spec without firing.
@@ -73,6 +76,7 @@ async def reshape_attention(
     DO NOT USE: when the right action is to fire now (use send_burst), or
                 when the spec is permanently moot (use kill_attention).
     """
+    attention_id = attention_id.strip() if attention_id else ""
     if not attention_id:
         raise ValueError("attention_id is required")
     if next_fire_at is None and surface_level is None and not cadence_change:

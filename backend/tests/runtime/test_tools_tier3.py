@@ -58,3 +58,26 @@ async def test_reshape_attention_with_next_fire_at():
 async def test_reshape_attention_requires_at_least_one_change():
     with pytest.raises(ValueError, match="at least one"):
         await reshape_attention(attention_id="att_1")
+
+
+@pytest.mark.asyncio
+async def test_kill_attention_strips_whitespace_only_id():
+    with pytest.raises(ValueError, match="attention_id"):
+        await kill_attention(attention_id="   ", reason="x")
+
+
+@pytest.mark.asyncio
+async def test_reshape_attention_with_surface_level_canonical_value():
+    out = await reshape_attention(
+        attention_id="att_1",
+        surface_level="urgent",
+    )
+    assert out["reshape_kwargs"]["surface_level"] == "urgent"
+
+
+@pytest.mark.asyncio
+async def test_skip_caps_reason_length():
+    long_reason = "x" * 1000
+    out = await skip(reason=long_reason)
+    # Reason capped at 500 chars (the module-level _MAX_REASON_LEN).
+    assert len(out["reason"]) == 500
