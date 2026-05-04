@@ -841,6 +841,8 @@ def _replace_draft(judge: JudgeResult, draft: str) -> JudgeResult:
         raw_response=judge.raw_response,
         failed=judge.failed,
         failure_reason=judge.failure_reason,
+        channel_hint=judge.channel_hint,
+        reclassify_speech_act=judge.reclassify_speech_act,
     )
 
 

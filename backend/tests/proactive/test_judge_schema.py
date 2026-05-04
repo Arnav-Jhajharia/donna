@@ -74,3 +74,47 @@ def test_judge_output_pydantic_back_compat_omits_new_fields():
     )
     assert out.channel_hint is None
     assert out.reclassify_speech_act is None
+
+
+def test_judge_event_passes_channel_hint_through_judgeresult(monkeypatch):
+    """The Pydantic JudgeOutput's channel_hint and reclassify_speech_act
+    must flow through judge_event into the returned JudgeResult."""
+    import asyncio
+    import json
+    from proactive.events import ProactiveEvent
+    from proactive.judge import JudgeOutput, judge_event
+
+    fake_out = JudgeOutput(
+        action="ping",
+        register="alert",
+        draft="x",
+        tie_in=[],
+        needs_tools=False,
+        reasoning="",
+        channel_hint="dashboard",
+        reclassify_speech_act="i_noticed",
+    )
+    fake_raw = json.dumps(fake_out.model_dump())
+
+    async def fake_call_haiku(*, system_prompt, user_message):
+        return fake_out, fake_raw
+
+    monkeypatch.setattr(
+        "proactive.judge._call_haiku",
+        fake_call_haiku,
+    )
+
+    async def _run():
+        return await judge_event(
+            ProactiveEvent(
+                user_id="u1",
+                source="email",
+                source_ref="r",
+                topic_key="t",
+                payload={"subject": "s"},
+            )
+        )
+
+    result = asyncio.run(_run())
+    assert result.channel_hint == "dashboard"
+    assert result.reclassify_speech_act == "i_noticed"

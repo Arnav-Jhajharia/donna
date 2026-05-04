@@ -55,3 +55,22 @@ def test_proactive_source_includes_system_b_web():
         speech_act="thought_youd_want",
     )
     assert event.source == "system_b_web"
+
+
+def test_make_event_from_email_sets_heads_up_speech_act():
+    """The email adapter routes through infer_speech_act and tags heads_up."""
+    from proactive.events import make_event_from_email
+
+    msg = type("Msg", (), {
+        "body_text": "hey",
+        "snippet": "hey",
+        "from_address": "luca@x.com",
+        "from_name": "Luca",
+        "subject": "term sheet",
+        "thread_id": "thread_xyz",
+        "gmail_message_id": "msg_123",
+    })()
+    score = type("Score", (), {"score": 0.7, "signals": ["biography"]})()
+
+    event = make_event_from_email(user_id="u1", msg=msg, score=score)
+    assert event.speech_act == "heads_up"

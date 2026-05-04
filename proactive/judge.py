@@ -376,6 +376,8 @@ async def judge_event(event: ProactiveEvent) -> JudgeResult:
         needs_tools=bool(parsed.needs_tools),
         reasoning=(parsed.reasoning or "").strip(),
         raw_response=raw,
+        channel_hint=parsed.channel_hint,
+        reclassify_speech_act=parsed.reclassify_speech_act,
     )
 
 

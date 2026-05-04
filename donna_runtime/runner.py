@@ -159,7 +159,7 @@ async def _donna_turn_core(
                     # the model's "this isn't worth pinging" decision into a
                     # generic check-in ("what's on your mind", etc.) which is
                     # exactly the failure mode we are trying to kill.
-                    if config.mode != "proactive":
+                    if config.mode not in {"proactive", "proactive_tier3"}:
                         await _fallback_plain_text_to_send_burst(trace)
                 except TimeoutError:
                     trace.record_runtime_error(f"Donna Agent SDK query timed out after {config.request_timeout_s:.1f}s")

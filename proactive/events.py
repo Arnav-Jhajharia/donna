@@ -126,11 +126,18 @@ def make_event_from_email(
     }
     thread_id = getattr(msg, "thread_id", None)
     gmail_message_id = getattr(msg, "gmail_message_id", "") or ""
+
+    # Route through infer_speech_act so email events carry the correct
+    # speech_act tag ("heads_up") instead of defaulting to thought_youd_want.
+    from proactive.sources._inference import infer_speech_act
+    speech_act = infer_speech_act("email", payload=payload, signals=signals)
+
     return ProactiveEvent(
         user_id=user_id,
         source="email",
         source_ref=gmail_message_id,
         topic_key=str(thread_id or gmail_message_id),
+        speech_act=speech_act,
         payload=payload,
         signals=signals,
     )
