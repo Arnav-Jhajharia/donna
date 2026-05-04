@@ -49,6 +49,34 @@ def infer_speech_act(
 
 
 def _infer_attention_fire(payload: dict[str, Any]) -> SpeechAct:
+    """Map an attention_fire payload to its speech act.
+
+    PAYLOAD CONTRACT (for the attention_fire source adapter to populate
+    when it is wired up in Phase 2):
+
+      payload["origin"]:
+        "USER_REQUESTED"     — user opted in via attend()
+        "DONNA_ANTICIPATED"  — Donna self-scheduled via attend(origin="donna")
+        "SHADOW_INFERRED"    — proposer-discovered SHADOW attention
+        (other / unset      — falls through to thought_youd_want)
+
+      payload["card"]:
+        "PING" / "DIGEST" / "TRACKER" / etc — the attention card type
+
+      payload["proposer"]:
+        Class name of the proposer for SHADOW_INFERRED attentions, e.g.
+        "ObservationFrequencyProposer". Only consulted when origin is
+        SHADOW_INFERRED.
+
+    Until the adapter is updated, this helper returns thought_youd_want
+    for every real attention_fire event (the keys above are not
+    populated).
+
+    The CONTRACT values intentionally use the SCREAMING_SNAKE form to
+    avoid collision with the existing lowercase AttentionOrigin enum
+    values (user_explicit, shadow_inferred, etc.). The adapter does the
+    translation at emission time so this helper stays terse.
+    """
     origin = str(payload.get("origin") or "").upper()
     card = str(payload.get("card") or "").upper()
     proposer = str(payload.get("proposer") or "")

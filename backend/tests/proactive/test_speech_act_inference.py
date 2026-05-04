@@ -46,5 +46,24 @@ def test_system_b_web_upgrades_to_heads_up_when_urgent():
     assert sa == "heads_up"
 
 
-def test_unknown_source_falls_back_to_thought_youd_want():
+def test_pattern_is_thought_youd_want():
     assert infer_speech_act("pattern", payload={}, signals={}) == "thought_youd_want"
+
+
+def test_attention_offer_is_thought_youd_want():
+    assert (
+        infer_speech_act("attention_offer", payload={}, signals={})
+        == "thought_youd_want"
+    )
+
+
+def test_truly_unknown_source_falls_back_to_default():
+    """A source string not in ProactiveSource hits the final fallback."""
+    assert (
+        infer_speech_act(
+            "sms",  # type: ignore[arg-type]
+            payload={},
+            signals={},
+        )
+        == "thought_youd_want"
+    )
