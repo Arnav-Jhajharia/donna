@@ -1,8 +1,6 @@
 """ProactiveEvent envelope — speech_act field and system_b_web source."""
 from __future__ import annotations
 
-import pytest
-
 from proactive.events import ProactiveEvent, SpeechAct
 
 

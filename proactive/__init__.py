@@ -19,14 +19,16 @@ from __future__ import annotations
 from proactive.events import (
     ProactiveEvent,
     ProactiveSource,
+    SpeechAct,
     make_event_from_email,
 )
 from proactive.judge import JudgeResult, judge_event
 
 __all__ = (
+    "JudgeResult",
     "ProactiveEvent",
     "ProactiveSource",
-    "JudgeResult",
+    "SpeechAct",
     "judge_event",
     "make_event_from_email",
 )
