@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime, timezone
 
 import sqlalchemy as sa
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -102,11 +102,22 @@ class Observation(Base):
     source: Mapped[str] = mapped_column(String, default="whatsapp")
     lineage: Mapped[list | None] = mapped_column(JSONB, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
+    # Soft-delete: when the user corrects a wrong log ("no I didn't have
+    # that"), the row stays for audit but is invisible to all read
+    # surfaces (list_observations, recall fanout, attention engine,
+    # synthesis). Reversible — clear the column to undelete.
+    deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    deleted_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     __table_args__ = (
         Index("idx_obs_user_type_time", "user_id", "type", "event_time"),
         Index("idx_obs_user_time", "user_id", "event_time"),
         Index("idx_obs_user_instance", "user_id", "instance_id"),
+        Index(
+            "idx_obs_user_type_time_live",
+            "user_id", "type", "event_time",
+            postgresql_where=sa.text("deleted_at IS NULL"),
+        ),
     )
 
 
@@ -947,3 +958,130 @@ class ProactiveDailyCount(Base):
     )
     local_date: Mapped[str] = mapped_column(String, primary_key=True)
     count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+
+class UserDay(Base):
+    """One row per user per local day. Deterministic aggregate — no LLM.
+
+    Tracks what the user did and what Donna did so both are available
+    as pre-turn context without tool calls. Updated post-turn by the
+    ``upsert_today_record`` hook and at fire time by the schedule worker.
+    Finalized nightly by ``day_record_worker``.
+    """
+
+    __tablename__ = "user_days"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    date_local: Mapped[str] = mapped_column(String, nullable=False)  # "YYYY-MM-DD" in user tz
+    timezone: Mapped[str] = mapped_column(String, nullable=False)
+    finalized: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    # User activity — incremented by the post-turn hook
+    user_message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Donna's output — incremented by hook + schedule worker
+    donna_message_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    donna_proactive_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # [{title, fired_at_local, message_preview}] — appended at each schedule fire
+    schedule_fires: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
+    attentions_accepted: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    attentions_snoozed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Finalized by nightly job from raw tables
+    observation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    # [{"type": "meal", "count": 3}]
+    observation_types: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    open_loops_opened: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    open_loops_closed: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    # Calendar timeline for the day (Google Calendar via Composio sync).
+    # [{"start_local": "09:00", "end_local": "10:30", "title": "...", "location": "...", "all_day": false}]
+    calendar_events: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+
+    # Deterministic narrative built by nightly job (no LLM)
+    digest: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "date_local", name="uq_user_days_user_date"),
+        Index("idx_user_days_user_date", "user_id", "date_local"),
+        Index(
+            "idx_user_days_unfinalized", "user_id", "finalized",
+            postgresql_where=sa.text("finalized = false"),
+        ),
+    )
+
+
+class ProactiveDispatchTelemetry(Base):
+    """Per-event audit row for the proactive pipeline.
+
+    Phase 1 use: log both legacy thin-directive Tier 3 outcomes AND the
+    new fat-contract counterfactual side-by-side, so we can compare
+    decisions and drafts before flipping anything live.
+
+    Long-term: the canonical observability table for arbiter / Tier 2 /
+    Tier 3 decisions. Replaces ad-hoc logging.
+    """
+
+    __tablename__ = "proactive_dispatch_telemetry"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(String, ForeignKey("users.id"), nullable=False)
+    event_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+    # Event identity
+    source: Mapped[str] = mapped_column(String, nullable=False)
+    speech_act: Mapped[str] = mapped_column(String, nullable=False)
+    topic_key: Mapped[str] = mapped_column(String, nullable=False)
+
+    # Tier 1
+    tier1_score: Mapped[float | None] = mapped_column(Float, nullable=True)
+
+    # Arbiter
+    arbiter_decision: Mapped[str | None] = mapped_column(String, nullable=True)
+    arbiter_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Tier 2
+    tier2_action: Mapped[str | None] = mapped_column(String, nullable=True)
+    tier2_register: Mapped[str | None] = mapped_column(String, nullable=True)
+    tier2_draft: Mapped[str | None] = mapped_column(Text, nullable=True)
+    tier2_needs_tools: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    tier2_channel_hint: Mapped[str | None] = mapped_column(String, nullable=True)
+    tier2_reclassify: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Tier 3 (legacy thin-directive path — what actually shipped today)
+    tier3_invoked: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    tier3_outcome: Mapped[str | None] = mapped_column(String, nullable=True)
+    channel: Mapped[str | None] = mapped_column(String, nullable=True)
+
+    # Counterfactual fat-contract Phase-1 logging — what the NEW path WOULD do
+    # Mirror-mode only: these fields capture the new pipeline's decision
+    # without acting on it.
+    counterfactual_legacy_outbound_count: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    counterfactual_fat_contract_outcome: Mapped[str | None] = mapped_column(
+        String, nullable=True
+    )
+    counterfactual_fat_contract_draft: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    counterfactual_fat_contract_skip_reason: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+    counterfactual_fat_contract_elapsed_ms: Mapped[int | None] = mapped_column(
+        Integer, nullable=True
+    )
+    counterfactual_fat_contract_error: Mapped[str | None] = mapped_column(
+        Text, nullable=True
+    )
+
+    __table_args__ = (
+        Index("idx_pdt_user_event_at", "user_id", "event_at"),
+        Index("idx_pdt_speech_act", "speech_act"),
+        Index("idx_pdt_topic_key", "topic_key"),
+    )
