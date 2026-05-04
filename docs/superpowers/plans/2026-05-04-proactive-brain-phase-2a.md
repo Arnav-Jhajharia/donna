@@ -76,7 +76,7 @@ def test_tier3_sdk_tools_includes_all_six():
 
 @pytest.mark.asyncio
 async def test_skip_tool_delegates_to_typed_function():
-    result = await skip_tool({"reason": "moment is dead"})
+    result = await skip_tool.handler({"reason": "moment is dead"})
     # SDK tool result shape: {"content": [...], "isError": False (optional)}
     # The typed function returns {"action": "skip", "reason": ...}; the
     # wrapper packages it for the SDK.
@@ -90,13 +90,13 @@ async def test_skip_tool_delegates_to_typed_function():
 async def test_skip_tool_validation_error_returned_as_error():
     """Empty reason → typed function raises ValueError → wrapper packages
     as SDK error result, not a Python exception."""
-    result = await skip_tool({"reason": ""})
+    result = await skip_tool.handler({"reason": ""})
     assert result.get("isError") is True
 
 
 @pytest.mark.asyncio
 async def test_send_burst_tool_supports_quadrant_matrix():
-    result = await send_burst_tool({
+    result = await send_burst_tool.handler({
         "messages": [{"type": "text", "body": "hi"}],
         "push": False,
         "surface_at": "morning_brief",
@@ -108,7 +108,7 @@ async def test_send_burst_tool_supports_quadrant_matrix():
 
 @pytest.mark.asyncio
 async def test_kill_attention_tool_returns_outcome():
-    result = await kill_attention_tool({
+    result = await kill_attention_tool.handler({
         "attention_id": "att_1",
         "reason": "user already did the thing",
     })
@@ -120,13 +120,13 @@ async def test_kill_attention_tool_returns_outcome():
 
 @pytest.mark.asyncio
 async def test_quick_check_tool_validates_question():
-    result = await quick_check_tool({"question": "", "max_results": 3})
+    result = await quick_check_tool.handler({"question": "", "max_results": 3})
     assert result.get("isError") is True
 
 
 @pytest.mark.asyncio
 async def test_read_external_tool_validates_source():
-    result = await read_external_tool({
+    result = await read_external_tool.handler({
         "source": "bogus",
         "ref": "x",
     })
