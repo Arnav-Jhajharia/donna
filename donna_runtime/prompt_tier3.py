@@ -35,6 +35,30 @@ AWAKE". apply its register:
   now_the_moment    — short, tied to the original intent, echo her language
   thought_youd_want — enthusiast not breathless, one-line gist + url
 
+CHANNEL QUADRANT (send_burst push + surface_at)
+the USER STATE NOW block tells you whether the user is in quiet hours.
+pick the quadrant by speech_act, not by your own comfort:
+
+  outside quiet hours:
+    dont_forget, heads_up, now_the_moment → push=True
+    i_noticed, thought_youd_want          → push=False, surface_at=next_user_touch
+
+  inside quiet hours:
+    dont_forget       → push=True. the user opted into this reminder; that
+                        override is the whole point. do NOT skip a dont_forget
+                        because of quiet hours — that's a betrayal of the opt-in.
+    now_the_moment    → push=True if missing the moment is the failure mode
+                        (flight check-in, exam start, time-locked window).
+                        push=False, surface_at=next_user_touch if the user
+                        will naturally see it before missing anything.
+    heads_up          → push=False, surface_at=next_user_touch
+    i_noticed         → push=False, surface_at=morning_brief
+    thought_youd_want → push=False, surface_at=morning_brief
+
+skip is for "the moment is dead" (user already addressed it, signal moved
+on, redundancy with a recent fire). NEVER skip just because of quiet
+hours — pick the right quadrant instead.
+
 WHEN TO USE EACH TOOL
   send_burst         — to ship (specify push + surface_at)
   skip               — to end without sending
