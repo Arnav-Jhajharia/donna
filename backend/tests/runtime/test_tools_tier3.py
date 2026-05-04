@@ -9,6 +9,7 @@ from donna_runtime.tools_tier3 import (
     skip,
     kill_attention,
     reshape_attention,
+    send_burst,
 )
 
 
@@ -81,3 +82,58 @@ async def test_skip_caps_reason_length():
     out = await skip(reason=long_reason)
     # Reason capped at 500 chars (the module-level _MAX_REASON_LEN).
     assert len(out["reason"]) == 500
+
+
+@pytest.mark.asyncio
+async def test_send_burst_push_default_quadrant():
+    out = await send_burst(messages=[{"type": "text", "body": "hi"}])
+    assert out["action"] == "ship"
+    assert out["push"] is True
+    assert out["surface_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_send_burst_ambient_quadrant():
+    out = await send_burst(
+        messages=[{"type": "text", "body": "fyi"}],
+        push=False,
+    )
+    assert out["action"] == "ship"
+    assert out["push"] is False
+    assert out["surface_at"] is None
+
+
+@pytest.mark.asyncio
+async def test_send_burst_hold_for_next_touch():
+    out = await send_burst(
+        messages=[{"type": "text", "body": "later"}],
+        push=False,
+        surface_at="next_user_touch",
+    )
+    assert out["surface_at"] == "next_user_touch"
+
+
+@pytest.mark.asyncio
+async def test_send_burst_morning_brief():
+    out = await send_burst(
+        messages=[{"type": "text", "body": "tomorrow"}],
+        push=False,
+        surface_at="morning_brief",
+    )
+    assert out["surface_at"] == "morning_brief"
+
+
+@pytest.mark.asyncio
+async def test_send_burst_rejects_push_with_surface_at():
+    with pytest.raises(ValueError, match="surface_at requires push=False"):
+        await send_burst(
+            messages=[{"type": "text", "body": "x"}],
+            push=True,
+            surface_at="morning_brief",
+        )
+
+
+@pytest.mark.asyncio
+async def test_send_burst_requires_messages():
+    with pytest.raises(ValueError, match="messages"):
+        await send_burst(messages=[])

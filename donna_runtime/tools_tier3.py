@@ -96,3 +96,41 @@ async def reshape_attention(
         "attention_id": attention_id,
         "reshape_kwargs": reshape_kwargs,
     }
+
+
+async def send_burst(
+    *,
+    messages: list[dict[str, Any]],
+    push: bool = True,
+    surface_at: Literal["next_user_touch", "morning_brief"] | None = None,
+) -> dict[str, Any]:
+    """Ship the proactive message. Channel is inline.
+
+    Quadrants:
+      push=True,  surface_at=None         -> WhatsApp ping + chat_messages
+      push=False, surface_at=None         -> ambient (chat_messages only)
+      push=False, surface_at="next_user_touch" -> pending_proactive_notes,
+                                                 surfaces in next reactive turn
+      push=False, surface_at="morning_brief"   -> pending note tagged for
+                                                  tomorrow's morning brief
+
+    USE: to actually ship (or hold).
+    DO NOT USE: when fresh signal shows the moment is dead — use skip.
+
+    NOTE: surface_at is meaningful only with push=False. push=True with
+    surface_at set raises — pushing means the user gets it now, holding
+    is a contradiction.
+    """
+    if not messages:
+        raise ValueError("messages list must not be empty")
+    if push and surface_at is not None:
+        raise ValueError(
+            "surface_at requires push=False (you can't push and hold at "
+            "the same time)"
+        )
+    return {
+        "action": "ship",
+        "messages": messages,
+        "push": push,
+        "surface_at": surface_at,
+    }
