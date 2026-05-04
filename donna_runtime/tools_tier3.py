@@ -148,30 +148,36 @@ async def send_burst(
 # ---- read tools ------------------------------------------------------------
 
 
+class _ExaSearchDegraded(Exception):
+    """Raised when the Exa search call could not be completed (import
+    failure, missing key, network error, etc.). The public tool layer
+    catches this and surfaces status='degraded' so the brain can
+    distinguish 'no hits' from 'tool failed'."""
+
+
 async def _exa_search_for_quick_check(
     *, query: str, num_results: int
 ) -> list[dict[str, Any]]:
     """Indirection for monkeypatching in tests + isolating the Exa client.
 
-    Real implementation lazy-imports the Exa client; this stays importable
-    without an Exa key for most callsites.
-
-    Returns a list of simplified hit dicts, each with title/url/excerpt.
+    Returns a list of simplified hit dicts with title/url/excerpt.
+    Raises _ExaSearchDegraded when Exa cannot be reached (no key, import
+    failure, runtime exception). An empty list means Exa returned zero
+    matches — that is a valid result, not a failure.
     """
     try:
         from backend.web.client import exa_search, have_exa_key
-    except Exception:
+    except Exception as exc:
         logger.exception("quick_check: exa client import failed")
-        return []
+        raise _ExaSearchDegraded("exa_client_import_failed") from exc
     if not have_exa_key():
-        logger.warning("quick_check: no EXA_API_KEY — returning empty")
-        return []
+        logger.warning("quick_check: no EXA_API_KEY")
+        raise _ExaSearchDegraded("missing_exa_api_key")
     try:
-        # exa_search returns Exa's raw JSON (dict with a "results" array).
         response = await exa_search(query=query, num_results=num_results)
-    except Exception:
+    except Exception as exc:
         logger.exception("quick_check: exa_search raised")
-        return []
+        raise _ExaSearchDegraded(f"exa_search_raised:{type(exc).__name__}") from exc
     raw_results = response.get("results", []) if isinstance(response, dict) else []
     return [
         {
@@ -195,6 +201,13 @@ async def quick_check(
     DO NOT USE: for general research or exploration. This is verification,
                 not curiosity.
     HARD LIMIT: one call per turn. The harness rejects a second call.
+    Cost: ~$0.005, ~1-2s.
+
+    Returns one of:
+      {status: "ok",         results: [...], ...}  hits returned
+      {status: "no_results", results: [],    ...}  Exa called, zero hits
+      {status: "degraded",   results: [],    error: <reason>, ...}
+                                                   Exa unreachable
     """
     if not question or not question.strip():
         raise ValueError("question is required")
@@ -202,14 +215,24 @@ async def quick_check(
         raise ValueError(
             f"max_results must be 1..{_QUICK_CHECK_MAX_RESULTS}; got {max_results}"
         )
-    results = await _exa_search_for_quick_check(
-        query=question.strip(), num_results=max_results
-    )
+    fetched_at = datetime.now(timezone.utc).isoformat()
+    try:
+        results = await _exa_search_for_quick_check(
+            query=question.strip(), num_results=max_results
+        )
+    except _ExaSearchDegraded as exc:
+        return {
+            "status": "degraded",
+            "question": question.strip(),
+            "results": [],
+            "error": str(exc),
+            "fetched_at": fetched_at,
+        }
     return {
         "status": "ok" if results else "no_results",
         "question": question.strip(),
         "results": results,
-        "fetched_at": datetime.now(timezone.utc).isoformat(),
+        "fetched_at": fetched_at,
     }
 
 
@@ -226,6 +249,7 @@ async def read_external(
               and that exact resource isn't in the pre-fetched fresh_signal
               block.
     DO NOT USE: when pre-fetched fresh_signal already has what you need.
+    Cost: source-specific, ~0.5-2s.
     """
     if source not in _READ_EXTERNAL_SOURCES:
         raise ValueError(
@@ -233,13 +257,13 @@ async def read_external(
         )
     if not ref:
         raise ValueError("ref is required")
-    # Phase 1: stub. Real per-source fetchers land alongside Phase 2.
+    # Phase 1 stub. Real per-source fetchers land with the System B
+    # fold-in. We return note="stub" (not human-readable prose) so the
+    # LLM doesn't try to interpret a free-form engineering message.
     return {
         "status": "no_fetcher",
         "source": source,
         "ref": ref,
-        "note": (
-            "Phase 1 stub. Real fetcher lands with the System B fold-in."
-        ),
+        "note": "stub",
         "fetched_at": datetime.now(timezone.utc).isoformat(),
     }

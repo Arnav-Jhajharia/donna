@@ -185,3 +185,44 @@ async def test_read_external_gmail_thread_returns_stub():
     assert out["status"] in {"ok", "degraded", "no_fetcher"}
     assert out["source"] == "gmail_thread"
     assert out["ref"] == "thread_xyz"
+
+
+@pytest.mark.asyncio
+async def test_quick_check_rejects_zero_max_results():
+    with pytest.raises(ValueError, match="max_results"):
+        await quick_check(question="x", max_results=0)
+
+
+@pytest.mark.asyncio
+async def test_quick_check_returns_degraded_when_exa_fails(monkeypatch):
+    """Exa unreachable → status='degraded', empty results, error key set."""
+    from donna_runtime.tools_tier3 import _ExaSearchDegraded
+
+    async def _boom(*, query, num_results, **_kwargs):
+        raise _ExaSearchDegraded("simulated_failure")
+
+    monkeypatch.setattr(
+        "donna_runtime.tools_tier3._exa_search_for_quick_check",
+        _boom,
+    )
+    out = await quick_check(question="anything")
+    assert out["status"] == "degraded"
+    assert out["results"] == []
+    assert "error" in out
+    assert out["error"] == "simulated_failure"
+
+
+@pytest.mark.asyncio
+async def test_quick_check_returns_no_results_when_exa_returns_empty(monkeypatch):
+    """Distinct from degraded: Exa called, zero hits."""
+    async def _empty(*, query, num_results, **_kwargs):
+        return []
+
+    monkeypatch.setattr(
+        "donna_runtime.tools_tier3._exa_search_for_quick_check",
+        _empty,
+    )
+    out = await quick_check(question="anything")
+    assert out["status"] == "no_results"
+    assert out["results"] == []
+    assert "error" not in out
