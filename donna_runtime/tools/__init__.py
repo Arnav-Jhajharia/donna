@@ -63,6 +63,14 @@ from .dashboard import (
 )
 from .auth import send_login_otp
 from .reminders import cancel_reminder, list_reminders, remind
+from .features import (
+    archive_feature,
+    install_feature,
+    list_features,
+    pause_feature,
+    resume_feature,
+    update_feature_config,
+)
 from .terminators import SEND_BURST_INPUT_SCHEMA, send_burst
 
 DONNA_TOOLS = (
@@ -95,5 +103,11 @@ DONNA_TOOLS = (
     send_dashboard_link,
     send_login_otp,
     clear_pending_note,
+    install_feature,
+    pause_feature,
+    resume_feature,
+    archive_feature,
+    list_features,
+    update_feature_config,
     send_burst,  # terminator — must remain last
 )

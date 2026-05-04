@@ -919,6 +919,7 @@ def _format_brief(
     calendar_entries: list[CalendarEntry],
     last_manifest_thesis: str | None,
     trigger: str,
+    feature_card_candidates: list[Any] | None = None,
 ) -> str:
     """Plaintext brief handed to the LLM. Sectioned, capped per-section."""
     parts: list[str] = []
@@ -988,6 +989,20 @@ def _format_brief(
         lines = [_format_chat_message(m) for m in chat_tail]
         parts.append(
             "## Recent chat (oldest first — this is the most current signal of what's on user's mind)\n"
+            + "\n".join(lines)
+        )
+
+    # Active features — bounded set of dashboard cards the user has opted
+    # into. The LLM picks WHICH earn space + ordering + hero / thesis
+    # framing, but cannot invent feature cards no manifest declared.
+    # Gated by ``DONNA_FEATURE_DASHBOARD_CARDS`` — empty list when the
+    # flag is off so the brief stays bit-for-bit identical to today.
+    if feature_card_candidates:
+        lines = [c.to_brief_line() for c in feature_card_candidates]
+        parts.append(
+            "## Active features — declared dashboard cards (the user has opted "
+            "in to these features; render values and feature_id are pre-computed, "
+            "the LLM only chooses WHICH cards earn space + ordering + framing)\n"
             + "\n".join(lines)
         )
 
@@ -1223,6 +1238,28 @@ async def compose_manifest(
 
     now_local = _resolve_now_local(user.timezone)
     place = _resolve_place(user)
+
+    # Feature dashboard cards — gated by env flag (default off).
+    feature_candidates: list[Any] = []
+    try:
+        from backend.features.dashboard_cards import (
+            is_feature_dashboard_enabled,
+            read_feature_card_candidates,
+        )
+
+        if is_feature_dashboard_enabled(user_id):
+            async with async_session() as cards_session:
+                feature_candidates = await read_feature_card_candidates(
+                    session=cards_session,
+                    user_id=user_id,
+                    observations=observations,
+                    now_local=now_local,
+                )
+    except Exception:
+        logger.exception(
+            "compose_manifest: feature card read failed user_id=%s", user_id
+        )
+
     brief = _format_brief(
         user=user,
         now_local=now_local,
@@ -1236,6 +1273,7 @@ async def compose_manifest(
         calendar_entries=calendar_entries,
         last_manifest_thesis=last_manifest_thesis,
         trigger=trigger,
+        feature_card_candidates=feature_candidates,
     )
 
     try:

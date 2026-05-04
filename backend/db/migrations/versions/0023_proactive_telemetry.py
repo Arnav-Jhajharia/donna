@@ -1,6 +1,6 @@
 """Proactive dispatch telemetry — Phase 1 counterfactual logging.
 
-Revision ID: 0023_proactive_dispatch_telemetry
+Revision ID: 0023_proactive_telemetry
 Revises: 0022
 Create Date: 2026-05-04 00:00:00
 """
@@ -8,7 +8,7 @@ from alembic import op
 import sqlalchemy as sa
 
 
-revision = "0023_proactive_dispatch_telemetry"
+revision = "0023_proactive_telemetry"
 down_revision = "0022"
 branch_labels = None
 depends_on = None

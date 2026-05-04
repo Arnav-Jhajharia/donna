@@ -75,6 +75,12 @@ class ProceduralRule(Base):
     quote: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
     last_confirmed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    # Phase 1 features primitive: rules can be scoped to a feature
+    # ("for hydration: never nudge after 22:00"). NULLable for free-form
+    # global rules.
+    feature_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("features.id"), nullable=True
+    )
 
 
 class Observation(Base):
@@ -108,6 +114,11 @@ class Observation(Base):
     # synthesis). Reversible — clear the column to undelete.
     deleted_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     deleted_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # Feature back-link (Phase 1). NULLable — pre-feature observations and
+    # any free-form log that doesn't match an active feature stay NULL.
+    feature_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("features.id"), nullable=True
+    )
 
     __table_args__ = (
         Index("idx_obs_user_type_time", "user_id", "type", "event_time"),
@@ -256,6 +267,12 @@ class DonnaSchedule(Base):
     last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     attention_id: Mapped[str | None] = mapped_column(String, nullable=True)
     recurrence_meta: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    # Phase 1 features primitive: schedule rows materialised from a
+    # feature manifest's cron[] are tagged here so a pause/archive of the
+    # feature can scope cleanups. NULLable for hand-spawned rows.
+    feature_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("features.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow)
 
     __table_args__ = (
@@ -718,6 +735,12 @@ class AttentionRow(Base):
     last_surfaced_at: Mapped[datetime | None] = mapped_column(
         DateTime, nullable=True
     )
+    # Phase 1 features primitive: attentions spawned by an installed
+    # feature manifest carry the owning feature id. NULLable for the
+    # vast majority of attentions which are hand-spawned per-intent.
+    feature_id: Mapped[str | None] = mapped_column(
+        String, ForeignKey("features.id"), nullable=True
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=utcnow, nullable=False
     )
@@ -1092,4 +1115,56 @@ class ProactiveDispatchTelemetry(Base):
         Index("idx_pdt_user_event_at", "user_id", "event_at"),
         Index("idx_pdt_speech_act", "speech_act"),
         Index("idx_pdt_topic_key", "topic_key"),
+    )
+
+
+class Feature(Base):
+    """Composable per-user installation of a feature manifest.
+
+    A Feature ties together attentions + observations + cron + dashboard
+    cards + hooks + tools + integrations into one declaratively-described
+    unit. ``template_id`` points at a system manifest in
+    ``backend.features.library``; for user-composed features it is NULL
+    (Phase 3) and the manifest is stored inline (not yet implemented).
+
+    ``config`` is the per-user override of the manifest's
+    ``config_schema`` defaults. ``state`` is the running state used by
+    the dashboard renderer (today_count, streak_days, last_logged_at).
+
+    The four nullable FK back-links on ``attentions``, ``observations``,
+    ``donna_schedule``, and ``procedural_rules`` let pause / archive
+    operations (Phase 2) scope cleanups without scanning the full table.
+
+    UNIQUE (user_id, name): no two features for the same user share a
+    name, which keeps user-facing identity stable across re-installs.
+    """
+
+    __tablename__ = "features"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=generate_uuid)
+    user_id: Mapped[str] = mapped_column(
+        String, ForeignKey("users.id"), nullable=False
+    )
+    template_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    surface: Mapped[str | None] = mapped_column(String, nullable=True)
+    icon: Mapped[str | None] = mapped_column(String, nullable=True)
+    tone: Mapped[str | None] = mapped_column(String, nullable=True)
+    status: Mapped[str] = mapped_column(String, nullable=False, default="active")
+    installed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    paused_until: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    config: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    state: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
+    manifest_version: Mapped[str | None] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=utcnow, onupdate=utcnow, nullable=False
+    )
+
+    __table_args__ = (
+        UniqueConstraint("user_id", "name", name="uq_features_user_name"),
+        Index("idx_features_user_status", "user_id", "status"),
     )

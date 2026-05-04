@@ -27,7 +27,7 @@ from sqlalchemy import select
 
 from backend.db.session import async_session
 from backend.dashboard.recipe_bank import RECIPE_BANK, Recipe
-from db.models import AttentionRow, Integration
+from db.models import AttentionRow, Feature, Integration
 
 logger = logging.getLogger(__name__)
 
@@ -98,7 +98,57 @@ async def _existing_capabilities(user_id: str) -> set[str]:
             if subject_match in subject_name or subject_match in title:
                 have.add(tag)
                 break
+
+    # Active features add their manifest's recipe.provides tags. A
+    # feature-installed hydration tracker means the user already has
+    # ``tracks_hydration`` regardless of how its attention was titled.
+    have |= await _capabilities_from_features(user_id)
     return have
+
+
+async def _capabilities_from_features(user_id: str) -> set[str]:
+    """Return capability tags claimed by the user's active features.
+
+    Reads each active ``Feature`` row, resolves its manifest from the
+    registry, and pulls ``manifest.recipe.provides``. Paused features
+    are NOT counted — pausing means the user wants the surface gone, so
+    a recipe to re-stand-it-up is a legitimate offer.
+    """
+    try:
+        async with async_session() as s:
+            rows = (
+                await s.execute(
+                    select(Feature).where(
+                        Feature.user_id == user_id,
+                        Feature.status == "active",
+                    )
+                )
+            ).scalars().all()
+    except Exception:
+        logger.exception(
+            "recipe_selector: feature read failed user=%s", user_id
+        )
+        return set()
+
+    if not rows:
+        return set()
+
+    try:
+        from backend.features.registry import get_registry
+    except Exception:
+        logger.exception("recipe_selector: feature registry unavailable")
+        return set()
+
+    registry = get_registry()
+    out: set[str] = set()
+    for feature in rows:
+        if not feature.template_id:
+            continue
+        manifest = registry.get_template(feature.template_id)
+        if manifest is None or manifest.recipe is None:
+            continue
+        out.update(manifest.recipe.provides)
+    return out
 
 
 # The integrations table normalises Google's products as ``provider=google``

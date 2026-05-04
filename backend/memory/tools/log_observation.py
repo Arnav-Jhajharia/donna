@@ -88,6 +88,14 @@ async def log_observation(
                 )
                 session.add(instance)
                 await session.flush()
+            # Phase 1 features tagging: if this user has an active feature
+            # whose primary observation type matches, auto-tag the row
+            # with the owning feature_id. Untagged free-form observations
+            # stay NULL (backwards compatible with the entire pre-feature
+            # observation history).
+            feature_id = await _resolve_feature_id(
+                session=session, user_id=user_id, obs_type=type
+            )
             obs = Observation(
                 user_id=user_id,
                 instance_id=instance.id,
@@ -97,6 +105,7 @@ async def log_observation(
                 raw=raw,
                 event_time=_coerce_event_time(event_time, timezone_name),
                 confidence=confidence,
+                feature_id=feature_id,
             )
             session.add(obs)
             await session.commit()
@@ -113,6 +122,61 @@ async def log_observation(
     except Exception as exc:
         logger.exception("log_observation failed")
         return degraded(f"db error: {exc}")
+
+
+async def _resolve_feature_id(
+    *, session, user_id: str, obs_type: str
+) -> str | None:
+    """Find the feature_id of an active feature claiming ``obs_type``.
+
+    Returns ``None`` if (a) the type isn't owned by any system feature,
+    (b) the user hasn't installed the owning feature, or (c) the feature
+    subsystem is unavailable. ``None`` is the legitimate, backwards-
+    compatible value for untagged free-form observations.
+
+    Reads from the in-process feature registry (cheap) followed by a
+    single query against the user's installed features (one row per
+    template at most, indexed on ``user_id``).
+    """
+    try:
+        from sqlalchemy import select
+
+        from backend.db.models import Feature
+        from backend.features.registry import get_registry
+    except Exception:
+        return None
+
+    try:
+        registry = get_registry()
+    except Exception:
+        logger.exception("log_observation: feature registry init failed")
+        return None
+
+    match = registry.manifest_for_observation(
+        user_id=user_id, obs_type=obs_type
+    )
+    if match is None:
+        return None
+    _, template_id = match
+
+    try:
+        row = (
+            await session.execute(
+                select(Feature).where(
+                    Feature.user_id == user_id,
+                    Feature.template_id == template_id,
+                    Feature.status == "active",
+                )
+            )
+        ).scalar_one_or_none()
+    except Exception:
+        logger.exception(
+            "log_observation: feature row lookup failed user=%s type=%s",
+            user_id[:8] if user_id else "?",
+            obs_type,
+        )
+        return None
+    return row.id if row else None
 
 
 async def _reevaluate_attentions(*, user_id: str, obs_type: str) -> None:
