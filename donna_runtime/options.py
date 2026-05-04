@@ -11,9 +11,19 @@ from .prompt import build_system_prompt
 from .tools import DONNA_TOOLS
 
 
-def _tools_for_mode(mode: str):
+def _tools_for_mode(mode: str, *, runtime_mode: str | None = None):
+    """Pick the tool palette.
+
+    ``mode`` is the legacy ``tool_mode`` (fake vs real). ``runtime_mode``
+    is the new ``DonnaAgentConfig.mode`` (reactive / proactive /
+    proactive_tier3). Tier 3 mode gets a narrow palette of 6 tools
+    instead of the full reactive set.
+    """
     if mode == "fake":
         return list(FAKE_DONNA_TOOLS)
+    if runtime_mode == "proactive_tier3":
+        from donna_runtime.tools_tier3_sdk import TIER3_SDK_TOOLS
+        return list(TIER3_SDK_TOOLS)
     return list(DONNA_TOOLS)
 
 
@@ -28,7 +38,7 @@ def build_mcp_server(config: DonnaAgentConfig | None = None):
     return create_sdk_mcp_server(
         name=MCP_SERVER_NAME,
         version=MCP_SERVER_VERSION,
-        tools=_tools_for_mode(cfg.tool_mode),
+        tools=_tools_for_mode(cfg.tool_mode, runtime_mode=cfg.mode),
     )
 
 
@@ -42,11 +52,19 @@ def build_options(config: DonnaAgentConfig | None = None) -> ClaudeAgentOptions:
         # Forwarded to the spawned `claude` CLI subprocess; the CLI converts it
         # into the 1h cache-TTL beta header on /v1/messages.
         env["ENABLE_PROMPT_CACHING_1H"] = "1"
+
+    # Phase 2A: Tier 3 mode picks its own system prompt + max_turns.
+    if config.mode == "proactive_tier3":
+        from donna_runtime.prompt_tier3 import TIER3_SYSTEM_PROMPT
+        system_prompt = TIER3_SYSTEM_PROMPT
+        max_turns = config.tier3_max_turns
+    else:
+        system_prompt = build_system_prompt(tool_mode=config.tool_mode)
+        max_turns = config.max_turns
+
     kwargs = {
         "model": config.model,
-        "system_prompt": build_system_prompt(
-            tool_mode=config.tool_mode,
-        ),
+        "system_prompt": system_prompt,
         "mcp_servers": {TOOL_NAMESPACE: build_mcp_server(config)},
         "extra_args": {
             "thinking": "enabled" if config.thinking_enabled else "disabled",
@@ -69,7 +87,7 @@ def build_options(config: DonnaAgentConfig | None = None) -> ClaudeAgentOptions:
             "PreToolUse": [HookMatcher(hooks=[pre_tool_hook])],
             "PostToolUse": [HookMatcher(hooks=[post_tool_hook])],
         },
-        "max_turns": config.max_turns,
+        "max_turns": max_turns,
         "resume": config.resume_session_id,
         "fork_session": config.fork_session,
         "skills": [],
