@@ -636,34 +636,76 @@ def _format_offered_attention(attention: Any) -> str:
     return f"[{aid}] card={card_label} subject={subject or '?'} | {body}"
 
 
-def _read_live_attentions(user_id: str) -> list[Any]:
+async def _read_live_attentions(user_id: str) -> list[Any]:
     """Pull LIVE attentions — what donna is currently watching/tracking/pinging.
 
     Test/debug-shape attentions are filtered before the limit so we
     don't waste a slot on noise.
     """
     try:
-        from donna.attention.schema import AttentionStatus
-        from donna.attention.store import AttentionStore
+        from backend.dashboard.state_snapshot import _is_noise_attention_row
+        from db.models import AttentionRow
 
-        rows = AttentionStore().list(user_id=user_id, status=AttentionStatus.LIVE)
-        return filter_attentions(rows)[:_LIVE_ATTENTIONS_LIMIT]
+        async with async_session() as session:
+            rows = (
+                (
+                    await session.execute(
+                        select(AttentionRow)
+                        .where(AttentionRow.user_id == user_id)
+                        .where(AttentionRow.status == "live")
+                        .order_by(AttentionRow.created_at.desc())
+                        .limit(_LIVE_ATTENTIONS_LIMIT * 2)
+                    )
+                )
+                .scalars()
+                .all()
+            )
+        return [
+            r for r in rows if not _is_noise_attention_row(r)
+        ][:_LIVE_ATTENTIONS_LIMIT]
     except Exception:
         logger.exception("compose_manifest: live attentions fetch failed user_id=%s", user_id)
         return []
 
 
 def _format_live_attention(attention: Any) -> str:
-    spec = getattr(attention, "spec", None)
-    card = getattr(spec, "card", None)
-    card_label = getattr(card, "value", "") or str(card or "?")
-    title = getattr(spec, "title", "") if spec else ""
-    description = getattr(spec, "description", "") if spec else ""
-    subject = (
-        getattr(getattr(spec, "subject", None), "name", "") if spec else ""
-    )
-    cadence = getattr(spec, "cadence", None)
-    cadence_type = getattr(getattr(cadence, "type", None), "value", "") or "?"
+    payload = getattr(attention, "payload", None) or {}
+    spec_dict = payload.get("spec") if isinstance(payload, dict) else None
+    if isinstance(spec_dict, dict):
+        subject_dict = (
+            spec_dict.get("subject")
+            if isinstance(spec_dict.get("subject"), dict)
+            else {}
+        )
+        cadence_dict = (
+            spec_dict.get("cadence")
+            if isinstance(spec_dict.get("cadence"), dict)
+            else {}
+        )
+        card_label = str(
+            getattr(attention, "card", None) or spec_dict.get("card") or "?"
+        )
+        title = str(
+            getattr(attention, "title", None) or spec_dict.get("title") or ""
+        )
+        description = str(spec_dict.get("description") or "")
+        subject = str(subject_dict.get("name") or "")
+        cadence_type = str(
+            getattr(attention, "cadence_type", None)
+            or cadence_dict.get("type")
+            or "?"
+        )
+    else:
+        spec = getattr(attention, "spec", None)
+        card = getattr(spec, "card", None)
+        card_label = getattr(card, "value", "") or str(card or "?")
+        title = getattr(spec, "title", "") if spec else ""
+        description = getattr(spec, "description", "") if spec else ""
+        subject = (
+            getattr(getattr(spec, "subject", None), "name", "") if spec else ""
+        )
+        cadence = getattr(spec, "cadence", None)
+        cadence_type = getattr(getattr(cadence, "type", None), "value", "") or "?"
     aid = str(getattr(attention, "id", "") or "")
     desc = (description or "").strip()[:120]
     body = title or subject or "attention"
@@ -1177,7 +1219,7 @@ async def compose_manifest(
         last_manifest_thesis,
     ) = inputs
     offered_attentions = _read_offered_attentions(user_id)
-    live_attentions = _read_live_attentions(user_id)
+    live_attentions = await _read_live_attentions(user_id)
 
     now_local = _resolve_now_local(user.timezone)
     place = _resolve_place(user)

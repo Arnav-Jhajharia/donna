@@ -108,6 +108,7 @@ type StateAttention = {
   cadence_type: string;
   created_at: string | null;
   last_update_at: string | null;
+  current_state: Record<string, unknown>;
   update_count: number;
   shadow_state: {
     tick_count: number;

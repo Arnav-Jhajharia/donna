@@ -71,51 +71,90 @@ async def _fetch_user(user_id: str) -> dict[str, Any] | None:
     }
 
 
-def _fetch_attentions(user_id: str) -> list[dict[str, Any]]:
-    try:
-        from donna.attention.noise import filter_attentions
-        from donna.attention.store import AttentionStore
-    except Exception:
-        return []
-    try:
-        rows = AttentionStore().list(user_id=user_id)
-    except Exception:
-        logger.exception("state_snapshot: attentions fetch failed user=%s", user_id[:8])
-        return []
-    rows = filter_attentions(rows)
-    out: list[dict[str, Any]] = []
-    for a in rows:
-        spec = a.spec
-        out.append(
-            {
-                "id": str(a.id),
-                "status": getattr(a.status, "value", str(a.status)),
-                "origin": getattr(a.origin, "value", str(a.origin)),
-                "card": getattr(spec.card, "value", str(spec.card)),
-                "title": spec.title,
-                "description": spec.description,
-                "subject": getattr(getattr(spec, "subject", None), "name", None),
-                "domain_tags": [
-                    getattr(t, "value", str(t)) for t in (spec.domain_tags or [])
-                ],
-                "cadence_type": getattr(
-                    spec.cadence.type, "value", str(spec.cadence.type)
-                ),
-                "created_at": _iso(getattr(a, "created_at", None)),
-                "last_update_at": _iso(getattr(a, "last_update_at", None)),
-                "update_count": getattr(a, "update_count", 0),
-                "shadow_state": (
-                    {
-                        "tick_count": a.shadow_state.tick_count,
-                        "promotion_hits": a.shadow_state.promotion_hits,
-                        "max_ticks": a.shadow_state.max_ticks,
-                    }
-                    if getattr(a, "shadow_state", None)
-                    else None
-                ),
-            }
+async def _fetch_attentions(user_id: str) -> list[dict[str, Any]]:
+    """Read attention state from Postgres, where runtime state is persisted.
+
+    The file-backed ``AttentionStore`` still exists for CLI/dev fallback, but
+    the attention engine writes ``current_state`` to
+    ``AttentionRow.payload['current_state']``. The dashboard state endpoint must
+    read that row shape directly instead of round-tripping through the pydantic
+    Attention model, which forbids runtime-only payload keys.
+    """
+    from backend.db.models import AttentionRow
+    from backend.db.session import async_session
+
+    async with async_session() as session:
+        rows = (
+            (
+                await session.execute(
+                    select(AttentionRow)
+                    .where(AttentionRow.user_id == user_id)
+                    .order_by(AttentionRow.created_at.desc())
+                )
+            )
+            .scalars()
+            .all()
         )
-    return out
+    return [
+        _attention_row_summary(r) for r in rows if not _is_noise_attention_row(r)
+    ]
+
+
+def _attention_row_summary(row: Any) -> dict[str, Any]:
+    payload = dict(getattr(row, "payload", None) or {})
+    spec = payload.get("spec") if isinstance(payload.get("spec"), dict) else {}
+    subject = spec.get("subject") if isinstance(spec.get("subject"), dict) else {}
+    cadence = spec.get("cadence") if isinstance(spec.get("cadence"), dict) else {}
+    shadow = payload.get("shadow_state")
+    state = (
+        payload.get("current_state")
+        if isinstance(payload.get("current_state"), dict)
+        else {}
+    )
+    update_count = payload.get("update_count") or 0
+    try:
+        update_count = int(update_count)
+    except (TypeError, ValueError):
+        update_count = 0
+    return {
+        "id": str(row.id),
+        "status": str(getattr(row, "status", None) or payload.get("status") or ""),
+        "origin": str(getattr(row, "origin", None) or payload.get("origin") or ""),
+        "card": str(getattr(row, "card", None) or spec.get("card") or ""),
+        "title": str(getattr(row, "title", None) or spec.get("title") or ""),
+        "description": spec.get("description"),
+        "subject": subject.get("name"),
+        "domain_tags": (
+            spec.get("domain_tags")
+            if isinstance(spec.get("domain_tags"), list)
+            else []
+        ),
+        "cadence_type": str(
+            getattr(row, "cadence_type", None) or cadence.get("type") or ""
+        ),
+        "created_at": _iso(getattr(row, "created_at", None)),
+        "last_update_at": _iso(payload.get("last_update_at")),
+        "last_surfaced_at": _iso(getattr(row, "last_surfaced_at", None)),
+        "updated_at": _iso(getattr(row, "updated_at", None)),
+        "update_count": update_count,
+        "shadow_state": shadow if isinstance(shadow, dict) else None,
+        "current_state": state,
+    }
+
+
+def _is_noise_attention_row(row: Any) -> bool:
+    try:
+        from donna.attention.noise import looks_like_debug_token
+    except Exception:
+        return False
+    payload = dict(getattr(row, "payload", None) or {})
+    spec = payload.get("spec") if isinstance(payload.get("spec"), dict) else {}
+    subject = spec.get("subject") if isinstance(spec.get("subject"), dict) else {}
+    title = str(getattr(row, "title", None) or spec.get("title") or "").strip()
+    subject_name = str(subject.get("name") or "").strip()
+    if title.lower() == "test" or subject_name.lower() == "test":
+        return True
+    return looks_like_debug_token(title) or looks_like_debug_token(subject_name)
 
 
 async def _fetch_instances(user_id: str) -> list[dict[str, Any]]:
@@ -278,9 +317,6 @@ async def gather_state(user_id: str) -> dict[str, Any]:
             "fetched_at": _iso(datetime.now(timezone.utc)),
         }
 
-    # File-store reads are sync; everything else is async.
-    attentions = _fetch_attentions(user_id)
-
     async def _safe(coro):
         try:
             return await coro
@@ -288,7 +324,15 @@ async def gather_state(user_id: str) -> dict[str, Any]:
             logger.exception("state_snapshot: subsection failed user=%s", user_id[:8])
             return []
 
-    instances, schedules, observations, open_loops, chat = await asyncio.gather(
+    (
+        attentions,
+        instances,
+        schedules,
+        observations,
+        open_loops,
+        chat,
+    ) = await asyncio.gather(
+        _safe(_fetch_attentions(user_id)),
         _safe(_fetch_instances(user_id)),
         _safe(_fetch_schedules(user_id, _SCHEDULES_LIMIT)),
         _safe(_fetch_observations(user_id, _OBSERVATIONS_LIMIT)),
