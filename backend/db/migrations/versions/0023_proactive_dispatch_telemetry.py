@@ -35,7 +35,7 @@ def upgrade() -> None:
         sa.Column("topic_key", sa.String(), nullable=False),
         sa.Column("tier1_score", sa.Float(), nullable=True),
         sa.Column("arbiter_decision", sa.String(), nullable=True),
-        sa.Column("arbiter_reason", sa.String(), nullable=True),
+        sa.Column("arbiter_reason", sa.Text(), nullable=True),
         sa.Column("tier2_action", sa.String(), nullable=True),
         sa.Column("tier2_register", sa.String(), nullable=True),
         sa.Column("tier2_draft", sa.Text(), nullable=True),

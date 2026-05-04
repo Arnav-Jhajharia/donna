@@ -1043,7 +1043,7 @@ class ProactiveDispatchTelemetry(Base):
 
     # Arbiter
     arbiter_decision: Mapped[str | None] = mapped_column(String, nullable=True)
-    arbiter_reason: Mapped[str | None] = mapped_column(String, nullable=True)
+    arbiter_reason: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # Tier 2
     tier2_action: Mapped[str | None] = mapped_column(String, nullable=True)
@@ -1080,6 +1080,14 @@ class ProactiveDispatchTelemetry(Base):
         Text, nullable=True
     )
 
+    # Indexes:
+    # - user_event_at is the primary read pattern used by the eval script
+    #   (per-user time-window scans).
+    # - speech_act and topic_key are anticipated indexes for future per-act
+    #   / per-topic admin queries (e.g. "show me all i_noticed fires this
+    #   month" or "find every fire on this thread"). They are not consumed
+    #   by Phase 1 callers — kept now to avoid a later migration when those
+    #   queries land.
     __table_args__ = (
         Index("idx_pdt_user_event_at", "user_id", "event_at"),
         Index("idx_pdt_speech_act", "speech_act"),
