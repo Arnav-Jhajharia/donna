@@ -25,9 +25,21 @@ from typing import Iterable
 
 from sqlalchemy import select
 
-from backend.db.session import async_session
 from backend.dashboard.recipe_bank import RECIPE_BANK, Recipe
 from db.models import AttentionRow, Feature, Integration
+
+
+def _async_session():
+    """Late-bind the session factory.
+
+    Importing ``async_session`` directly captures the value at module
+    import time, which breaks pytest monkeypatch when consumer modules
+    (this one) are imported before the fixture rebinds the symbol.
+    Calling through the package keeps the lookup live across tests.
+    """
+    from backend.db.session import async_session as _async_session_factory
+
+    return _async_session_factory()
 
 logger = logging.getLogger(__name__)
 
@@ -69,7 +81,7 @@ async def _existing_capabilities(user_id: str) -> set[str]:
     and the selector skips both recipes.
     """
     try:
-        async with async_session() as s:
+        async with _async_session() as s:
             rows = (
                 await s.execute(
                     select(AttentionRow).where(
@@ -115,7 +127,7 @@ async def _capabilities_from_features(user_id: str) -> set[str]:
     a recipe to re-stand-it-up is a legitimate offer.
     """
     try:
-        async with async_session() as s:
+        async with _async_session() as s:
             rows = (
                 await s.execute(
                     select(Feature).where(
@@ -175,7 +187,7 @@ async def _connected_toolkits(user_id: str) -> set[str]:
     composed slug.
     """
     try:
-        async with async_session() as s:
+        async with _async_session() as s:
             rows = (
                 await s.execute(
                     select(Integration.provider, Integration.product, Integration.status)
