@@ -17,7 +17,7 @@ from typing import Any, Literal
 
 from pydantic import BaseModel, Field
 
-from proactive.events import ProactiveEvent
+from proactive.events import ProactiveEvent, SpeechAct
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +49,9 @@ class JudgeResult:
     raw_response: str
     failed: bool = False
     failure_reason: str | None = None
+    # NEW (Phase 1) — Tier 2's optional channel + speech-act-reclassification hints.
+    channel_hint: Literal["whatsapp", "dashboard", "digest", "hold"] | None = None
+    reclassify_speech_act: SpeechAct | None = None
 
 
 class JudgeOutput(BaseModel):
@@ -91,6 +94,22 @@ class JudgeOutput(BaseModel):
     reasoning: str = Field(
         default="",
         description="One short sentence for telemetry.",
+    )
+    # NEW (Phase 1)
+    channel_hint: Literal["whatsapp", "dashboard", "digest", "hold"] | None = Field(
+        default=None,
+        description=(
+            "Tier 2's channel routing recommendation. Tier 3 may override."
+        ),
+    )
+    reclassify_speech_act: Literal[
+        "dont_forget", "heads_up", "i_noticed", "now_the_moment", "thought_youd_want"
+    ] | None = Field(
+        default=None,
+        description=(
+            "If Tier 2 disagrees with the source's speech_act tag, set "
+            "this to the corrected act. Null otherwise."
+        ),
     )
 
 
