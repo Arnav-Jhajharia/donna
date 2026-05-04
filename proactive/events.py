@@ -18,6 +18,15 @@ ProactiveSource = Literal[
     "attention_offer",
     "calendar",
     "pattern",
+    "system_b_web",          # NEW: System B web hits as a unified source
+]
+
+SpeechAct = Literal[
+    "dont_forget",            # keeper — user opted in, never miss
+    "heads_up",               # alert — world moved, situation changed
+    "i_noticed",              # mirror — pattern reflected, soft register
+    "now_the_moment",         # anticipator — time has arrived
+    "thought_youd_want",      # curator — earn the interrupt
 ]
 
 
@@ -32,6 +41,9 @@ class ProactiveEvent:
       topic_key   — dedup key. For email use thread_id (so a long thread
                     does not re-fire). Defaults to source_ref when the
                     adapter has no better grouping.
+      speech_act  — register the message is delivered in. Defaults to
+                    thought_youd_want for back-compat with existing call
+                    sites. Source adapters set it explicitly post-Phase-1.
       payload     — the source-specific shape, normalized into a small
                     dict so the judge prompt can render it without
                     branching on type.
@@ -44,6 +56,9 @@ class ProactiveEvent:
     source: ProactiveSource
     source_ref: str
     topic_key: str
+    # speech_act defaults to thought_youd_want for back-compat with existing
+    # call sites. Source adapters set it explicitly post-Phase-1.
+    speech_act: SpeechAct = "thought_youd_want"
     payload: dict[str, Any] = field(default_factory=dict)
     signals: dict[str, Any] = field(default_factory=dict)
 
