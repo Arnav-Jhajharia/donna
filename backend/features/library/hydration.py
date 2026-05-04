@@ -2,16 +2,24 @@
 
 Smallest possible feature shape: one observation type, two attentions
 (tally + cadenced ping), one dashboard card, one evening summary cron,
-one recipe entry. Validates the install flow, FK tagging, and the
-observation -> state update path.
+one recipe entry. Validates the install flow, FK tagging, the
+observation -> state update path, and (Phase 4) the post-observation
+hook + cron handler dispatch.
 
-The hook handlers (``update_hydration_state``,
-``maybe_close_loop_on_glass_logged``, ``render_evening_summary``) are
-declared but not implemented as live code in Phase 1 — Phase 1 only
-needs the manifest to round-trip through registry + install. Stubs that
-log are wired in Phase 4 when the hook dispatcher lands.
+Live handlers — registered via ``hydration_handlers``:
+  - ``update_hydration_state``  (post_observation)
+  - ``render_evening_summary``  (cron @ 21:00 user-local)
+
+Still declared, not implemented:
+  - ``maybe_close_loop_on_glass_logged`` (post_turn) — Phase 4b
 """
 from __future__ import annotations
+
+# Importing the handlers module triggers handler registration as a
+# side-effect (register_cron_handler / register_hook_handler called at
+# import time). The registry's ``load_library`` walks every module in
+# this package, so the import alone is enough — nothing else to wire.
+from backend.features.library import _hydration_handlers  # noqa: F401
 
 
 FEATURE_MANIFEST = {

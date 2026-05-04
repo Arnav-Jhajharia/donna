@@ -7,7 +7,10 @@ import socket
 from datetime import datetime, timedelta, timezone
 from typing import Any, Sequence
 
-from sqlalchemy import select, update
+import json
+
+from sqlalchemy import cast, literal, select, update
+from sqlalchemy.dialects.postgresql import JSONB
 
 import backend.db.session as _db_session_mod
 from backend.db.models import ChatMessage, DonnaSchedule
@@ -109,6 +112,68 @@ def _lock_expired(locked_at: datetime | None, *, timeout_s: int) -> bool:
         return True
     # locked_at stored as naive UTC by convention
     return (utcnow_naive() - locked_at) > timedelta(seconds=timeout_s)
+
+
+async def _maybe_render_feature_cron(row: DonnaSchedule) -> str | None:
+    """Call the registered feature cron handler to compose a body.
+
+    Returns the handler's string output, or ``None`` when:
+      - ``recurrence_meta.handler`` is missing or unregistered
+      - the feature row is gone (archived between schedule + fire)
+      - the handler itself returns ``None`` (intentional silence,
+        e.g. evening_summary on a clean-miss day)
+      - any exception bubbles (logged + swallowed)
+
+    The caller treats ``None`` as "skip silently" and the legacy
+    literal-"reminder" fallback never runs for a row that opted into
+    a feature handler.
+    """
+    meta = row.recurrence_meta or {}
+    handler_name = meta.get("handler") if isinstance(meta, dict) else None
+    if not handler_name:
+        return None
+    try:
+        from backend.db.models import Feature
+        from backend.features.handlers import (
+            get_cron_handler,
+            is_cron_handler_registered,
+        )
+    except Exception:
+        return None
+    if not is_cron_handler_registered(handler_name):
+        logger.warning(
+            "schedule_worker: feature cron handler %r not registered "
+            "(feature_id=%s schedule_id=%s)",
+            handler_name,
+            row.feature_id,
+            row.id,
+        )
+        return None
+    handler = get_cron_handler(handler_name)
+    try:
+        async with _session_factory()() as session:
+            feature = (
+                await session.execute(
+                    select(Feature).where(Feature.id == row.feature_id)
+                )
+            ).scalar_one_or_none()
+            if feature is None or feature.status != "active":
+                return None
+            return await handler(
+                session=session,
+                user_id=row.user_id,
+                feature=feature,
+                schedule_row=row,
+            )
+    except Exception:
+        logger.exception(
+            "schedule_worker: feature cron handler %r raised "
+            "(feature_id=%s schedule_id=%s)",
+            handler_name,
+            row.feature_id,
+            row.id,
+        )
+        return None
 
 
 async def _hydrate_attention(attention_id: str | None):
@@ -410,6 +475,35 @@ async def run_once(*, batch_size: int = 25, lock_timeout_s: int = 300) -> int:
             else:
                 payload = fresh.context or {}
                 raw_items = payload.get("messages") if isinstance(payload, dict) else None
+
+                # Feature cron path — if the row carries a registered
+                # feature handler, call it to compose the body. Falls
+                # through to the legacy ``context.messages`` path below
+                # when no handler is registered.
+                if raw_items is None and fresh.feature_id and fresh.recurrence_meta:
+                    handler_body = await _maybe_render_feature_cron(fresh)
+                    if handler_body is None:
+                        # Handler chose silence — mark the row done with a
+                        # breadcrumb instead of firing the literal-"reminder"
+                        # fallback.
+                        async with _session_factory()() as session:
+                            await session.execute(
+                                update(DonnaSchedule)
+                                .where(DonnaSchedule.id == fresh.id)
+                                .values(
+                                    fired=True,
+                                    fired_at=utcnow_naive(),
+                                    status="done",
+                                    last_error="feature_handler_silent",
+                                    locked_at=None,
+                                    locked_by=None,
+                                )
+                            )
+                            await session.commit()
+                        await _maybe_enqueue_next_fire(fresh)
+                        continue
+                    raw_items = [{"type": "text", "body": handler_body}]
+
                 items = raw_items if isinstance(raw_items, list) else [{"type": "text", "body": "reminder"}]
 
                 from donna_runtime.tool_logic import _build_outbound
@@ -451,6 +545,7 @@ async def run_once(*, batch_size: int = 25, lock_timeout_s: int = 300) -> int:
             await _maybe_record_attention_surface(fresh)
             await _maybe_enqueue_next_fire(fresh)
             await _maybe_resolve_completed_attention(fresh)
+            await _append_day_fire(fresh, constructed)
         except Exception as exc:
             logger.exception("schedule send failed id=%s", fresh.id)
             async with _session_factory()() as session:
@@ -468,6 +563,97 @@ async def run_once(*, batch_size: int = 25, lock_timeout_s: int = 300) -> int:
                 await session.commit()
 
     return attempted
+
+
+async def _append_day_fire(row: DonnaSchedule, outbound: list) -> None:
+    """Append a schedule fire record to today's user_days.schedule_fires.
+
+    Best-effort — a failure here never blocks delivery.
+    """
+    if not row.user_id or not row.fired_at:
+        return
+    try:
+        from sqlalchemy.dialects.postgresql import insert
+        from zoneinfo import ZoneInfo
+
+        from db.models import UserDay, generate_uuid, utcnow
+
+        ctx = row.context or {}
+        msgs = ctx.get("messages") or []
+        title = (
+            (msgs[0].get("body") or "")[:60]
+            if msgs
+            else ctx.get("title") or row.attention_id or "reminder"
+        )
+
+        # Capture what was actually sent, not just the attention trigger name.
+        sent_preview = ""
+        if outbound:
+            try:
+                from donna_runtime.tool_logic import render_outbound_text
+
+                parts = [render_outbound_text(m) for m in outbound]
+                sent_preview = " ".join(p for p in parts if p)[:300]
+            except Exception:
+                pass
+
+        try:
+            tz = ZoneInfo(ctx.get("timezone") or "Asia/Singapore")
+        except Exception:
+            tz = ZoneInfo("Asia/Singapore")
+
+        fired_local = row.fired_at.replace(tzinfo=None)
+        try:
+            from datetime import timezone as _tz
+            fired_local = row.fired_at.replace(tzinfo=_tz.utc).astimezone(tz)
+        except Exception:
+            pass
+
+        fire_record = {
+            "title": title,
+            "sent": sent_preview,
+            "fired_at_local": fired_local.strftime("%H:%M") if hasattr(fired_local, "strftime") else str(row.fired_at)[:16],
+            "attention_id": row.attention_id or "",
+        }
+        date_local = fired_local.strftime("%Y-%m-%d") if hasattr(fired_local, "strftime") else ""
+        if not date_local:
+            return
+
+        now = utcnow()
+        async with _session_factory()() as session:
+            # INSERT or UPDATE. On conflict, append to the JSONB array with ||
+            # (atomic at the Postgres level — no read-modify-write race).
+            fire_literal = cast(literal(json.dumps([fire_record])), JSONB)
+            await session.execute(
+                insert(UserDay)
+                .values(
+                    id=generate_uuid(),
+                    user_id=row.user_id,
+                    date_local=date_local,
+                    timezone=ctx.get("timezone") or "Asia/Singapore",
+                    schedule_fires=[fire_record],
+                    donna_message_count=len(outbound),
+                    donna_proactive_count=1,
+                    observation_types=[],
+                    finalized=False,
+                    updated_at=now,
+                    created_at=now,
+                )
+                .on_conflict_do_update(
+                    constraint="uq_user_days_user_date",
+                    set_={
+                        "schedule_fires": UserDay.schedule_fires.op("||")(fire_literal),
+                        "donna_message_count": UserDay.donna_message_count + len(outbound),
+                        "donna_proactive_count": UserDay.donna_proactive_count + 1,
+                        "updated_at": now,
+                    },
+                )
+            )
+            await session.commit()
+    except Exception:
+        logger.exception(
+            "schedule_worker: _append_day_fire failed schedule=%s", row.id
+        )
 
 
 async def _maybe_record_attention_surface(row: DonnaSchedule) -> None:
@@ -603,32 +789,32 @@ async def _consecutive_non_replies(
 
 
 async def _maybe_enqueue_next_fire(row: DonnaSchedule) -> None:
-    """For a fired attention-linked row with a recurring cadence, queue the next fire.
+    """For a fired row with a recurring cadence, queue the next fire.
 
-    No-op for one-shot reminders (legacy text reminders without ``attention_id``
-    or PING attentions with ONE_SHOT cadence). Errors are logged, not raised —
-    a missed re-enqueue must not break the just-completed delivery.
+    Handles two shapes:
+      - Attention-linked rows (``row.attention_id`` set): subject to the
+        engagement backoff (skip recurrence after N consecutive non-replies).
+      - Unattached reminders (``row.attention_id`` is None): created via
+        the simple ``remind`` tool. No engagement backoff — the user
+        explicitly opted in to the cadence and can ``cancel_reminder``.
 
-    Engagement backoff: if the user hasn't replied to the last N
-    consecutive fires of this attention, pause the recurrence. The user
-    can resume by acknowledging the next ping or by explicitly saying
-    "remind me again" — both produce a user-side ChatMessage which the
-    next fire's engagement check sees and resets the streak.
+    No-op for one-shot fires (no recurrence_meta or non-recurring cadence).
+    Errors are logged, not raised — a missed re-enqueue must not break
+    the just-completed delivery.
     """
-    if not row.attention_id:
-        return
     if not row.recurrence_meta:
         return
 
-    streak = await _consecutive_non_replies(row.user_id, row.attention_id)
-    if streak >= _ENGAGEMENT_BACKOFF_LIMIT:
-        logger.info(
-            "engagement backoff: pausing attn=%s user=%s after %d consecutive non-replies",
-            row.attention_id[:8],
-            row.user_id[:8],
-            streak,
-        )
-        return
+    if row.attention_id:
+        streak = await _consecutive_non_replies(row.user_id, row.attention_id)
+        if streak >= _ENGAGEMENT_BACKOFF_LIMIT:
+            logger.info(
+                "engagement backoff: pausing attn=%s user=%s after %d consecutive non-replies",
+                row.attention_id[:8],
+                row.user_id[:8],
+                streak,
+            )
+            return
 
     try:
         from donna.attention.firing import RecurrenceMeta, compute_next_fire

@@ -118,7 +118,14 @@ async def log_observation(
             # snapshots. Best-effort — failures here never block the write.
             await _reevaluate_attentions(user_id=user_id, obs_type=type)
 
-            return ok({"id": obs.id, "type": obs.type, "situation_brief_refreshed": refreshed})
+        # Feature post_observation hooks — fan out to active features
+        # whose manifest declares this observation type. Runs in its own
+        # session so handler state updates are committed independently
+        # of the observation write. Best-effort: handler errors are
+        # logged + swallowed, never block the response.
+        await _dispatch_feature_hooks(user_id=user_id, obs=obs)
+
+        return ok({"id": obs.id, "type": obs.type, "situation_brief_refreshed": refreshed})
     except Exception as exc:
         logger.exception("log_observation failed")
         return degraded(f"db error: {exc}")
@@ -198,6 +205,31 @@ async def _reevaluate_attentions(*, user_id: str, obs_type: str) -> None:
     except Exception:
         logger.exception(
             "log_observation: attention re-eval failed user=%s", user_id[:8]
+        )
+
+
+async def _dispatch_feature_hooks(*, user_id: str, obs: Any) -> None:
+    """Run ``post_observation`` handlers for matching active features.
+
+    Opens its own DB session so feature.state updates commit
+    independently of the observation write. Best-effort: handler
+    failures are logged inside the dispatcher and never bubble.
+    """
+    try:
+        from backend.db.session import async_session
+        from backend.features.hook_dispatcher import dispatch_post_observation
+    except Exception:
+        return
+    try:
+        async with async_session() as session:
+            await dispatch_post_observation(
+                session=session, user_id=user_id, obs=obs
+            )
+            await session.commit()
+    except Exception:
+        logger.exception(
+            "log_observation: feature hook dispatch failed user=%s",
+            user_id[:8] if user_id else "?",
         )
 
 
