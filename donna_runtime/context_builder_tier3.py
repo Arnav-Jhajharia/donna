@@ -179,7 +179,7 @@ async def load_pending_notes_block(*, user_id: str) -> str:
     lines = []
     for row in rows:
         # Compact one-line per note. Truncate long drafts to keep prompt tight.
-        draft = (getattr(row, "draft_text", None) or getattr(row, "draft", None) or "")[:160]
+        draft = (row.draft or "")[:160]
         topic = getattr(row, "topic_key", None) or "(no topic)"
         lines.append(f"- {topic} — {draft}")
     return "\n".join(lines)
@@ -449,10 +449,10 @@ async def load_user_state_now_block(*, user_id: str) -> str:
                 )
             ).scalar_one_or_none()
             if last_obs:
-                kind = getattr(last_obs, "kind", None) or "obs"
+                obs_type = last_obs.type or "obs"
                 age = datetime.utcnow() - last_obs.event_time
                 hours = int(age.total_seconds() / 3600)
-                parts.append(f"last observation: {kind}, {hours}h ago")
+                parts.append(f"last observation: {obs_type}, {hours}h ago")
             else:
                 parts.append("no observations in last 36h")
     except Exception:
