@@ -32,22 +32,30 @@ ALLOWED_TOOLS = (
     "mcp__donna__list_attentions",
     "mcp__donna__cancel_attention",
     "mcp__donna__snooze_attention",
-    "mcp__donna__check_calendar",
+    "mcp__donna__accept_attention",
+    "mcp__donna__remind",
+    "mcp__donna__list_reminders",
+    "mcp__donna__cancel_reminder",
     "mcp__donna__image",
     "mcp__donna__web_search",
     "mcp__donna__agentic_web_search",
     "mcp__donna__research",
     "mcp__donna__send_burst",
+    "mcp__donna__update_identity",
+    "mcp__donna__log_observation",
+    "mcp__donna__track_open_loop",
+    "mcp__donna__gather_context",
     "mcp__donna__connect_integration",
     "mcp__donna__check_integration_status",
     "mcp__donna__list_gmail_recent",
+    "mcp__donna__search_gmail",
     "mcp__donna__read_gmail_thread",
-    "mcp__donna__list_calendar",
     "mcp__donna__composio_search_tools",
     "mcp__donna__composio_execute_tool",
     "mcp__donna__update_dashboard",
     "mcp__donna__send_dashboard_link",
     "mcp__donna__send_login_otp",
+    "mcp__donna__clear_pending_note",
 )
 
 DISALLOWED_TOOLS = (
@@ -116,6 +124,7 @@ class DonnaAgentConfig:
     model: str = MODEL_NAME
     max_turns: int = 6
     proactive_max_turns: int = 12
+    tier3_max_turns: int = 3
     # Bumped 45 → 120. The 45s ceiling was killing turns mid-tool-loop:
     # a chain of attend()/recall() calls (each ~6-8s) blew past it after
     # 5-7 invocations, the SDK subprocess got cancelled before any
@@ -146,7 +155,7 @@ class DonnaAgentConfig:
     user_phone: str | None = None
     inbound_wa_message_id: str | None = None
     chat_already_persisted: bool = False
-    mode: Literal["reactive", "proactive"] = "reactive"
+    mode: Literal["reactive", "proactive", "proactive_tier3"] = "reactive"
     voice_filter_enabled: bool = True
     stateless_sessions: bool = False
     cache_ttl_1h: bool = True
