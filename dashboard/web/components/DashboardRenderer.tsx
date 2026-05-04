@@ -60,6 +60,18 @@ const fadeUp = {
   visible: { opacity: 1, y: 0 },
 };
 
+// Empty variants on the page section just so framer-motion's
+// staggerChildren transition has a defined parent variant chain.
+// Without this, children with ``variants={fadeUp}`` and a parent that
+// uses string ``initial="hidden" animate="visible"`` but no ``variants``
+// prop can fail to inherit the visible state — leaving children at
+// opacity:0 indefinitely. Empty objects mean the parent itself
+// animates nothing; only the children's transitions matter.
+const pageVariants = {
+  hidden: {},
+  visible: {},
+};
+
 export default function DashboardRenderer({ plan }: { plan: DashboardPlan }) {
   if (process.env.NODE_ENV !== 'production') {
     const issues = validatePlan(plan);
@@ -274,13 +286,15 @@ function PagedDashboard({ plan }: { plan: DashboardPlan }) {
 
 function PageColumn({ page, index }: { page: DashboardPage; index: number }) {
   const isTodayPage = page.id === 'today';
-  // Page 1 ("now") is a single-screen surface — the editorial cover. It
-  // must FIT in the viewport without scrolling. Page 2 ("today") is the
-  // operational view (rails of content) and stays scrollable. The
-  // outer page container handles horizontal swipe; vertical overflow
-  // is per-page.
+  // Both pages are vertically scrollable. The outer container handles
+  // horizontal swipe between pages; each page owns its own vertical
+  // overflow. Block layout (not flex) on purpose — flex column was
+  // shrinking children with default flex-shrink:1, which clipped Page
+  // 1's hero+thesis+footer when their natural height exceeded the
+  // viewport before the overflow scroll could kick in.
   return (
     <motion.section
+      variants={pageVariants}
       initial="hidden"
       animate="visible"
       transition={{ staggerChildren: 0.06, delayChildren: 0.04 }}
@@ -290,51 +304,58 @@ function PageColumn({ page, index }: { page: DashboardPage; index: number }) {
         scrollSnapAlign: 'start',
         height: '100%',
         minHeight: 0,
-        overflowY: isTodayPage ? 'auto' : 'hidden',
-        display: 'flex',
-        flexDirection: 'column',
+        overflowY: 'auto',
+        WebkitOverflowScrolling: 'touch',
+        paddingBottom: 32,
       }}
     >
-      {/* Page kicker + thesis (above blocks). The hero block carries its own
-          date+greeting+place, so we only render the kicker/thesis when the
-          page actually supplies them — and never duplicate them on the now
-          page when a hero is the first block. */}
-      {(page.kicker || page.thesis) && !pageStartsWithHero(page) && (
-        <motion.div
-          variants={fadeUp}
-          transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-          style={{ padding: '4px 22px 16px' }}
-        >
-          {page.kicker && (
-            <div
-              style={{
-                fontSize: 11,
-                letterSpacing: '0.18em',
-                textTransform: 'uppercase',
-                color: 'var(--fg-placeholder)',
-                fontWeight: 500,
-              }}
-            >
-              {page.kicker}
-            </div>
-          )}
-          {page.thesis && (
-            <div
-              style={{
-                fontFamily: 'var(--font-serif)',
-                fontWeight: 400,
-                fontSize: 22,
-                lineHeight: 1.2,
-                letterSpacing: '-0.015em',
-                color: 'var(--fg-primary)',
-                marginTop: 6,
-              }}
-            >
-              {page.thesis}
-            </div>
-          )}
-        </motion.div>
-      )}
+      {/* Page 1 ("now") leads with the hero block's date+greeting+place,
+          so we never render kicker/thesis on it. Page 2 ("today") is
+          domain-railed — the rails ARE the structure, so a kicker
+          ("today") + thesis (a filler sentence the LLM tends to pad
+          with) creates ~80px of empty editorial chrome above the first
+          rail without earning it. We omit the kicker/thesis entirely
+          on the today page; if the LLM emits them, they're discarded.
+          The exception: a non-today, non-now page in the future could
+          still want the header — keep the affordance for that case. */}
+      {!isTodayPage &&
+        (page.kicker || page.thesis) &&
+        !pageStartsWithHero(page) && (
+          <motion.div
+            variants={fadeUp}
+            transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+            style={{ padding: '4px 22px 16px' }}
+          >
+            {page.kicker && (
+              <div
+                style={{
+                  fontSize: 11,
+                  letterSpacing: '0.18em',
+                  textTransform: 'uppercase',
+                  color: 'var(--fg-placeholder)',
+                  fontWeight: 500,
+                }}
+              >
+                {page.kicker}
+              </div>
+            )}
+            {page.thesis && (
+              <div
+                style={{
+                  fontFamily: 'var(--font-serif)',
+                  fontWeight: 400,
+                  fontSize: 22,
+                  lineHeight: 1.2,
+                  letterSpacing: '-0.015em',
+                  color: 'var(--fg-primary)',
+                  marginTop: 6,
+                }}
+              >
+                {page.thesis}
+              </div>
+            )}
+          </motion.div>
+        )}
       {isTodayPage ? (
         <DomainRailedPage page={page} />
       ) : (
