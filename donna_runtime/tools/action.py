@@ -483,3 +483,69 @@ def _fact_confidence(value: Any):
     return Confidence.MEDIUM
 
 
+@tool(
+    "update_identity",
+    "Update a persistent identity fact about the user (the USER MODEL). Use this for semi-permanent state, "
+    "like a job change, a relationship, a new school, or a core preference. Do NOT use for ephemeral events "
+    "(use log_observation). Do NOT use for temporary situations (use track_open_loop).",
+    {
+        "type": "object",
+        "required": ["key", "value"],
+        "properties": {
+            "key": {"type": "string", "description": _FACT_KEY_DESCRIPTION},
+            "value": {"type": "string", "description": "The new value for the identity fact."},
+        },
+    },
+)
+@traceable(name="donna.tool.update_identity", run_type="tool")
+async def update_identity(args):
+    from backend.memory.tools.update_identity import update_identity as _update_identity
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("Missing user_id.")
+    key = str(args.get("key") or "").strip()
+    value = str(args.get("value") or "").strip()
+    if not key or not value:
+        return text_content("Missing key or value.")
+    res = await _update_identity(user_id=user_id, key=key, value=value)
+    return _tool_text(res)
+
+
+@tool(
+    "gather_context",
+    "The unified tool to fetch the user's current state. Use this to instantly pull schedule, pending tasks, "
+    "and memory hits in a single network hop. "
+    "Use for broad day-map or current-situation questions where multiple context sources matter. "
+    "Do NOT use for ambient chatter, greetings with no ask, a single obvious calendar lookup, or a write action.",
+    {
+        "type": "object",
+        "properties": {
+            "query": {"type": "string", "description": "Optional search term for fuzzy memory recall."},
+            "include_calendar_days": {"type": "integer", "description": "Days ahead to fetch schedule. 0 = none, 1 = today."},
+            "include_open_loops": {"type": "boolean", "description": "True to see pending commitments."},
+            "include_recent_trackers": {"type": "boolean", "description": "True to see recently logged events (meals, habits, etc)."},
+        },
+    },
+)
+@traceable(name="donna.tool.gather_context", run_type="tool")
+async def gather_context(args):
+    from backend.memory.tools.gather_context import gather_context as _gather_context
+
+    user_id = _current_user_id()
+    if not user_id:
+        return text_content("Missing user_id.")
+    query = args.get("query")
+    include_calendar_days = args.get("include_calendar_days", 0)
+    include_open_loops = args.get("include_open_loops", False)
+    include_recent_trackers = args.get("include_recent_trackers", False)
+    res = await _gather_context(
+        user_id=user_id,
+        query=query,
+        include_calendar_days=int(include_calendar_days) if include_calendar_days is not None else 0,
+        include_open_loops=bool(include_open_loops),
+        include_recent_trackers=bool(include_recent_trackers),
+    )
+    return _tool_text(res)
+
+

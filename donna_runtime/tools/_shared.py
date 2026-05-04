@@ -9,6 +9,14 @@ from ..tool_logic import text_content
 
 logger = logging.getLogger(__name__)
 
+
+def disabled_tool(*args, **kwargs):
+    """Stub decorator that keeps the function importable without registering it as an SDK tool."""
+    def decorator(f):
+        return f
+    return decorator
+
+
 def _current_user_id() -> str | None:
     return _CURRENT_USER_ID.get()
 

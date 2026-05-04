@@ -105,17 +105,19 @@ def mint_dashboard_url(user_id: str, *, reason: str = "user_request") -> str | N
     (
         "Generate a fresh 5-minute magic link to the user's dashboard. "
         "Use when (a) the user explicitly asks ('send my dashboard', "
-        "'open my home screen', 'where can i see all this'), or (b) a "
+        "'open my home screen', 'where can i see all this'), (b) a "
         "turn just produced something live and specific worth seeing "
         "there now — a loop closed, a streak ticked, an attention went "
         "live, a tracker hit a milestone, or the user just offloaded a "
-        "concrete thing for the first time. Anchor your reply on the "
-        "specific thing, then send the link. Include the URL verbatim in "
-        "send_burst, valid 5 minutes. Onboarding: send within the first "
-        "6-7 exchanges, ideally at the first moment something concrete "
-        "lands there. Do NOT use on Day 1 (deterministic), on tiny "
-        "acknowledgements, after every dashboard update, or as a "
-        "generic status ping — that trains the user the link is noise."
+        "concrete thing for the first time, or (c) you are on a "
+        "proactive turn after sustained user silence (~2+ hours post-"
+        "onboarding) and the dashboard has something concrete to anchor "
+        "on. Anchor your reply on the specific thing, then deliver the "
+        "URL as a `cta_url` send_burst item with display_text='open "
+        "dashboard' — never as plain text. Valid 5 minutes. Do NOT use "
+        "on Day 1, on tiny acknowledgements, after every dashboard "
+        "update, or as a generic status ping — that trains the user "
+        "the link is noise."
     ),
     {
         "type": "object",
@@ -143,5 +145,9 @@ async def send_dashboard_link(args):
     url = mint_dashboard_url(user_id, reason=reason)
     if url is None:
         return text_content("dashboard link: not available.")
-    return text_content(f"link: {url} · valid 5 min · reason={reason}")
+    return text_content(
+        f"link: {url} · valid 5 min · reason={reason}\n"
+        f"deliver as cta_url item: "
+        f"{{type:'cta_url', body:'<anchor>', display_text:'open dashboard', url:'{url}'}}"
+    )
 

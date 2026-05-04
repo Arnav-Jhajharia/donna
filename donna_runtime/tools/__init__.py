@@ -8,6 +8,7 @@ from ._shared import (
     _render_payload,
     _result_text,
     _tool_text,
+    disabled_tool,
 )
 from .retrieval import (
     check_calendar,
@@ -24,11 +25,13 @@ from .action import (
     _FACT_KEY_VALUES,
     clear_pending_note,
     close_open_loop,
+    gather_context,
     log_observation,
     remember,
     resolve_time_expression,
     set_timezone,
     track_open_loop,
+    update_identity,
 )
 from .integrations import (
     check_integration_status,
@@ -59,9 +62,14 @@ from .dashboard import (
     update_dashboard,
 )
 from .auth import send_login_otp
+from .reminders import cancel_reminder, list_reminders, remind
 from .terminators import SEND_BURST_INPUT_SCHEMA, send_burst
 
 DONNA_TOOLS = (
+    update_identity,
+    gather_context,
+    log_observation,
+    track_open_loop,
     recall,
     remember,
     attend,
@@ -69,7 +77,9 @@ DONNA_TOOLS = (
     cancel_attention,
     snooze_attention,
     accept_attention,
-    check_calendar,
+    remind,
+    list_reminders,
+    cancel_reminder,
     image,
     web_search,
     agentic_web_search,
@@ -79,7 +89,6 @@ DONNA_TOOLS = (
     list_gmail_recent,
     search_gmail,
     read_gmail_thread,
-    list_calendar,
     composio_search_tools,
     composio_execute_tool,
     update_dashboard,

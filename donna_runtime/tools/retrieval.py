@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import logging
+
 from claude_agent_sdk import tool
 
 from ..hooks import _CURRENT_USER_ID, _fire_memory_hooks
 from ..langsmith_tracing import traceable
 from ..tool_logic import text_content
-from ._shared import _current_user_id, _render_payload, _tool_text
+from ._shared import _current_user_id, _render_payload, _result_text, _tool_text, disabled_tool
 
-@tool(
+logger = logging.getLogger(__name__)
+
+
+@disabled_tool(
     "read_tracker",
     "Read-only tracker lookup by observation type (e.g. 'expense', 'mood'). "
     "Use period for local-time questions like today, this week, or last week. "
@@ -31,7 +36,7 @@ async def read_tracker(args):
     return await read_tracker_result(args)
 
 
-@tool(
+@disabled_tool(
     "smart_recall",
     "Adaptive recall across episodic, graph, and document memory. Use when you "
     "need the best-ranked hits without choosing a specific source. "
@@ -56,7 +61,7 @@ async def smart_recall(args):
     return _tool_text(res, no_hits_text="No hits.", degraded_text="Recall unavailable.")
 
 
-@tool(
+@disabled_tool(
     "list_open_loops",
     "List active unresolved threads for this user. Use when deciding what the "
     "user may be forgetting or what needs follow-up. "
@@ -85,7 +90,7 @@ async def list_open_loops(args):
     return _tool_text(res, no_hits_text="No open loops.", degraded_text="Open loops unavailable.")
 
 
-@tool(
+@disabled_tool(
     "list_calendar",
     "List upcoming calendar entries synced from the user's Google Calendar. "
     "Returns title, start/end in the user's local time, and location when set. "
@@ -241,7 +246,7 @@ async def recall(args):
     return _tool_text(res, no_hits_text="No hits.", degraded_text="Recall unavailable.")
 
 
-@tool(
+@disabled_tool(
     "check_calendar",
     (
         "Check upcoming calendar context. Use for availability, conflicts, "

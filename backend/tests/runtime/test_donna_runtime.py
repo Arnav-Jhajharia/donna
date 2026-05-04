@@ -55,25 +55,40 @@ class DonnaRuntimeTests(unittest.TestCase):
             "mcp__donna__list_attentions",
             "mcp__donna__cancel_attention",
             "mcp__donna__snooze_attention",
-            "mcp__donna__check_calendar",
+            "mcp__donna__accept_attention",
+            "mcp__donna__remind",
+            "mcp__donna__list_reminders",
+            "mcp__donna__cancel_reminder",
             "mcp__donna__image",
             "mcp__donna__web_search",
             "mcp__donna__agentic_web_search",
             "mcp__donna__research",
             "mcp__donna__send_burst",
+            "mcp__donna__update_identity",
+            "mcp__donna__log_observation",
+            "mcp__donna__track_open_loop",
+            "mcp__donna__gather_context",
             "mcp__donna__connect_integration",
             "mcp__donna__check_integration_status",
             "mcp__donna__list_gmail_recent",
+            "mcp__donna__search_gmail",
             "mcp__donna__read_gmail_thread",
-            "mcp__donna__list_calendar",
             "mcp__donna__composio_search_tools",
             "mcp__donna__composio_execute_tool",
             "mcp__donna__update_dashboard",
             "mcp__donna__send_dashboard_link",
             "mcp__donna__send_login_otp",
+            "mcp__donna__clear_pending_note",
         }
         self.assertEqual(set(ALLOWED_TOOLS), expected)
         self.assertEqual(set(build_options().allowed_tools), expected)
+
+        from donna_runtime.tools import DONNA_TOOLS
+
+        self.assertEqual(
+            {f"mcp__donna__{t.name}" for t in DONNA_TOOLS},
+            expected,
+        )
 
         # Fake mode is offline dev-only; integration tools have no fake
         # implementations so they're absent from FAKE_ALLOWED_TOOLS.
