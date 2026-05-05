@@ -16,14 +16,22 @@ def _tools_for_mode(mode: str, *, runtime_mode: str | None = None):
 
     ``mode`` is the legacy ``tool_mode`` (fake vs real). ``runtime_mode``
     is the new ``DonnaAgentConfig.mode`` (reactive / proactive /
-    proactive_tier3). Tier 3 mode gets a narrow palette of 6 tools
-    instead of the full reactive set.
+    proactive_tier3). Tier 3 mode gets the FULL reactive palette plus
+    Tier-3-specific terminators (skip / kill_attention / reshape_attention)
+    and lookup tools (quick_check / read_external). The Tier 3 ``send_burst``
+    wrapper REPLACES the reactive one because it carries the push +
+    surface_at quadrant args.
     """
     if mode == "fake":
         return list(FAKE_DONNA_TOOLS)
     if runtime_mode == "proactive_tier3":
         from donna_runtime.tools_tier3_sdk import TIER3_SDK_TOOLS
-        return list(TIER3_SDK_TOOLS)
+
+        tier3_only = {t.name for t in TIER3_SDK_TOOLS}
+        # Drop reactive tools that conflict with Tier 3 specialized ones
+        # (today only ``send_burst`` overlaps; the others are Tier-3-only).
+        reactive_kept = [t for t in DONNA_TOOLS if t.name not in tier3_only]
+        return reactive_kept + list(TIER3_SDK_TOOLS)
     return list(DONNA_TOOLS)
 
 

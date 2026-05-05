@@ -124,7 +124,7 @@ class DonnaAgentConfig:
     model: str = MODEL_NAME
     max_turns: int = 6
     proactive_max_turns: int = 12
-    tier3_max_turns: int = 3
+    tier3_max_turns: int = 5
     # Bumped 45 → 120. The 45s ceiling was killing turns mid-tool-loop:
     # a chain of attend()/recall() calls (each ~6-8s) blew past it after
     # 5-7 invocations, the SDK subprocess got cancelled before any
