@@ -253,10 +253,28 @@ export default function ObservePage() {
   const [userFilter, setUserFilter] = useState<string | null>(null);
   const [stateSnapshot, setStateSnapshot] = useState<StateSnapshot | null>(null);
   const [stateError, setStateError] = useState<string | null>(null);
+  // Growing window — bumped via "load older" button. Reset to 100 when
+  // userFilter changes so switching users doesn't carry a stale large
+  // limit into the new view (and doesn't make the first paint slow).
+  const [eventLimit, setEventLimit] = useState<number>(100);
+
+  // Reset the window each time the user filter changes.
+  useEffect(() => {
+    setEventLimit(100);
+  }, [userFilter]);
 
   const fetchData = useCallback(async () => {
     try {
-      const res = await fetch('/api/events?limit=100', { cache: 'no-store' });
+      // Pass user_id to the server so the per-user tail isn't drowned
+      // out by louder users (Arnav alone produces ~120 events/day; a
+      // global 100-event window leaves quieter users with 1-3 visible
+      // turns). The Next.js route forwards user_id + a generous raw
+      // event budget to the backend admin endpoint.
+      const params = new URLSearchParams({ limit: String(eventLimit) });
+      if (userFilter) params.set('user_id', userFilter);
+      const res = await fetch(`/api/events?${params.toString()}`, {
+        cache: 'no-store',
+      });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = (await res.json()) as Payload;
       setData(payload);
@@ -265,7 +283,7 @@ export default function ObservePage() {
     } catch (err) {
       setError((err as Error).message);
     }
-  }, []);
+  }, [userFilter, eventLimit]);
 
   const fetchState = useCallback(async (uid: string) => {
     try {
@@ -480,6 +498,33 @@ export default function ObservePage() {
             {filteredTurns.length === 0 && (
               <div style={{ fontSize: 12, color: 'var(--ink-500)', padding: 12 }}>
                 {data ? 'no turns match this filter.' : 'loading…'}
+              </div>
+            )}
+            {data && data.turns.length >= eventLimit && eventLimit < 1000 && (
+              <button
+                type="button"
+                onClick={() => setEventLimit((n) => Math.min(1000, n + 100))}
+                style={{
+                  marginTop: 8,
+                  padding: '8px 12px',
+                  fontSize: 12,
+                  border: '1px solid var(--ink-300)',
+                  background: 'var(--ink-50)',
+                  color: 'var(--ink-700)',
+                  cursor: 'pointer',
+                  borderRadius: 4,
+                }}
+              >
+                load 100 older
+                {data.total_turns > data.turns.length
+                  ? ` (${data.total_turns - data.turns.length}+ more)`
+                  : ''}
+              </button>
+            )}
+            {eventLimit >= 1000 && data && data.turns.length >= 1000 && (
+              <div style={{ fontSize: 11, color: 'var(--ink-500)', padding: 8 }}>
+                showing the last 1000 turns — older history is in the DB but
+                not paginated here. drill in via psql if you need more.
               </div>
             )}
           </div>
@@ -1902,6 +1947,10 @@ function shortToolName(name: string | null | undefined): string {
 
 function eventLabel(ev: RawEvent): string {
   if (ev.event === 'tool.call') return `tool · ${shortToolName(ev.tool as string)}`;
+  if (ev.event === 'tool.result') {
+    const isErr = ev.is_error === true;
+    return `result${isErr ? '·error' : ''} · ${shortToolName(ev.tool as string)}`;
+  }
   if (ev.event === 'memory.op') return `mem · ${ev.backend as string}`;
   if (ev.event === 'prompt.snapshot') return 'prompt';
   return ev.event;
@@ -1911,6 +1960,12 @@ function eventDetail(ev: RawEvent): string {
   if (ev.event === 'tool.call') {
     const keys = (ev.input_keys as string[]) ?? [];
     return keys.length ? `keys: ${keys.join(', ')}` : '';
+  }
+  if (ev.event === 'tool.result') {
+    const len = (ev.output_len as number | undefined) ?? null;
+    const trunc = ev.output_truncated === true;
+    const sizeStr = len !== null ? `${fmtChars(len)} chars` : '';
+    return [sizeStr, trunc ? 'truncated' : ''].filter(Boolean).join(' · ');
   }
   if (ev.event === 'memory.op') {
     const dur = fmtMs(ev.duration_ms as number);
@@ -1950,6 +2005,24 @@ function eventDrilldown(ev: RawEvent): string {
       null,
       2,
     );
+  }
+  if (ev.event === 'tool.result') {
+    // Render the raw tool output the model will see on its next turn.
+    // For text-y tools (recall, web_search, gmail) this is exactly what
+    // the model anchors its reasoning on. For dict-y tools
+    // (log_observation, install_feature) it's a short status line.
+    const preview = (ev.output_preview as string | undefined) ?? '';
+    const trunc = ev.output_truncated === true;
+    const len = (ev.output_len as number | undefined) ?? null;
+    const header = [
+      `tool: ${ev.tool}`,
+      ev.is_error ? 'is_error: true' : null,
+      len !== null ? `output_len: ${len}` : null,
+      trunc ? '(truncated)' : null,
+    ]
+      .filter(Boolean)
+      .join('  ');
+    return `${header}\n\n${preview}`;
   }
   if (ev.event === 'memory.op') {
     return JSON.stringify(

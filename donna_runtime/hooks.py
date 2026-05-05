@@ -261,21 +261,49 @@ async def post_tool_hook(input_data, tool_use_id, context):
 
     tool_name = str(hook_input.get("tool_name") or "")
     short_name = _tool_short_name(tool_name)
-    if short_name == "image":
-        tool_response = (
-            input_data.get("tool_response") if isinstance(input_data, Mapping) else None
+    tool_response = (
+        input_data.get("tool_response") if isinstance(input_data, Mapping) else None
+    )
+
+    # Observability: emit the tool's output so /observe shows what extra
+    # context the model is actually seeing on the next turn. The
+    # model's behavior on turn N+1 is shaped by tool results from turn
+    # N — without this, /observe shows tool calls but not the
+    # information the model fed back on, which is half the story.
+    try:
+        output_text = _extract_tool_response_text(tool_response)
+        is_error = False
+        if isinstance(tool_response, Mapping):
+            is_error = bool(tool_response.get("is_error"))
+        emit(
+            "tool.result",
+            tool=tool_name,
+            tool_short=short_name,
+            call_id=str(tool_use_id),
+            is_error=is_error,
+            output_len=len(output_text),
+            output_preview=output_text[:_TOOL_RESULT_PREVIEW_LIMIT],
+            output_truncated=len(output_text) > _TOOL_RESULT_PREVIEW_LIMIT,
         )
+    except Exception:
+        logger.exception("post_tool_hook: tool.result emit failed")
+
+    if short_name == "image":
         await _image_post_tool_record(tool_name, tool_response)
 
     if short_name == "connect_integration":
-        tool_response = (
-            input_data.get("tool_response") if isinstance(input_data, Mapping) else None
-        )
         _maybe_spawn_oauth_watcher(tool_response)
 
     await trace_post_tool_hook(hook_input)
 
     return {}
+
+
+# Cap how much tool output the observability record carries. /observe
+# is a debugging surface — operators want signal, not the full
+# 50k-token web_search dump. 4k is enough to read the gist of any
+# tool's response; the full text still lives on the turn trace.
+_TOOL_RESULT_PREVIEW_LIMIT = 4000
 
 
 def _maybe_inject_voice_response(

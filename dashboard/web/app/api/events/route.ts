@@ -145,6 +145,7 @@ async function readEventsLines(filePath: string): Promise<RawEvent[]> {
 async function fetchEventsFromBackend(
   backendUrl: string,
   limit: number,
+  userId: string | null,
 ): Promise<RawEvent[]> {
   // Backend events route is admin-gated; auth from server env so the
   // dashboard browser session never sees the credential.
@@ -157,8 +158,10 @@ async function fetchEventsFromBackend(
   // Pull a generous tail — /observe groups by turn and trims by turn count
   // downstream, so the raw event budget here is the limiting factor.
   const eventBudget = Math.max(limit * 30, 2000);
+  const params = new URLSearchParams({ limit: String(eventBudget) });
+  if (userId) params.set('user_id', userId);
   const upstream = await fetch(
-    `${backendUrl}/api/admin/events?limit=${eventBudget}`,
+    `${backendUrl}/api/admin/events?${params.toString()}`,
     {
       headers: { authorization: `Basic ${auth}` },
       cache: 'no-store',
@@ -429,7 +432,14 @@ function buildAggregate(events: RawEvent[], turns: Turn[], orphanDenies: number)
 
 export async function GET(request: Request) {
   const url = new URL(request.url);
-  const limit = Math.min(200, Math.max(1, parseInt(url.searchParams.get('limit') ?? '50', 10)));
+  // Cap raised from 200 → 1000 so paginated user-scoped views can dig
+  // back through long histories. Per-user volume is bounded; the cap
+  // protects against runaway global queries.
+  const limit = Math.min(
+    1000,
+    Math.max(1, parseInt(url.searchParams.get('limit') ?? '50', 10)),
+  );
+  const userId = url.searchParams.get('user_id');
 
   const backendUrl = process.env.DONNA_BACKEND_URL?.replace(/\/$/, '');
   let events: RawEvent[] = [];
@@ -439,7 +449,7 @@ export async function GET(request: Request) {
 
   if (backendUrl) {
     try {
-      events = await fetchEventsFromBackend(backendUrl, limit);
+      events = await fetchEventsFromBackend(backendUrl, limit, userId);
     } catch (err) {
       // Backend reachable-but-failing should NOT fall back silently — the
       // operator needs to see why /observe is empty in prod. Surface the
@@ -453,6 +463,11 @@ export async function GET(request: Request) {
     sourceLabel = filePath;
     source = 'file';
     events = await readEventsLines(filePath);
+    // Apply user_id filter at the file-source layer too so dev parity
+    // matches prod when a userFilter is set.
+    if (userId) {
+      events = events.filter((e) => e.user_id === userId);
+    }
   }
 
   const turns = groupTurns(events);
