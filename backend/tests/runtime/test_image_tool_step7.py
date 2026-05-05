@@ -49,7 +49,7 @@ def _run_image(args: dict, user_id: str | None = "user_1") -> str:
 def patched_generate():
     """Patch compose_image_prompt + generate_and_upload + WhatsAppChannel()."""
     with patch(
-        "donna_runtime.tools.compose_image_prompt",
+        "donna_runtime.tools.media.compose_image_prompt",
         new=AsyncMock(return_value="composed prompt"),
     ) as compose, patch(
         "donna_runtime.image_client.generate_and_upload",
@@ -115,7 +115,7 @@ class TestHappyPath:
 class TestErrorMapping:
     def _run_with_error(self, exc: Exception) -> str:
         with patch(
-            "donna_runtime.tools.compose_image_prompt",
+            "donna_runtime.tools.media.compose_image_prompt",
             new=AsyncMock(return_value="prompt"),
         ), patch(
             "donna_runtime.image_client.generate_and_upload",
@@ -145,7 +145,7 @@ class TestErrorMapping:
 
     def test_compose_value_error_maps_cleanly(self) -> None:
         with patch(
-            "donna_runtime.tools.compose_image_prompt",
+            "donna_runtime.tools.media.compose_image_prompt",
             new=AsyncMock(side_effect=ValueError("empty")),
         ):
             text = _run_image({"intent": "x", "caption": "y"})

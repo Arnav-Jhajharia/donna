@@ -2,12 +2,16 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 
 from claude_agent_sdk import tool
 
+from ..hooks import set_image_prompt_hash
 from ..langsmith_tracing import traceable
 from ..tool_logic import compose_image_prompt, text_content
 from ._shared import _current_user_id
+
+logger = logging.getLogger(__name__)
 
 @tool(
     "image",

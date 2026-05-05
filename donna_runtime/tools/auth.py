@@ -1,10 +1,14 @@
 from __future__ import annotations
 
+import logging
+
 from claude_agent_sdk import tool
 
 from ..langsmith_tracing import traceable
 from ..tool_logic import text_content
 from ._shared import _current_user_id
+
+logger = logging.getLogger(__name__)
 
 @tool(
     "send_login_otp",

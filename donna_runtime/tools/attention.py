@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import Any
 
 from claude_agent_sdk import tool
@@ -8,6 +9,8 @@ from ..hooks import _CURRENT_USER_ID, _fire_memory_hooks
 from ..langsmith_tracing import traceable
 from ..tool_logic import text_content
 from ._shared import _current_user_id, _tool_text
+
+logger = logging.getLogger(__name__)
 
 async def _create_and_queue_attention(
     *, intent: str, user_id: str | None, origin: str, label: str

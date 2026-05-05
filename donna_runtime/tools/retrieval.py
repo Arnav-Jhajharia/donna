@@ -6,7 +6,7 @@ from claude_agent_sdk import tool
 
 from ..hooks import _CURRENT_USER_ID, _fire_memory_hooks
 from ..langsmith_tracing import traceable
-from ..tool_logic import text_content
+from ..tool_logic import read_tracker_result, text_content
 from ._shared import _current_user_id, _render_payload, _result_text, _tool_text, disabled_tool
 
 logger = logging.getLogger(__name__)

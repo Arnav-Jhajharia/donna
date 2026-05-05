@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+
 from claude_agent_sdk import tool
 
 from ..hooks import _CURRENT_USER_ID
 from ..langsmith_tracing import traceable
 from ..tool_logic import text_content
 from ._shared import _current_user_id
+
+logger = logging.getLogger(__name__)
 
 @tool(
     "update_dashboard",

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+
 from claude_agent_sdk import tool
 
 from backend.memory.user_facts.schema import FactKey
@@ -8,6 +10,8 @@ from ..hooks import _CURRENT_USER_ID, _fire_memory_hooks
 from ..langsmith_tracing import traceable
 from ..tool_logic import text_content
 from ._shared import _current_user_id, _result_text, _tool_text
+
+logger = logging.getLogger(__name__)
 
 _FACT_KEY_VALUES: tuple[str, ...] = tuple(k.value for k in FactKey)
 _FACT_KEY_DESCRIPTION = (

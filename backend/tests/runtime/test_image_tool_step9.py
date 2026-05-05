@@ -99,7 +99,7 @@ def patched_pipeline():
         "delivery.whatsapp.WhatsAppChannel",
         return_value=wa_stub,
     ), patch(
-        "donna_runtime.tools.compose_image_prompt",
+        "donna_runtime.tools.media.compose_image_prompt",
         new=AsyncMock(
             return_value=(
                 "warm hand-drawn illustration, gentle muted palette, soft edges. "

@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+import logging
+
 from claude_agent_sdk import tool
 
 from ..hooks import _CURRENT_TRACE, _fire_memory_hooks
 from ..langsmith_tracing import traceable
 from ..tool_logic import send_burst_result
 from ._shared import _current_user_id
+
+logger = logging.getLogger(__name__)
 
 SEND_BURST_INPUT_SCHEMA: dict = {
     "type": "object",
