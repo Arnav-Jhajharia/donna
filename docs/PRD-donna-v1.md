@@ -9,7 +9,9 @@
 
 ## 0. TL;DR
 
-Donna's world engine is one shared **client layer** wrapping ~35 data sources, used in two consumption patterns:
+**v1 ships ~16 sources. The full registry covers ~35 — the rest are v2 candidates with implementation details documented now so we don't research twice.**
+
+Donna's world engine is one shared **client layer** wrapping data sources, used in two consumption patterns:
 
 - **Reactive**: BRAIN tools call clients on demand (per turn)
 - **Ambient**: Workers poll clients on cadence + webhooks push events; the proactive lane scores and ships
@@ -17,6 +19,44 @@ Donna's world engine is one shared **client layer** wrapping ~35 data sources, u
 Sources are MCP servers when a quality wrapper exists, direct APIs when wrapping value is in our code, Composio for OAuth integrations. Same client used by both paths — one integration, two consumption modes.
 
 The **proactive pipeline** is intentionally light: most events are shipped by a Haiku judge composing from structured payload. BRAIN escalation only when composition genuinely requires tool access.
+
+---
+
+## 0.1 The locked v1 list (~16 sources)
+
+```
+WORLD SUBSTRATE (3)
+  GDELT 2.0                  — global news firehose
+  Hacker News                — curated tech
+  User RSS                   — user-managed feeds (Substack, niche blogs)
+
+MAGIC APIs (10)
+  Finnhub                    — stocks (price + news)
+  OpenWeather + NWS          — weather + severe alerts
+  Exa                        — agentic semantic search
+  Wolfram Alpha              — math + units + computation
+  Foursquare Places          — restaurants + POIs
+  Nutritionix                — food + calorie database
+  Veryfi                     — receipt OCR
+  TrackingMore               — universal package tracking
+  AirLabs                    — flight tracking
+  changedetection.io         — universal URL/JSON watching
+  Terra                      — unified wearables (health) [optional]
+
+OAUTH INTEGRATIONS (2 via Composio)
+  Gmail                      — search/draft/send
+  Google Calendar            — list/create/update
+
+SUBSTRATE
+  Composio                   — OAuth gateway
+  Twilio                     — WhatsApp delivery (already wired) + future SMS/voice
+  Supermemory                — memory store
+  Postgres                   — structured state
+  DeepL                      — translation (cheap utility)
+  Open Library               — book metadata (cheap utility)
+```
+
+That's the v1 commitment. The full source registry below documents the v2 candidates we'd add later (NewsAPI aggregator, Reddit, Mastodon, GitHub releases, API-Sports, EDGAR, congress.gov, TMDB, Notion, Spotify, Readwise, Strava, etc.). Implementation details are documented now so onboarding new sources is config-only later.
 
 ---
 
@@ -1039,42 +1079,51 @@ Optimizations available later: switch BRAIN(reactive) to Haiku for non-compositi
 
 ## 8. Phased rollout
 
-### v1 — ship these (locked)
+### v1 — locked at ~16 sources
 
-**Layer A (4 sources):**
-GDELT, Hacker News, NewsAPI aggregator (Apify), Federal Reserve.
+**Layer A — World substrate (3):**
+GDELT, Hacker News, User RSS.
 
-**Layer B (10 watch kinds):**
-RSS, YouTube channels, GitHub releases, stocks (set_price_alert), sports (poll_score), weather, NWS alerts, packages (track_package), flights (track_flight), URL change (watch_url + changedetection).
+**Layer B — User watches (6 kinds):**
+- packages (TrackingMore)
+- flights (AirLabs)
+- stocks (Finnhub)
+- URL change (changedetection.io)
+- topic follow (Exa-driven)
+- YouTube channels (RSS)
 
-**Layer C (2 integrations):**
+**Layer C — OAuth integrations (2):**
 Gmail, Calendar (via Composio).
 
-**Layer D (4 webhooks):**
-Composio (Gmail/Calendar combined endpoints), TrackingMore, OAuth callback, Twilio inbound (already wired).
+**Layer D — Webhooks (4):**
+Composio (Gmail+Calendar), TrackingMore, OAuth callback, Twilio inbound (already wired).
 
-**Layer E (11 reactive sources):**
-Wolfram, Exa (primary), Tavily (fallback), Serper, Foursquare, Nutritionix, Veryfi, Open Library, Finnhub (reactive), GDELT (reactive), OpenWeather (reactive), HN (reactive), Translate (DeepL).
+**Layer E — Reactive utilities (8):**
+Wolfram, Exa (with Tavily as internal fallback inside the same `search_web` client), Foursquare, Nutritionix, Veryfi, Open Library, Translate (DeepL), Finnhub-reactive (`stock_price`, `stock_news`).
 
-**Tools (~35):**
-- 15 always-loaded
+**Plus shared:** OpenWeather + NWS (used by both Layer B watch kinds and reactive `weather_at`), Terra for health (Layer C+D, optional v1 add).
+
+**Tools shipped at v1 (~35):**
+- 15 always-loaded primitives
 - 10 personal logs
 - 5 captures
 - 5 reflection (reflect, summarize_day, weekly_review, get_pattern, relationship_check_in)
-- 5 magic (track_package, set_price_alert, compute_math, find_places, parse_receipt)
-- 5 people (person_note/recall/last_touch, prep_for_meeting, draft_message_to)
+- 5 magic verbs (track_package, set_price_alert, compute_math, find_places, parse_receipt)
+- 5 people tools (person_note, person_recall, person_last_touch, prep_for_meeting, draft_message_to)
 - 4 loops
-- 4 integration management (connect/status/set_mode/disconnect)
+- 4 integration management
 - 6 integration use (gmail.search/draft/send, gcal.list/create/update)
 
-### v2 — add post-launch
+### v2 candidates (deferred, documented above for future onboarding)
 
-**Layer A:** Product Hunt, arXiv, Substack popular, GitHub trending.
-**Layer B:** Reddit, Mastodon, Linear/Jira/Slack, crypto, AirVisual, cheap flight, concerts, civic.
-**Layer C:** Notion, Terra (health), Strava, Spotify, Readwise.
-**Layer D:** Notion (Composio), Terra, YouTube WebSub, Apple Shortcuts, Cal.com.
-**Layer E:** Supadata (transcripts), TheMovieDB, CoinGecko reactive, API-Sports reactive.
-**Tools:** Discovery (find_*), writing aids, health workflows, more captures.
+**Layer A:** NewsAPI aggregator (Apify), Federal Reserve (FRED), Product Hunt, arXiv, Substack popular feeds, GitHub trending.
+**Layer B:** Reddit subreddits, Mastodon timeline, GitHub releases per repo, GitHub mentions, Linear/Jira/Slack, crypto watches (CoinGecko), AirVisual air quality, cheap flight watcher (Kiwi/Skyscanner), concerts (Ticketmaster), restaurant availability, civic bills (congress.gov, Open States), SEC EDGAR filings, sports per team (API-Sports/Football-Data.org).
+**Layer C:** Notion, Terra (if not in v1), Strava, Spotify, Readwise.
+**Layer D:** Notion (Composio), Terra (health webhooks), YouTube WebSub for instant uploads, Apple Shortcuts, Cal.com bookings.
+**Layer E:** Supadata (YouTube transcripts), TheMovieDB, CoinGecko reactive (`crypto_price`), API-Sports reactive (`score_of`), TheSportsDB fallback, Serper (raw SERP fallback inside `web_search`), Brave Search, Perplexity Sonar.
+**Tools:** Discovery family (find_restaurant_for, find_book_like, find_movie_for, find_recipe_for), writing aids (draft_email_in_voice, edit_for_brevity), health workflows (recovery_check_today, training_load, correlate_sleep_mood), watch_artist_release, watch_substack, watch_concert, watch_cheap_flight, watch_repo_release, transcribe_video, research_topic, deep_dive.
+
+The detailed source registry in section 2 documents implementation details for both v1 and v2 sources. We pre-research v2 sources so onboarding them later is config-only, not design work.
 
 ---
 
