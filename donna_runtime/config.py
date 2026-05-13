@@ -31,6 +31,7 @@ ALLOWED_TOOLS = (
     "mcp__donna__resolve_time_expression",
     "mcp__donna__read_situation_brief",
     "mcp__donna__send_burst",
+    "WebSearch",
 )
 
 DISALLOWED_TOOLS = (
@@ -43,7 +44,6 @@ DISALLOWED_TOOLS = (
     "Glob",
     "Grep",
     "WebFetch",
-    "WebSearch",
     "TodoWrite",
     "NotebookEdit",
     "ExitPlanMode",
