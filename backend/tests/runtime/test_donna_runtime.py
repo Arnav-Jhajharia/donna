@@ -60,9 +60,6 @@ class DonnaRuntimeTests(unittest.TestCase):
             "mcp__donna__list_reminders",
             "mcp__donna__cancel_reminder",
             "mcp__donna__image",
-            "mcp__donna__web_search",
-            "mcp__donna__agentic_web_search",
-            "mcp__donna__research",
             "mcp__donna__send_burst",
             "mcp__donna__update_identity",
             "mcp__donna__log_observation",
@@ -80,8 +77,11 @@ class DonnaRuntimeTests(unittest.TestCase):
             "mcp__donna__send_login_otp",
             "mcp__donna__clear_pending_note",
         }
-        self.assertEqual(set(ALLOWED_TOOLS), expected)
-        self.assertEqual(set(build_options().allowed_tools), expected)
+        # ALLOWED_TOOLS = the MCP affordances + the SDK built-in WebSearch.
+        self.assertEqual(set(ALLOWED_TOOLS), expected | {"WebSearch"})
+        self.assertEqual(
+            set(build_options().allowed_tools), expected | {"WebSearch"}
+        )
 
         from donna_runtime.tools import DONNA_TOOLS
 
