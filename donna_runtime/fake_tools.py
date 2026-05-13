@@ -162,7 +162,7 @@ async def list_observations(args):
         entries = [(k, e) for k, lst in _OBSERVATIONS.items() for e in lst]
     entries.sort(key=lambda pair: pair[1]["ts"], reverse=True)
     lines = [f"[{kind}] {e}" for kind, e in entries[:10]]
-    return text_content("\n".join(lines) or "no observations.")
+    return text_content("\n".join(lines))
 
 
 @tool(
@@ -439,91 +439,6 @@ async def image(args):
 
 
 @tool(
-    "web_search",
-    (
-        "Fake single-shot web search. Returns two canned hits so smoke evals "
-        "can exercise a web-lookup turn without live HTTP."
-    ),
-    {
-        "type": "object",
-        "required": ["query"],
-        "properties": {
-            "query": {"type": "string"},
-            "max_results": {"type": "integer"},
-            "recency": {"type": "string"},
-        },
-    },
-)
-async def web_search(args):
-    query = str(args.get("query") or "").strip() if isinstance(args, dict) else ""
-    if not query:
-        return text_content("web_search: query is required.")
-    hits = [
-        f"- example reference on '{query}' (https://example.test/a) — canned snippet one.",
-        f"- background on '{query}' (https://example.test/b) — canned snippet two.",
-    ]
-    return text_content("\n".join(hits))
-
-
-@tool(
-    "agentic_web_search",
-    (
-        "Fake agentic web search. Returns a canned synthesized answer and "
-        "two canned sources so smoke evals can exercise deep-research turns."
-    ),
-    {
-        "type": "object",
-        "required": ["question"],
-        "properties": {
-            "question": {"type": "string"},
-            "max_results": {"type": "integer"},
-        },
-    },
-)
-async def agentic_web_search(args):
-    question = str(args.get("question") or "").strip() if isinstance(args, dict) else ""
-    if not question:
-        return text_content("agentic_web_search: question is required.")
-    lines = [
-        f"answer: canned synthesis for '{question}'. two sources agree on the headline.",
-        "sources:",
-        "- example primary source (https://example.test/a)",
-        "- example secondary source (https://example.test/b)",
-    ]
-    return text_content("\n".join(lines))
-
-
-@tool(
-    "research",
-    (
-        "Fake deep research. Returns a canned synthesis with two sources and "
-        "a low confidence score so smoke evals can exercise research turns."
-    ),
-    {
-        "type": "object",
-        "required": ["question"],
-        "properties": {
-            "question": {"type": "string"},
-            "top_k": {"type": "integer"},
-            "seed_url": {"type": "string"},
-        },
-    },
-)
-async def research(args):
-    question = str(args.get("question") or "").strip() if isinstance(args, dict) else ""
-    if not question:
-        return text_content("research: question is required.")
-    lines = [
-        f"answer (merged, confidence=0.42): canned deep-research synthesis for '{question}'.",
-        "dissent: an alternate read flags a caveat.",
-        "sources:",
-        "- canned primary source (https://example.test/primary)",
-        "- canned secondary source (https://example.test/secondary)",
-    ]
-    return text_content("\n".join(lines))
-
-
-@tool(
     "send_burst",
     "TERMINATOR. Send 1-3 WhatsApp messages (<200 chars each, lowercase, no em dashes). "
     "tone: 'crisp' | 'direct' | 'warm'.",
@@ -545,9 +460,6 @@ FAKE_DONNA_TOOLS = (
     snooze_attention,
     check_calendar,
     image,
-    web_search,
-    agentic_web_search,
-    research,
     send_burst,
 )
 
@@ -563,9 +475,6 @@ FAKE_ALLOWED_TOOLS = tuple(
         "snooze_attention",
         "check_calendar",
         "image",
-        "web_search",
-        "agentic_web_search",
-        "research",
         "send_burst",
     )
 )
