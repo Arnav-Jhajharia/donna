@@ -16,7 +16,7 @@ TOOL_NAMESPACE = "donna"
 MCP_SERVER_NAME = "donna-tools"
 MCP_SERVER_VERSION = "0.1.0"
 
-# ── image tool ───────────────────────────────────────────────────────────────
+# ── image tool ────────────────────────────────────────────────────────────────────────
 IMAGE_MODEL = "fal-ai/flux-pro/v1.1"
 IMAGE_SIZE = "square_hd"
 IMAGE_LOCKED_STYLE = (
@@ -37,10 +37,8 @@ ALLOWED_TOOLS = (
     "mcp__donna__list_reminders",
     "mcp__donna__cancel_reminder",
     "mcp__donna__image",
-    "mcp__donna__web_search",
-    "mcp__donna__agentic_web_search",
-    "mcp__donna__research",
     "mcp__donna__send_burst",
+    "WebSearch",
     "mcp__donna__update_identity",
     "mcp__donna__log_observation",
     "mcp__donna__track_open_loop",
@@ -68,7 +66,6 @@ DISALLOWED_TOOLS = (
     "Glob",
     "Grep",
     "WebFetch",
-    "WebSearch",
     "TodoWrite",
     "NotebookEdit",
     "ExitPlanMode",

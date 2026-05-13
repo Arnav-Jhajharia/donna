@@ -42,11 +42,6 @@ from .integrations import (
     read_gmail_thread,
     search_gmail,
 )
-from .web import (
-    agentic_web_search,
-    research,
-    web_search,
-)
 from .media import image
 from .attention import (
     _create_and_queue_attention,
@@ -89,9 +84,6 @@ DONNA_TOOLS = (
     list_reminders,
     cancel_reminder,
     image,
-    web_search,
-    agentic_web_search,
-    research,
     connect_integration,
     check_integration_status,
     list_gmail_recent,
